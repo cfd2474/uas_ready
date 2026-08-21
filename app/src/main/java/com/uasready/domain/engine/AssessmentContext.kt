@@ -16,6 +16,7 @@ data class AssessmentContext(
     val flightWindow: FlightWindow,
     val location: LocationInfo,
     val gnss: GnssEstimation? = null,
+    val terrainProfile: TerrainObstructionProfile? = null,
     val plannedAltitudeAglFt: Double = 400.0,
     val hasInternetConnection: Boolean = true
 )

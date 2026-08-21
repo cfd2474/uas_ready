@@ -283,7 +283,8 @@ fun HomeScreen(
                 }
 
                 val secondaryText = if (gnss != null) {
-                    "HDOP ${gnss.estimatedHdop} • 3D Fix • ${gnss.signalIntegrityPercent}% Signal"
+                    val terrainStr = gnss.terrainProfile?.let { " • ${it.terrainClassification} (${it.maxObstructionDeg}°)" } ?: " • ${gnss.signalIntegrityPercent}% Signal"
+                    "HDOP ${gnss.estimatedHdop} • 3D Fix$terrainStr"
                 } else {
                     hdopRule?.inputValueFormatted ?: "HDOP <= 1.5 • Multi-GNSS"
                 }

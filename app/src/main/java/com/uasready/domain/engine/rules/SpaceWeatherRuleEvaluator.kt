@@ -92,8 +92,15 @@ class SpaceWeatherRuleEvaluator : CategoryRuleEvaluator {
         val gnss = context.gnss ?: GnssEstimation.estimate(
             latitude = context.location.latitude,
             elevationFt = context.location.elevationFt,
-            kpIndex = maxKp
+            kpIndex = maxKp,
+            terrainProfile = context.terrainProfile
         )
+
+        val terrainNote = if (gnss.terrainOccludedSatellitesCount > 0 && gnss.terrainProfile != null) {
+            " (${gnss.terrainOccludedSatellitesCount} sats occluded by ${gnss.terrainProfile.terrainClassification}, ${gnss.terrainProfile.maxObstructionDeg}° max ridge mask)"
+        } else {
+            ""
+        }
 
         // Rule: Satellites in navigation solution
         when {
@@ -105,7 +112,7 @@ class SpaceWeatherRuleEvaluator : CategoryRuleEvaluator {
                     title = "GNSS Satellite Constellation Lock",
                     inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
                     thresholdFormatted = ">= 12 Sats (3D Fix)",
-                    explanation = "${gnss.lockedSatellitesCount} multi-GNSS satellites in navigation solution (out of ${gnss.visibleSatellitesCount} visible). 3D fix verified; stable home point confirmed."
+                    explanation = "${gnss.lockedSatellitesCount} multi-GNSS satellites in navigation solution$terrainNote. 3D fix verified; stable home point confirmed."
                 )
             )
             gnss.lockedSatellitesCount in 8..11 -> rules.add(
@@ -116,7 +123,7 @@ class SpaceWeatherRuleEvaluator : CategoryRuleEvaluator {
                     title = "Marginal GNSS Satellite Lock (8-11 Sats)",
                     inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
                     thresholdFormatted = "12+ Sats for Full Nominal",
-                    explanation = "${gnss.lockedSatellitesCount} satellites locked. Marginal constellation geometry; verify home point manually and avoid GNSS-dependent precision automated mapping."
+                    explanation = "${gnss.lockedSatellitesCount} satellites locked$terrainNote. Marginal constellation geometry; verify home point manually and avoid GNSS-dependent precision automated mapping."
                 )
             )
             else -> rules.add(
@@ -127,7 +134,7 @@ class SpaceWeatherRuleEvaluator : CategoryRuleEvaluator {
                     title = "Insufficient GNSS Satellites (<= 7 Sats)",
                     inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
                     thresholdFormatted = "Min 8 Sats Required",
-                    explanation = "Only ${gnss.lockedSatellitesCount} satellites locked in navigation solution (<= 7). Severe risk of GPS loss-of-lock, ATTI mode fallback, or uncommanded fly-away."
+                    explanation = "Only ${gnss.lockedSatellitesCount} satellites locked in navigation solution (<= 7)$terrainNote. Severe risk of GPS loss-of-lock, ATTI mode fallback, or uncommanded fly-away."
                 )
             )
         }

@@ -68,24 +68,24 @@
 
 ## 7. Active Plan: GNSS Satellite Estimation & Safety Decision Engine
 
-### Chunk 1: Domain Modeling, Estimation Engine & Assessment Rules ✅
-- [x] Step 1.1: Created `GnssModel.kt` with `GnssEstimation` domain model (visible satellites, locked satellites, estimated HDOP, signal integrity).
-- [x] Step 1.2: Implemented `GnssEstimator` algorithm taking latitude, elevation MSL, and NOAA planetary Kp index.
-- [x] Step 1.3: Updated `AssessmentContext.kt` to carry `GnssEstimation`.
-- [x] Step 1.4: Updated `SpaceWeatherRuleEvaluator.kt` with rules `SP-GNSS-SATS` and `SP-GNSS-HDOP` matching user criteria:
-  - **GO**: ≥ 12 Satellites (3D fix, HDOP ≤ 1.5, stable home point).
-  - **CAUTION**: 8–11 Satellites (HDOP 1.5–2.5, verify home point).
-  - **NO-GO**: ≤ 7 Satellites or HDOP > 2.5 (Severe risk of ATTI transition/flyaway).
-- [x] Step 1.5: Updated `ScenarioSimulator.kt` with realistic GNSS metrics for all 10 simulation scenarios.
+## 9. Active Plan: DEM Terrain Shading GNSS Occlusion Engine
 
-### Chunk 2: UI Visuals, Unit Test Suite & Release v1.1.0 Publication ✅
-- [x] Step 2.1: Added GNSS Satellites & HDOP metric card to `HomeScreen.kt`.
-- [x] Step 2.2: Added GNSS audit cards and companion criteria to `AssessmentDetailScreen.kt`.
-- [x] Step 2.3: Added GNSS satellites readout to `MapScreen.kt` bottom sheet.
-- [x] Step 2.4: Wrote comprehensive unit tests in `AssessmentEngineTest.kt`.
-- [x] Step 2.5: Built signed release APK `releases/current/UASReady-v1.1.0.apk`, archived `v1.0.4`, and pushed to GitHub.
+### Chunk 1: Online DEM Elevation Client & Terrain-Shaded GNSS Engine (IN PROGRESS)
+- [ ] Step 1.1: Create `TerrainRepository.kt` with `LiveTerrainRepository` querying Open-Meteo 90m SRTM/Copernicus batch elevation endpoint for 8 radial azimuth points (N, NE, E, SE, S, SW, W, NW at 1 km and 3 km radius).
+- [ ] Step 1.2: Implement `TerrainObstructionProfile` in `GnssModel.kt` with trigonometric radial horizon mask angle calculation $\theta(\alpha) = \arctan\left(\frac{\Delta E}{D}\right)$.
+- [ ] Step 1.3: Update `GnssEstimation.estimate(...)` to incorporate solid-angle terrain horizon occlusion alongside ionospheric Kp scintillation to compute final locked satellites and HDOP.
+- [ ] Step 1.4: Update `AssessmentContext.kt` to carry `terrainProfile`.
+- [ ] Step 1.5: Ensure Go/No-Go rules strictly adhere to user constraint: Steep terrain is evaluated via its impact on final GNSS satellite count and HDOP, not as an isolated arbitrary No-Go.
 
-## 8. Constraints & Decisions
+### Chunk 2: Repository Integration, UI Readouts, Tests & Release v1.2.0 (PENDING)
+- [ ] Step 2.1: Inject `TerrainRepository` into `MainViewModel` (with default fallback for offline or simulated modes).
+- [ ] Step 2.2: Update `HomeScreen.kt`, `AssessmentDetailScreen.kt`, and `MapScreen.kt` to display terrain shading metrics (e.g. `~22 Sats Locked • Terrain Occlusion: -4 Sats (18° East Ridge)`).
+- [ ] Step 2.3: Update `ScenarioSimulator.kt` with terrain-shaded scenarios (e.g. canyon simulation).
+- [ ] Step 2.4: Write comprehensive unit tests in `DataLayerTest.kt` and `AssessmentEngineTest.kt`.
+- [ ] Step 2.5: Build signed release APK `releases/current/UASReady-v1.2.0.apk`, archive `v1.1.0`, and push to GitHub.
+
+## 10. Constraints & Decisions
+- **User Guideline**: Terrain shading is evaluated strictly against its effect on GNSS satellite solution and HDOP. Steep terrain alone without GNSS degradation is not an automatic flight prohibition.
 - **GNSS Thresholds**:
   - 🟢 **GO**: Satellites ≥ 12, HDOP ≤ 1.5. 3D fix with stable home point.
   - 🟡 **CAUTION**: Satellites 8–11, HDOP 1.5–2.5. Marginal satellite geometry; verify home point.

@@ -344,4 +344,31 @@ class AssessmentEngineTest {
         assertTrue(severeStorm.estimatedHdop > 2.0)
         assertTrue(severeStorm.signalIntegrityPercent < 50)
     }
+
+    @Test
+    fun testTerrainShadingImpactOnGnssAssessment() {
+        // Moderate terrain with 22° ridge: Still retains 18 satellites -> GO (not an arbitrary No-Go)
+        val moderateTerrain = TerrainObstructionProfile.fromSectorAngles(
+            launchElevationMeters = 300.0,
+            sectorMaskAngles = mapOf(0 to 5.0, 45 to 5.0, 90 to 22.0, 135 to 10.0, 180 to 5.0, 225 to 5.0, 270 to 5.0, 315 to 5.0)
+        )
+        val moderateGnss = GnssEstimation.estimate(latitude = 34.0, elevationFt = 1000.0, kpIndex = 1.5, terrainProfile = moderateTerrain)
+        val contextModerate = AssessmentContext(
+            aircraft = defaultAircraft,
+            pilot = defaultPilot,
+            weather = nominalWeather,
+            forecast = null,
+            spaceWeather = nominalSpaceWeather,
+            airspace = nominalAirspace,
+            sunData = nominalSunData,
+            flightWindow = defaultFlightWindow,
+            location = defaultLocation,
+            gnss = moderateGnss,
+            terrainProfile = moderateTerrain
+        )
+        val resultModerate = engine.assess(contextModerate)
+        val satsRuleModerate = resultModerate.allRuleResults.first { it.ruleId == "SP-GNSS-SATS" }
+        assertEquals(AssessmentStatus.GO, satsRuleModerate.status)
+        assertTrue(satsRuleModerate.explanation.contains("occluded by"))
+    }
 }
