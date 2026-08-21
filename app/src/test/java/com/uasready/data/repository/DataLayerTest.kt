@@ -150,5 +150,37 @@ class DataLayerTest {
         val constructor = com.uasready.ui.viewmodel.MainViewModel::class.java.getConstructor(android.app.Application::class.java)
         assertNotNull(constructor)
     }
+
+    @Test
+    fun testTerrainObstructionProfileFromSectorAngles() {
+        val steepCanyonSectors = mapOf(
+            0 to 5.0,
+            45 to 8.0,
+            90 to 42.0, // 42° East canyon wall
+            135 to 15.0,
+            180 to 6.0,
+            225 to 12.0,
+            270 to 38.0, // 38° West canyon wall
+            315 to 10.0
+        )
+        val profile = com.uasready.domain.model.TerrainObstructionProfile.fromSectorAngles(
+            launchElevationMeters = 350.0,
+            sectorMaskAngles = steepCanyonSectors
+        )
+
+        assertEquals(42.0, profile.maxObstructionDeg, 0.1)
+        assertEquals(90, profile.worstObstructionAzimuth)
+        assertTrue(profile.terrainOcclusionPercent > 5)
+        assertEquals("Deep Canyon / Gorge", profile.terrainClassification)
+
+        val gnssWithCanyon = com.uasready.domain.model.GnssEstimation.estimate(
+            latitude = 34.0,
+            elevationFt = 1100.0,
+            kpIndex = 2.0,
+            terrainProfile = profile
+        )
+        assertTrue(gnssWithCanyon.terrainOccludedSatellitesCount >= 2)
+        assertTrue(gnssWithCanyon.lockedSatellitesCount < gnssWithCanyon.visibleSatellitesCount)
+    }
 }
 

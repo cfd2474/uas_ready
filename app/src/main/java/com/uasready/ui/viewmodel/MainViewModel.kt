@@ -33,6 +33,7 @@ class MainViewModel @JvmOverloads constructor(
     private val spaceWeatherRepo: SpaceWeatherRepository = LiveSpaceWeatherRepository(),
     private val solarRepo: SolarRepository = AstronomicalSolarRepository(),
     private val airspaceRepo: AirspaceRepository = LiveAirspaceRepository(),
+    private val terrainRepo: TerrainRepository = LiveTerrainRepository(),
     private val aircraftRepo: AircraftRepository = InMemoryAircraftRepository(),
     private val pilotRepo: PilotRepository = InMemoryPilotRepository(),
     private val assessmentEngine: AssessmentEngine = AssessmentEngine(),
@@ -127,17 +128,20 @@ class MainViewModel @JvmOverloads constructor(
             val weatherResult = weatherRepo.getWeatherData(lat, lon)
             val spaceResult = spaceWeatherRepo.getSpaceWeather()
             val airspaceResult = airspaceRepo.getAirspaceInfo(lat, lon)
+            val terrainResult = terrainRepo.getTerrainProfile(lat, lon)
             val sunData = solarRepo.calculateSunData(lat, lon, System.currentTimeMillis())
 
             val weatherPair = weatherResult.getOrNull()
             val spaceWeather = spaceResult.getOrNull()
             val airspace = airspaceResult.getOrNull()
+            val terrainProfile = terrainResult.getOrNull()
 
             val gnss = spaceWeather?.let {
                 GnssEstimation.estimate(
                     latitude = lat,
                     elevationFt = state.currentLocation.elevationFt,
-                    kpIndex = it.currentKpIndex
+                    kpIndex = it.currentKpIndex,
+                    terrainProfile = terrainProfile
                 )
             }
 
@@ -152,6 +156,7 @@ class MainViewModel @JvmOverloads constructor(
                 flightWindow = state.flightWindow,
                 location = state.currentLocation,
                 gnss = gnss,
+                terrainProfile = terrainProfile,
                 plannedAltitudeAglFt = state.plannedAltitudeAglFt,
                 hasInternetConnection = weatherResult.isSuccess || spaceResult.isSuccess
             )
