@@ -1,7 +1,10 @@
 package com.uasready.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.uasready.data.location.DeviceLocationManager
 import com.uasready.data.repository.*
 import com.uasready.domain.engine.AssessmentContext
 import com.uasready.domain.engine.AssessmentEngine
@@ -24,17 +27,23 @@ data class MainUiState(
 )
 
 class MainViewModel(
+    application: Application,
     private val weatherRepo: WeatherRepository = LiveWeatherRepository(),
     private val spaceWeatherRepo: SpaceWeatherRepository = LiveSpaceWeatherRepository(),
     private val solarRepo: SolarRepository = AstronomicalSolarRepository(),
     private val airspaceRepo: AirspaceRepository = LiveAirspaceRepository(),
     private val aircraftRepo: AircraftRepository = InMemoryAircraftRepository(),
     private val pilotRepo: PilotRepository = InMemoryPilotRepository(),
-    private val assessmentEngine: AssessmentEngine = AssessmentEngine()
-) : ViewModel() {
+    private val assessmentEngine: AssessmentEngine = AssessmentEngine(),
+    private val locationManager: DeviceLocationManager = DeviceLocationManager(application)
+) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+
+    companion object {
+        private const val TAG = "MainViewModel"
+    }
 
     init {
         // Collect aircraft and pilot state
@@ -56,6 +65,9 @@ class MainViewModel(
             }
         }
 
+        // Try to obtain initial GPS location silently if permission is already granted
+        refreshGpsLocation(silent = true)
+
         // Initial evaluation
         reevaluateAssessment()
     }
@@ -76,9 +88,37 @@ class MainViewModel(
         }
     }
 
+    fun refreshGpsLocation(silent: Boolean = false) {
+        viewModelScope.launch {
+            try {
+                val gpsLoc = locationManager.getCurrentLocation()
+                if (gpsLoc != null) {
+                    Log.i(TAG, "GPS location acquired: ${gpsLoc.formattedCoordinates} (${gpsLoc.displayName})")
+                    _uiState.update { it.copy(currentLocation = gpsLoc) }
+                    if (_uiState.value.currentScenario == SimulationScenario.LIVE_DATA) {
+                        fetchLiveData()
+                    } else {
+                        reevaluateAssessment()
+                    }
+                } else if (!silent) {
+                    Log.w(TAG, "Could not acquire GPS fix (permission not granted or no GPS signal)")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error acquiring GPS location: ${e.message}", e)
+            }
+        }
+    }
+
     fun fetchLiveData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLiveLoading = true, liveErrorMessage = null) }
+
+            // Check if we can get fresh GPS location first
+            val gpsLoc = locationManager.getCurrentLocation()
+            if (gpsLoc != null) {
+                _uiState.update { it.copy(currentLocation = gpsLoc) }
+            }
+
             val state = _uiState.value
             val lat = state.currentLocation.latitude
             val lon = state.currentLocation.longitude
