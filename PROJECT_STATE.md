@@ -68,19 +68,22 @@
 
 ## 7. Active Plan: GNSS Satellite Estimation & Safety Decision Engine
 
-### Chunk 1: Domain Modeling, Estimation Engine & Assessment Rules (IN PROGRESS)
-- [ ] Step 1.1: Create `GnssModel.kt` with `GnssEstimation` domain model (visible satellites, locked satellites, estimated HDOP, signal integrity).
-- [ ] Step 1.2: Implement `GnssEstimator` algorithm taking latitude, elevation MSL, and NOAA planetary Kp index.
-- [ ] Step 1.3: Update `AssessmentContext.kt` to carry `GnssEstimation`.
-- [ ] Step 1.4: Update `SpaceWeatherRuleEvaluator.kt` with rules `SP-GNSS-SATS` and `SP-GNSS-HDOP` matching user criteria (≥12 GO / 8-11 CAUTION / ≤7 NO-GO; HDOP ≤1.5 / 1.5-2.5 / >2.5).
-- [ ] Step 1.5: Update `ScenarioSimulator.kt` with realistic GNSS metrics for all 10 standard simulation scenarios.
+### Chunk 1: Domain Modeling, Estimation Engine & Assessment Rules ✅
+- [x] Step 1.1: Created `GnssModel.kt` with `GnssEstimation` domain model (visible satellites, locked satellites, estimated HDOP, signal integrity).
+- [x] Step 1.2: Implemented `GnssEstimator` algorithm taking latitude, elevation MSL, and NOAA planetary Kp index.
+- [x] Step 1.3: Updated `AssessmentContext.kt` to carry `GnssEstimation`.
+- [x] Step 1.4: Updated `SpaceWeatherRuleEvaluator.kt` with rules `SP-GNSS-SATS` and `SP-GNSS-HDOP` matching user criteria:
+  - **GO**: ≥ 12 Satellites (3D fix, HDOP ≤ 1.5, stable home point).
+  - **CAUTION**: 8–11 Satellites (HDOP 1.5–2.5, verify home point).
+  - **NO-GO**: ≤ 7 Satellites or HDOP > 2.5 (Severe risk of ATTI transition/flyaway).
+- [x] Step 1.5: Updated `ScenarioSimulator.kt` with realistic GNSS metrics for all 10 simulation scenarios.
 
-### Chunk 2: UI Visuals, Unit Test Suite & Release v1.1.0 Publication (PENDING)
-- [ ] Step 2.1: Add GNSS Satellites & HDOP metric card to `HomeScreen.kt`.
-- [ ] Step 2.2: Add GNSS audit cards and companion criteria to `AssessmentDetailScreen.kt`.
-- [ ] Step 2.3: Add GNSS satellites readout to `MapScreen.kt` bottom sheet.
-- [ ] Step 2.4: Write comprehensive unit tests in `AssessmentEngineTest.kt` and `DataLayerTest.kt`.
-- [ ] Step 2.5: Build signed release APK `releases/current/UASReady-v1.1.0.apk`, archive previous, and push to GitHub.
+### Chunk 2: UI Visuals, Unit Test Suite & Release v1.1.0 Publication ✅
+- [x] Step 2.1: Added GNSS Satellites & HDOP metric card to `HomeScreen.kt`.
+- [x] Step 2.2: Added GNSS audit cards and companion criteria to `AssessmentDetailScreen.kt`.
+- [x] Step 2.3: Added GNSS satellites readout to `MapScreen.kt` bottom sheet.
+- [x] Step 2.4: Wrote comprehensive unit tests in `AssessmentEngineTest.kt`.
+- [x] Step 2.5: Built signed release APK `releases/current/UASReady-v1.1.0.apk`, archived `v1.0.4`, and pushed to GitHub.
 
 ## 8. Constraints & Decisions
 - **GNSS Thresholds**:
