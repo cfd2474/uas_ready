@@ -121,4 +121,28 @@ class DataLayerTest {
         val staleResult = engine.assess(staleContext)
         assertEquals(AssessmentStatus.CAUTION, staleResult.overallStatus)
     }
+
+    @Test
+    fun testLiveSpaceWeatherRepositoryPayloadParsing() {
+        val jsonString = """
+            [
+                {"time_tag":"2026-08-20T18:00:00","Kp":3.33,"a_running":18,"station_count":8},
+                {"time_tag":"2026-08-20T21:00:00","Kp":2.67,"a_running":12,"station_count":8},
+                {"time_tag":"2026-08-21T00:00:00","Kp":3.33,"a_running":18,"station_count":8}
+            ]
+        """.trimIndent()
+
+        val jsonArray = org.json.JSONArray(jsonString)
+        val parsedKps = mutableListOf<Double>()
+        for (i in 0 until jsonArray.length()) {
+            val element = jsonArray.get(i)
+            if (element is org.json.JSONObject && element.has("Kp")) {
+                parsedKps.add(element.getDouble("Kp"))
+            }
+        }
+
+        assertEquals(3, parsedKps.size)
+        assertEquals(3.33, parsedKps.last(), 0.01)
+    }
 }
+

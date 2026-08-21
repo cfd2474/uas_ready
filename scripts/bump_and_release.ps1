@@ -48,11 +48,12 @@ $minor = 0
 $patch = 0
 
 if (Test-Path $VersionFile) {
-    Get-Content $VersionFile | ForEach-Object {
-        if ($_ -match "^VERSION_CODE\s*=\s*(\d+)") {
+    $lines = [System.IO.File]::ReadAllLines($VersionFile)
+    foreach ($line in $lines) {
+        if ($line -match "^VERSION_CODE\s*=\s*(\d+)") {
             $code = [int]$matches[1]
         }
-        if ($_ -match "^VERSION_NAME\s*=\s*(\d+)\.(\d+)\.(\d+)") {
+        if ($line -match "^VERSION_NAME\s*=\s*(\d+)\.(\d+)\.(\d+)") {
             $major = [int]$matches[1]
             $minor = [int]$matches[2]
             $patch = [int]$matches[3]
@@ -91,11 +92,8 @@ Write-Host "Previous: v$major.$minor.$patch (Build $code)" -ForegroundColor Yell
 Write-Host "New:      v$newName (Build $newCode)" -ForegroundColor Green
 
 # Write new version.properties
-$newProps = @"
-VERSION_CODE=$newCode
-VERSION_NAME=$newName
-"@
-Set-Content -Path $VersionFile -Value $newProps -Encoding UTF8
+$newProps = "VERSION_CODE=$newCode`r`nVERSION_NAME=$newName`r`n"
+[System.IO.File]::WriteAllText($VersionFile, $newProps, [System.Text.Encoding]::UTF8)
 
 # Move existing APKs in releases/current/ to releases/archive/
 $existingCurrentApks = Get-ChildItem -Path $CurrentDir -Filter "*.apk"
