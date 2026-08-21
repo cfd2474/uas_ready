@@ -61,10 +61,15 @@
 - [x] Step 2.1: Create `.gitignore` to protect build caches and private IDE files while tracking release APKs and sources.
 - [x] Step 2.2: Create `LICENSE` with MIT License (2026 Michael Leckliter).
 - [x] Step 2.3: Create comprehensive public-safety `README.md`.
-- [x] Step 2.4: Create `releases/current/` and `releases/archive/` and build initial signed release APK (`releases/current/UASReady-v1.0.0.apk`).
+- [x] Step 2.4: Create `releases/current/` and `releases/archive/` and build initial signed release APK.
 - [x] Step 2.5: Verify signed APK integrity with `apksigner` (V2 scheme valid, 100% signed with user keystore).
 - [x] Step 2.6: Initialize git, set remote to `https://github.com/cfd2474/UAS_Ready.git`, commit and push `main` branch.
 - [x] Step 2.7: Update `PROJECT_STATE.md`.
+
+### Bugfix & Release v1.0.2: NOAA SWPC Live Telemetry Parser ✅
+- **Issue**: NOAA SWPC K-Index endpoint returns a JSON array of `JSONObject` entries (`{"time_tag":"...","Kp":3.33}`) rather than an array of arrays, causing a `JSONException` during live fetch.
+- **Fix**: Updated `LiveSpaceWeatherRepository` to dynamically handle both `JSONObject` (extracting `Kp`/`kp`/`kp_index`) and `JSONArray` formats, added a 1-minute fallback feed, and detailed logcat logging (`SpaceWeatherRepo`).
+- **Release**: Built signed APK `releases/current/UASReady-v1.0.2.apk`, archived `v1.0.0` into `releases/archive/`, and pushed to GitHub.
 
 ## 6. Constraints & Decisions
 - **Keystore**: `D:\Code\ANDROID\APK Keys\AppSign.jks` with alias `key0` and password `zml61313`.
