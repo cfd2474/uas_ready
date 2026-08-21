@@ -57,18 +57,19 @@
 - [x] Step 1.4: Create `scripts/bump_and_release.ps1` automation script for release building, version bumping, and archiving.
 - [x] Step 1.5: Run unit tests and Gradle validation (BUILD SUCCESSFUL, all tests passing).
 
-### Chunk 2: Licensing, Documentation, Release Archiving & GitHub Publication (IN PROGRESS)
-- [ ] Step 2.1: Create `.gitignore` to protect build caches and private IDE files while tracking release APKs and sources.
-- [ ] Step 2.2: Create `LICENSE` with MIT License (2026 Michael Leckliter).
-- [ ] Step 2.3: Create comprehensive public-safety `README.md`.
-- [ ] Step 2.4: Create `releases/current/` and `releases/archive/` and build initial signed release APK.
-- [ ] Step 2.5: Verify signed APK integrity with apksigner/keytool.
-- [ ] Step 2.6: Initialize git, set remote to `https://github.com/cfd2474/UAS_Ready.git`, commit and push `main`.
-- [ ] Step 2.7: Update `PROJECT_STATE.md`.
+### Chunk 2: Licensing, Documentation, Release Archiving & GitHub Publication ✅
+- [x] Step 2.1: Create `.gitignore` to protect build caches and private IDE files while tracking release APKs and sources.
+- [x] Step 2.2: Create `LICENSE` with MIT License (2026 Michael Leckliter).
+- [x] Step 2.3: Create comprehensive public-safety `README.md`.
+- [x] Step 2.4: Create `releases/current/` and `releases/archive/` and build initial signed release APK (`releases/current/UASReady-v1.0.0.apk`).
+- [x] Step 2.5: Verify signed APK integrity with `apksigner` (V2 scheme valid, 100% signed with user keystore).
+- [x] Step 2.6: Initialize git, set remote to `https://github.com/cfd2474/UAS_Ready.git`, commit and push `main` branch.
+- [x] Step 2.7: Update `PROJECT_STATE.md`.
 
 ## 6. Constraints & Decisions
 - **Keystore**: `D:\Code\ANDROID\APK Keys\AppSign.jks` with alias `key0` and password `zml61313`.
-- **Target Repository**: `https://github.com/cfd2474/UAS_Ready.git`.
-- **Version Tracking**: Version code & version name displayed persistently in the app footer.
+- **Target Repository**: `https://github.com/cfd2474/UAS_Ready.git` (tracked on `main`).
+- **Version Tracking**: Version code & version name displayed persistently in the app footer (`v1.0.0 (Build 1)`).
 - **Releases Directory**: `releases/current/` holds the active release APK, `releases/archive/` holds all prior versions labeled by version number.
+- **Automated Release Engine**: PowerShell script `scripts/bump_and_release.ps1` automates version bumps, APK signing, release archiving, and GitHub synchronization.
 
