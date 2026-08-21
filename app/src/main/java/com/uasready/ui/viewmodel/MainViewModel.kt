@@ -26,7 +26,7 @@ data class MainUiState(
     val selectedCategoryFilter: AssessmentCategory? = null
 )
 
-class MainViewModel(
+class MainViewModel @JvmOverloads constructor(
     application: Application,
     private val weatherRepo: WeatherRepository = LiveWeatherRepository(),
     private val spaceWeatherRepo: SpaceWeatherRepository = LiveSpaceWeatherRepository(),
