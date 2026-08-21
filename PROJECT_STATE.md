@@ -67,13 +67,12 @@
 - [x] Step 2.7: Update `PROJECT_STATE.md`.
 
 ### Release v1.0.3: Real-Time Hardware GPS Provider & Runtime Permissions ✅
-- **Issue**: Location was falling back to the Corona, CA HQ default because runtime location permissions were not prompted and hardware GPS updates were not active.
-- **Implementation**:
-  - Added `DeviceLocationManager` in `data/location/` to query `LocationManager.GPS_PROVIDER` / `NETWORK_PROVIDER` with reverse geocoding via `Geocoder`.
-  - Added Compose `ActivityResultContracts.RequestMultiplePermissions` launcher in `MainActivity` on startup.
-  - Connected `onRefreshGpsLocation` to the **CURRENT GPS** button on `MapScreen` and `MainViewModel.refreshGpsLocation()`.
-  - Enabled live telemetry refresh immediately upon GPS fix acquisition.
-- **Release**: Built signed APK `releases/current/UASReady-v1.0.3.apk`, archived `v1.0.2`, and pushed to GitHub.
+- **Implementation**: Added `DeviceLocationManager` in `data/location/` with Android runtime permission requests on startup.
+
+### Bugfix & Release v1.0.4: ViewModel Reflection Instantiation Fix ✅
+- **Issue**: App crashed on launch with `NoSuchMethodException: com.uasready.ui.viewmodel.MainViewModel.<init> [class android.app.Application]` because Kotlin default constructor parameters require `@JvmOverloads` for `AndroidViewModelFactory` Java reflection instantiation.
+- **Fix**: Added `@JvmOverloads constructor(...)` to `MainViewModel` and added a unit test verifying reflection constructor accessibility.
+- **Release**: Built signed APK `releases/current/UASReady-v1.0.4.apk`, archived `v1.0.3` into `releases/archive/`, and pushed to GitHub.
 
 ## 6. Constraints & Decisions
 - **Keystore**: `D:\Code\ANDROID\APK Keys\AppSign.jks` with alias `key0` and password `zml61313`.
