@@ -1,0 +1,39 @@
+# Built application files
+*.apk
+*.aab
+
+# Don't ignore release APKs in the releases folder!
+!releases/**/*.apk
+
+# Gradle files
+.gradle/
+build/
+app/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log files
+*.log
+
+# Android Studio / IntelliJ IDEA
+*.iml
+.idea/
+.idea/caches
+.idea/libraries
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/kotlinc.xml
+
+# Keystore files (keep private if any local keys are generated in workspace)
+*.jks
+*.keystore
+
+# OS & Temp
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*~
