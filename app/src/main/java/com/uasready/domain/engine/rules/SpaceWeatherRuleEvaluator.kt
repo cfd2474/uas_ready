@@ -88,6 +88,87 @@ class SpaceWeatherRuleEvaluator : CategoryRuleEvaluator {
             )
         }
 
+        // 3. GNSS Satellite Navigation Solution & HDOP Safety Assessment
+        val gnss = context.gnss ?: GnssEstimation.estimate(
+            latitude = context.location.latitude,
+            elevationFt = context.location.elevationFt,
+            kpIndex = maxKp
+        )
+
+        // Rule: Satellites in navigation solution
+        when {
+            gnss.lockedSatellitesCount >= 12 -> rules.add(
+                RuleResult(
+                    ruleId = "SP-GNSS-SATS",
+                    category = category,
+                    status = AssessmentStatus.GO,
+                    title = "GNSS Satellite Constellation Lock",
+                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
+                    thresholdFormatted = ">= 12 Sats (3D Fix)",
+                    explanation = "${gnss.lockedSatellitesCount} multi-GNSS satellites in navigation solution (out of ${gnss.visibleSatellitesCount} visible). 3D fix verified; stable home point confirmed."
+                )
+            )
+            gnss.lockedSatellitesCount in 8..11 -> rules.add(
+                RuleResult(
+                    ruleId = "SP-GNSS-SATS",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "Marginal GNSS Satellite Lock (8-11 Sats)",
+                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
+                    thresholdFormatted = "12+ Sats for Full Nominal",
+                    explanation = "${gnss.lockedSatellitesCount} satellites locked. Marginal constellation geometry; verify home point manually and avoid GNSS-dependent precision automated mapping."
+                )
+            )
+            else -> rules.add(
+                RuleResult(
+                    ruleId = "SP-GNSS-SATS",
+                    category = category,
+                    status = AssessmentStatus.NO_GO,
+                    title = "Insufficient GNSS Satellites (<= 7 Sats)",
+                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
+                    thresholdFormatted = "Min 8 Sats Required",
+                    explanation = "Only ${gnss.lockedSatellitesCount} satellites locked in navigation solution (<= 7). Severe risk of GPS loss-of-lock, ATTI mode fallback, or uncommanded fly-away."
+                )
+            )
+        }
+
+        // Rule: Horizontal Dilution of Precision (HDOP)
+        when {
+            gnss.estimatedHdop <= 1.5 -> rules.add(
+                RuleResult(
+                    ruleId = "SP-GNSS-HDOP",
+                    category = category,
+                    status = AssessmentStatus.GO,
+                    title = "Horizontal Dilution of Precision (HDOP)",
+                    inputValueFormatted = "HDOP ${gnss.estimatedHdop}",
+                    thresholdFormatted = "<= 1.5",
+                    explanation = "Optimal satellite geometry with HDOP ${gnss.estimatedHdop} (<= 1.5). Centimeter-to-sub-meter horizontal positioning precision."
+                )
+            )
+            gnss.estimatedHdop <= 2.5 -> rules.add(
+                RuleResult(
+                    ruleId = "SP-GNSS-HDOP",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "Degraded HDOP Precision (1.5 - 2.5)",
+                    inputValueFormatted = "HDOP ${gnss.estimatedHdop}",
+                    thresholdFormatted = "<= 1.5 Nominal",
+                    explanation = "HDOP is elevated at ${gnss.estimatedHdop}. Positional accuracy reduced; maintain safe separation from structures and trees."
+                )
+            )
+            else -> rules.add(
+                RuleResult(
+                    ruleId = "SP-GNSS-HDOP",
+                    category = category,
+                    status = AssessmentStatus.NO_GO,
+                    title = "Excessive HDOP Error (> 2.5)",
+                    inputValueFormatted = "HDOP ${gnss.estimatedHdop}",
+                    thresholdFormatted = "<= 2.5 Max Safe",
+                    explanation = "HDOP of ${gnss.estimatedHdop} exceeds safe navigation criteria (> 2.5). Satellite triangulation geometry is severely compromised."
+                )
+            )
+        }
+
         val worstStatus = rules.maxByOrNull { it.status.priority }?.status ?: AssessmentStatus.GO
         val summary = when (worstStatus) {
             AssessmentStatus.NO_GO -> "Severe space weather / geomagnetic storm hazard to GNSS"

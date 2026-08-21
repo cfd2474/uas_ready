@@ -66,18 +66,27 @@
 - [x] Step 2.6: Initialize git, set remote to `https://github.com/cfd2474/UAS_Ready.git`, commit and push `main` branch.
 - [x] Step 2.7: Update `PROJECT_STATE.md`.
 
-### Release v1.0.3: Real-Time Hardware GPS Provider & Runtime Permissions ✅
-- **Implementation**: Added `DeviceLocationManager` in `data/location/` with Android runtime permission requests on startup.
+## 7. Active Plan: GNSS Satellite Estimation & Safety Decision Engine
 
-### Bugfix & Release v1.0.4: ViewModel Reflection Instantiation Fix ✅
-- **Issue**: App crashed on launch with `NoSuchMethodException: com.uasready.ui.viewmodel.MainViewModel.<init> [class android.app.Application]` because Kotlin default constructor parameters require `@JvmOverloads` for `AndroidViewModelFactory` Java reflection instantiation.
-- **Fix**: Added `@JvmOverloads constructor(...)` to `MainViewModel` and added a unit test verifying reflection constructor accessibility.
-- **Release**: Built signed APK `releases/current/UASReady-v1.0.4.apk`, archived `v1.0.3` into `releases/archive/`, and pushed to GitHub.
+### Chunk 1: Domain Modeling, Estimation Engine & Assessment Rules (IN PROGRESS)
+- [ ] Step 1.1: Create `GnssModel.kt` with `GnssEstimation` domain model (visible satellites, locked satellites, estimated HDOP, signal integrity).
+- [ ] Step 1.2: Implement `GnssEstimator` algorithm taking latitude, elevation MSL, and NOAA planetary Kp index.
+- [ ] Step 1.3: Update `AssessmentContext.kt` to carry `GnssEstimation`.
+- [ ] Step 1.4: Update `SpaceWeatherRuleEvaluator.kt` with rules `SP-GNSS-SATS` and `SP-GNSS-HDOP` matching user criteria (≥12 GO / 8-11 CAUTION / ≤7 NO-GO; HDOP ≤1.5 / 1.5-2.5 / >2.5).
+- [ ] Step 1.5: Update `ScenarioSimulator.kt` with realistic GNSS metrics for all 10 standard simulation scenarios.
 
-## 6. Constraints & Decisions
-- **Keystore**: `D:\Code\ANDROID\APK Keys\AppSign.jks` with alias `key0` and password `zml61313`.
-- **Target Repository**: `https://github.com/cfd2474/UAS_Ready.git` (tracked on `main`).
-- **Version Tracking**: Version code & version name displayed persistently in the app footer (`v1.0.0 (Build 1)`).
-- **Releases Directory**: `releases/current/` holds the active release APK, `releases/archive/` holds all prior versions labeled by version number.
-- **Automated Release Engine**: PowerShell script `scripts/bump_and_release.ps1` automates version bumps, APK signing, release archiving, and GitHub synchronization.
+### Chunk 2: UI Visuals, Unit Test Suite & Release v1.1.0 Publication (PENDING)
+- [ ] Step 2.1: Add GNSS Satellites & HDOP metric card to `HomeScreen.kt`.
+- [ ] Step 2.2: Add GNSS audit cards and companion criteria to `AssessmentDetailScreen.kt`.
+- [ ] Step 2.3: Add GNSS satellites readout to `MapScreen.kt` bottom sheet.
+- [ ] Step 2.4: Write comprehensive unit tests in `AssessmentEngineTest.kt` and `DataLayerTest.kt`.
+- [ ] Step 2.5: Build signed release APK `releases/current/UASReady-v1.1.0.apk`, archive previous, and push to GitHub.
+
+## 8. Constraints & Decisions
+- **GNSS Thresholds**:
+  - 🟢 **GO**: Satellites ≥ 12, HDOP ≤ 1.5. 3D fix with stable home point.
+  - 🟡 **CAUTION**: Satellites 8–11, HDOP 1.5–2.5. Marginal satellite geometry; verify home point.
+  - 🔴 **NO-GO**: Satellites ≤ 7 or HDOP > 2.5. High risk of flyaway/ATTI mode transition.
+- **Keystore**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (alias `key0`, password `zml61313`).
+- **Target Repository**: `https://github.com/cfd2474/UAS_Ready.git` (branch `main`).
 

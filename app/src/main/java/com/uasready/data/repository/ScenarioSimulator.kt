@@ -75,6 +75,12 @@ object ScenarioSimulator {
             sourceName = "Simulated FAA Airspace"
         )
 
+        val defaultGnss = GnssEstimation.estimate(
+            latitude = location.latitude,
+            elevationFt = location.elevationFt,
+            kpIndex = defaultSpaceWeather.currentKpIndex
+        )
+
         return when (scenario) {
             SimulationScenario.LIVE_DATA, SimulationScenario.NOMINAL_GO -> {
                 AssessmentContext(
@@ -86,7 +92,8 @@ object ScenarioSimulator {
                     airspace = defaultAirspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
 
@@ -105,7 +112,8 @@ object ScenarioSimulator {
                     airspace = defaultAirspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
 
@@ -124,7 +132,8 @@ object ScenarioSimulator {
                     airspace = defaultAirspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
 
@@ -146,7 +155,8 @@ object ScenarioSimulator {
                     airspace = defaultAirspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
 
@@ -165,7 +175,8 @@ object ScenarioSimulator {
                     airspace = airspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
 
@@ -190,7 +201,8 @@ object ScenarioSimulator {
                     airspace = airspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
 
@@ -202,6 +214,11 @@ object ScenarioSimulator {
                     gnssRiskLevel = GnssRiskLevel.SEVERE,
                     activeAlerts = listOf("NOAA SWPC Strong Geomagnetic Storm G3 Warning")
                 )
+                val stormGnss = GnssEstimation.estimate(
+                    latitude = location.latitude,
+                    elevationFt = location.elevationFt,
+                    kpIndex = 7.5
+                )
                 AssessmentContext(
                     aircraft = aircraft,
                     pilot = pilot,
@@ -211,7 +228,8 @@ object ScenarioSimulator {
                     airspace = defaultAirspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = stormGnss
                 )
             }
 
@@ -237,27 +255,43 @@ object ScenarioSimulator {
                     airspace = defaultAirspace,
                     sunData = nightSun,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
 
             SimulationScenario.DETERIORATING_FORECAST_NOGO -> {
-                val forecast = WeatherForecast(
-                    intervals = listOf(
-                        HourlyForecastInterval(
-                            timestampEpochMs = flightWindow.startEpochMs + 45 * 60 * 1000L,
-                            temperatureF = 72.0,
-                            windSpeedMph = 28.0,
-                            windGustMph = 38.0, // Spikes above 34 MPH limit
-                            windDirectionDegrees = 280,
-                            visibilityStatuteMiles = 10.0,
-                            cloudCeilingFt = 5000.0,
-                            precipitationProbabilityPercent = 0,
-                            precipitationRateInchesPerHour = 0.0,
-                            conditionsDescription = "High Wind Gust Deterioration"
-                        )
+                val hourly = listOf(
+                    HourlyForecastInterval(
+                        timestampEpochMs = flightWindow.startEpochMs + 30 * 60 * 1000L,
+                        temperatureF = 72.0,
+                        windSpeedMph = 14.0,
+                        windGustMph = 20.0,
+                        windDirectionDegrees = 270,
+                        visibilityStatuteMiles = 10.0,
+                        cloudCeilingFt = 5000.0,
+                        precipitationProbabilityPercent = 10,
+                        precipitationRateInchesPerHour = 0.0,
+                        conditionsDescription = "Clear"
                     ),
-                    generatedAtEpochMs = now
+                    HourlyForecastInterval(
+                        timestampEpochMs = flightWindow.startEpochMs + 90 * 60 * 1000L,
+                        temperatureF = 65.0,
+                        windSpeedMph = 28.0,
+                        windGustMph = 39.0, // Exceeds limit later in flight window
+                        windDirectionDegrees = 290,
+                        visibilityStatuteMiles = 3.0,
+                        cloudCeilingFt = 1200.0,
+                        precipitationProbabilityPercent = 85,
+                        precipitationRateInchesPerHour = 0.4,
+                        precipitationType = PrecipitationType.RAIN,
+                        conditionsDescription = "High Winds & Rain Squall"
+                    )
+                )
+                val forecast = WeatherForecast(
+                    intervals = hourly,
+                    generatedAtEpochMs = now,
+                    sourceName = "Simulated NOAA GFS Forecast"
                 )
                 AssessmentContext(
                     aircraft = aircraft,
@@ -268,13 +302,14 @@ object ScenarioSimulator {
                     airspace = defaultAirspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
 
             SimulationScenario.STALE_DATA_WARNING -> {
                 val staleWeather = defaultWeather.copy(
-                    timestampEpochMs = now - 90 * 60 * 1000L, // 90 minutes old
+                    timestampEpochMs = now - (3 * 3600 * 1000L), // 3 hours old
                     isStale = true
                 )
                 AssessmentContext(
@@ -286,7 +321,8 @@ object ScenarioSimulator {
                     airspace = defaultAirspace,
                     sunData = defaultSunData,
                     flightWindow = flightWindow,
-                    location = location
+                    location = location,
+                    gnss = defaultGnss
                 )
             }
         }

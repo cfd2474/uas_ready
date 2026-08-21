@@ -279,4 +279,69 @@ class AssessmentEngineTest {
         assertEquals(AssessmentStatus.NO_GO, result.overallStatus)
         assertTrue(result.noGoRules.any { it.ruleId == "PLT-107-NGT-001" })
     }
+
+    @Test
+    fun testGnssSatellitesRuleEvaluationThresholds() {
+        // 1. 12+ Satellites -> GO
+        val gnssGo = GnssEstimation(
+            visibleSatellitesCount = 28,
+            lockedSatellitesCount = 18,
+            estimatedHdop = 1.0,
+            signalIntegrityPercent = 95
+        )
+        val contextGo = AssessmentContext(
+            aircraft = defaultAircraft,
+            pilot = defaultPilot,
+            weather = nominalWeather,
+            forecast = null,
+            spaceWeather = nominalSpaceWeather,
+            airspace = nominalAirspace,
+            sunData = nominalSunData,
+            flightWindow = defaultFlightWindow,
+            location = defaultLocation,
+            gnss = gnssGo
+        )
+        val resultGo = engine.assess(contextGo)
+        val satsRuleGo = resultGo.allRuleResults.first { it.ruleId == "SP-GNSS-SATS" }
+        assertEquals(AssessmentStatus.GO, satsRuleGo.status)
+
+        // 2. 8-11 Satellites -> CAUTION
+        val gnssCaution = GnssEstimation(
+            visibleSatellitesCount = 24,
+            lockedSatellitesCount = 10,
+            estimatedHdop = 1.8,
+            signalIntegrityPercent = 60
+        )
+        val contextCaution = contextGo.copy(gnss = gnssCaution)
+        val resultCaution = engine.assess(contextCaution)
+        val satsRuleCaution = resultCaution.allRuleResults.first { it.ruleId == "SP-GNSS-SATS" }
+        assertEquals(AssessmentStatus.CAUTION, satsRuleCaution.status)
+
+        // 3. <= 7 Satellites -> NO-GO
+        val gnssNoGo = GnssEstimation(
+            visibleSatellitesCount = 20,
+            lockedSatellitesCount = 6,
+            estimatedHdop = 3.2,
+            signalIntegrityPercent = 30
+        )
+        val contextNoGo = contextGo.copy(gnss = gnssNoGo)
+        val resultNoGo = engine.assess(contextNoGo)
+        val satsRuleNoGo = resultNoGo.allRuleResults.first { it.ruleId == "SP-GNSS-SATS" }
+        assertEquals(AssessmentStatus.NO_GO, satsRuleNoGo.status)
+        val hdopRuleNoGo = resultNoGo.allRuleResults.first { it.ruleId == "SP-GNSS-HDOP" }
+        assertEquals(AssessmentStatus.NO_GO, hdopRuleNoGo.status)
+    }
+
+    @Test
+    fun testGnssEstimatorCalculations() {
+        val nominal = GnssEstimation.estimate(latitude = 33.8753, elevationFt = 600.0, kpIndex = 1.7)
+        assertTrue(nominal.lockedSatellitesCount >= 20)
+        assertTrue(nominal.estimatedHdop <= 1.2)
+        assertEquals(100, nominal.signalIntegrityPercent)
+
+        val severeStorm = GnssEstimation.estimate(latitude = 33.8753, elevationFt = 600.0, kpIndex = 8.5)
+        assertTrue(severeStorm.lockedSatellitesCount <= 10)
+        assertTrue(severeStorm.estimatedHdop > 2.0)
+        assertTrue(severeStorm.signalIntegrityPercent < 50)
+    }
 }
