@@ -66,10 +66,14 @@
 - [x] Step 2.6: Initialize git, set remote to `https://github.com/cfd2474/UAS_Ready.git`, commit and push `main` branch.
 - [x] Step 2.7: Update `PROJECT_STATE.md`.
 
-### Bugfix & Release v1.0.2: NOAA SWPC Live Telemetry Parser ✅
-- **Issue**: NOAA SWPC K-Index endpoint returns a JSON array of `JSONObject` entries (`{"time_tag":"...","Kp":3.33}`) rather than an array of arrays, causing a `JSONException` during live fetch.
-- **Fix**: Updated `LiveSpaceWeatherRepository` to dynamically handle both `JSONObject` (extracting `Kp`/`kp`/`kp_index`) and `JSONArray` formats, added a 1-minute fallback feed, and detailed logcat logging (`SpaceWeatherRepo`).
-- **Release**: Built signed APK `releases/current/UASReady-v1.0.2.apk`, archived `v1.0.0` into `releases/archive/`, and pushed to GitHub.
+### Release v1.0.3: Real-Time Hardware GPS Provider & Runtime Permissions ✅
+- **Issue**: Location was falling back to the Corona, CA HQ default because runtime location permissions were not prompted and hardware GPS updates were not active.
+- **Implementation**:
+  - Added `DeviceLocationManager` in `data/location/` to query `LocationManager.GPS_PROVIDER` / `NETWORK_PROVIDER` with reverse geocoding via `Geocoder`.
+  - Added Compose `ActivityResultContracts.RequestMultiplePermissions` launcher in `MainActivity` on startup.
+  - Connected `onRefreshGpsLocation` to the **CURRENT GPS** button on `MapScreen` and `MainViewModel.refreshGpsLocation()`.
+  - Enabled live telemetry refresh immediately upon GPS fix acquisition.
+- **Release**: Built signed APK `releases/current/UASReady-v1.0.3.apk`, archived `v1.0.2`, and pushed to GitHub.
 
 ## 6. Constraints & Decisions
 - **Keystore**: `D:\Code\ANDROID\APK Keys\AppSign.jks` with alias `key0` and password `zml61313`.
