@@ -144,5 +144,11 @@ class DataLayerTest {
         assertEquals(3, parsedKps.size)
         assertEquals(3.33, parsedKps.last(), 0.01)
     }
+
+    @Test
+    fun testMainViewModelConstructorReflection() {
+        val constructor = com.uasready.ui.viewmodel.MainViewModel::class.java.getConstructor(android.app.Application::class.java)
+        assertNotNull(constructor)
+    }
 }
 
