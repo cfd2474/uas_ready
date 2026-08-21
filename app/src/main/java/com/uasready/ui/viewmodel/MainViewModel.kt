@@ -23,6 +23,7 @@ data class MainUiState(
     val liveErrorMessage: String? = null,
     val currentScenario: SimulationScenario = SimulationScenario.NOMINAL_GO,
     val assessmentResult: AssessmentResult? = null,
+    val estimatedGnss: GnssEstimation? = null,
     val selectedCategoryFilter: AssessmentCategory? = null
 )
 
@@ -84,7 +85,7 @@ class MainViewModel @JvmOverloads constructor(
                 location = _uiState.value.currentLocation
             )
             val result = assessmentEngine.assess(context)
-            _uiState.update { it.copy(assessmentResult = result, liveErrorMessage = null) }
+            _uiState.update { it.copy(assessmentResult = result, estimatedGnss = context.gnss, liveErrorMessage = null) }
         }
     }
 
@@ -132,6 +133,14 @@ class MainViewModel @JvmOverloads constructor(
             val spaceWeather = spaceResult.getOrNull()
             val airspace = airspaceResult.getOrNull()
 
+            val gnss = spaceWeather?.let {
+                GnssEstimation.estimate(
+                    latitude = lat,
+                    elevationFt = state.currentLocation.elevationFt,
+                    kpIndex = it.currentKpIndex
+                )
+            }
+
             val context = AssessmentContext(
                 aircraft = state.selectedAircraft,
                 pilot = state.currentPilot,
@@ -142,6 +151,7 @@ class MainViewModel @JvmOverloads constructor(
                 sunData = sunData,
                 flightWindow = state.flightWindow,
                 location = state.currentLocation,
+                gnss = gnss,
                 plannedAltitudeAglFt = state.plannedAltitudeAglFt,
                 hasInternetConnection = weatherResult.isSuccess || spaceResult.isSuccess
             )
@@ -151,6 +161,7 @@ class MainViewModel @JvmOverloads constructor(
                 it.copy(
                     isLiveLoading = false,
                     assessmentResult = assessment,
+                    estimatedGnss = gnss,
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
                 )
             }

@@ -255,14 +255,52 @@ fun HomeScreen(
             }
 
             item {
-                // Space Weather & GNSS
+                // Space Weather & Planetary Kp
                 val kpRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("SP-KP") }
+                val satsRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-SATS" }
+                val hdopRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-HDOP" }
+
                 MetricSummaryCard(
-                    title = "Space Weather & GNSS",
+                    title = "Space Weather & Geomagnetic (Kp)",
                     primaryValue = kpRule?.inputValueFormatted ?: "Kp 2.0 (Nominal)",
-                    secondaryValue = "Normal GNSS constellation health",
+                    secondaryValue = kpRule?.thresholdFormatted ?: "Normal solar & ionospheric activity",
                     status = spaceCat?.status,
                     icon = Icons.Default.Public,
+                    onClick = onNavigateToAssessment
+                )
+            }
+
+            item {
+                // GNSS Satellite Navigation Solution & HDOP
+                val satsRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-SATS" }
+                val hdopRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-HDOP" }
+                val gnss = uiState.estimatedGnss
+
+                val primaryText = if (gnss != null) {
+                    "~${gnss.lockedSatellitesCount} Satellites Locked"
+                } else {
+                    satsRule?.inputValueFormatted ?: "12+ Satellites Expected"
+                }
+
+                val secondaryText = if (gnss != null) {
+                    "HDOP ${gnss.estimatedHdop} • 3D Fix • ${gnss.signalIntegrityPercent}% Signal"
+                } else {
+                    hdopRule?.inputValueFormatted ?: "HDOP <= 1.5 • Multi-GNSS"
+                }
+
+                val gnssWorstStatus = when {
+                    satsRule?.status == AssessmentStatus.NO_GO || hdopRule?.status == AssessmentStatus.NO_GO -> AssessmentStatus.NO_GO
+                    satsRule?.status == AssessmentStatus.CAUTION || hdopRule?.status == AssessmentStatus.CAUTION -> AssessmentStatus.CAUTION
+                    satsRule?.status == AssessmentStatus.GO -> AssessmentStatus.GO
+                    else -> spaceCat?.status
+                }
+
+                MetricSummaryCard(
+                    title = "GNSS Satellites & Geometry",
+                    primaryValue = primaryText,
+                    secondaryValue = secondaryText,
+                    status = gnssWorstStatus,
+                    icon = Icons.Default.Satellite,
                     onClick = onNavigateToAssessment
                 )
             }

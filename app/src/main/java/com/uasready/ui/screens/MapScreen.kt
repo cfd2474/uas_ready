@@ -187,6 +187,11 @@ fun MapScreen(
                             Text("ELEVATION", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
                             Text("${loc.elevationFt.toInt()} ft MSL", style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary, fontWeight = FontWeight.SemiBold))
                         }
+                        Column {
+                            Text("GNSS SATS", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
+                            val satsText = if (uiState.estimatedGnss != null) "~${uiState.estimatedGnss.lockedSatellitesCount} (HDOP ${uiState.estimatedGnss.estimatedHdop})" else "12+ Locked"
+                            Text(satsText, style = MaterialTheme.typography.bodyLarge.copy(color = AviationAccent, fontWeight = FontWeight.SemiBold))
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
