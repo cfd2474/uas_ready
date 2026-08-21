@@ -31,6 +31,7 @@ import org.osmdroid.views.overlay.Marker
 fun MapScreen(
     uiState: MainUiState,
     onLocationChanged: (LocationInfo) -> Unit,
+    onRefreshGpsLocation: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -192,17 +193,23 @@ fun MapScreen(
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            onClick = {
-                                // Reset to default Corona HQ
-                                onLocationChanged(LocationInfo.defaultLocation())
-                            },
+                            onClick = onRefreshGpsLocation,
                             colors = ButtonDefaults.buttonColors(containerColor = AviationCyan),
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Icon(Icons.Default.GpsFixed, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("CURRENT GPS")
+                            Text("CURRENT GPS", color = AviationDarkBackground, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = { onLocationChanged(LocationInfo.defaultLocation()) },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("RESET HQ", fontSize = 12.sp)
                         }
                     }
                 }
