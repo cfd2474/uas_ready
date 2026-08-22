@@ -42,6 +42,18 @@ fun AircraftScreen(
     var customMaxTemp by remember { mutableStateOf("104.0") }
     var customPrecipAllowed by remember { mutableStateOf(false) }
 
+    // Filter state: List remains blank until a manufacturer is explicitly chosen
+    var selectedManufacturer by remember { mutableStateOf<String?>(null) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val manufacturerList = listOf(
+        "DJI",
+        "Autel Robotics",
+        "Skydio",
+        "Parrot",
+        "Custom Profiles"
+    )
+
     val selected = uiState.selectedAircraft
 
     Scaffold(
@@ -63,7 +75,7 @@ fun AircraftScreen(
                     }
                 },
                 actions = {
-                    FilledTonalButton(
+                    Button(
                         onClick = {
                             customName = "${selected.displayName} (Custom)"
                             customMaxWind = selected.limitations.maxSustainedWindSpeedMph.toString()
@@ -73,7 +85,7 @@ fun AircraftScreen(
                             customPrecipAllowed = selected.limitations.precipitationAllowed
                             showCustomDialog = true
                         },
-                        colors = ButtonDefaults.filledTonalButtonColors(
+                        colors = ButtonDefaults.buttonColors(
                             containerColor = AviationCyan,
                             contentColor = Color.White
                         ),
@@ -96,7 +108,7 @@ fun AircraftScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Selected Active Aircraft Highlight
+            // Selected Active Aircraft Highlight Card
             item {
                 Spacer(modifier = Modifier.height(4.dp))
                 Box(
@@ -114,7 +126,7 @@ fun AircraftScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.FlightTakeoff, contentDescription = null, tint = AviationCyan, modifier = Modifier.size(24.dp))
+                                Icon(Icons.Default.FlightTakeoff, contentDescription = null, tint = AviationCyan, modifier = Modifier.size(22.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "ACTIVE FLIGHT AIRCRAFT",
@@ -127,130 +139,248 @@ fun AircraftScreen(
                                     .background(SafetyGoBg)
                                     .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Text("SELECTED", style = MaterialTheme.typography.labelMedium.copy(color = SafetyGoLight, fontWeight = FontWeight.Bold))
+                                Text("SELECTED", style = MaterialTheme.typography.labelMedium.copy(color = SafetyGoLight, fontWeight = FontWeight.Bold, fontSize = 10.sp))
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = selected.displayName,
-                            style = MaterialTheme.typography.headlineMedium.copy(color = TextPrimary, fontWeight = FontWeight.Black)
+                            style = MaterialTheme.typography.headlineSmall.copy(color = TextPrimary, fontWeight = FontWeight.Black)
                         )
                         Text(
                             text = "Manufacturer: ${selected.manufacturer} • Fleet: ${selected.organization}",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         HorizontalDivider(color = AviationDarkBorder)
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
                         // Operating Envelope Grid
                         Text(
                             text = "OPERATING ENVELOPE & CERTIFIED LIMITS",
-                            style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary, fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         Row(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("MAX SUSTAINED WIND", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
-                                Text("${selected.limitations.maxSustainedWindSpeedMph.toInt()} MPH", style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
+                                Text("MAX SUSTAINED WIND", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 9.sp))
+                                Text("${selected.limitations.maxSustainedWindSpeedMph.toInt()} MPH", style = MaterialTheme.typography.titleSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
                             }
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("MAX WIND GUST", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
-                                Text("${selected.limitations.maxGustSpeedMph.toInt()} MPH", style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
+                                Text("MAX WIND GUST", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 9.sp))
+                                Text("${selected.limitations.maxGustSpeedMph.toInt()} MPH", style = MaterialTheme.typography.titleSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("TEMP ENVELOPE", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 9.sp))
+                                Text("${selected.limitations.minOperatingTempF.toInt()}°F to ${selected.limitations.maxOperatingTempF.toInt()}°F", style = MaterialTheme.typography.titleSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
                         Row(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("TEMP ENVELOPE", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
-                                Text("${selected.limitations.minOperatingTempF.toInt()}°F to ${selected.limitations.maxOperatingTempF.toInt()}°F", style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
+                                Text("WATER / IP RATING", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 9.sp))
+                                Text(if (selected.limitations.precipitationAllowed) selected.limitations.ipRating else "None (No Rain)", style = MaterialTheme.typography.titleSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
                             }
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("WATER / IP RATING", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
-                                Text(if (selected.limitations.precipitationAllowed) selected.limitations.ipRating else "None (No Rain)", style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("MAX TAKEOFF MSL", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
-                                Text("${selected.limitations.maxTakeoffAltitudeMslFt.toInt()} ft", style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
+                                Text("MAX TAKEOFF MSL", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 9.sp))
+                                Text("${selected.limitations.maxTakeoffAltitudeMslFt.toInt()} ft", style = MaterialTheme.typography.titleSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
                             }
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("KP TOLERANCE", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
-                                Text("Kp <= ${selected.limitations.maxKpIndexTolerance}", style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
+                                Text("KP TOLERANCE", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 9.sp))
+                                Text("Kp <= ${selected.limitations.maxKpIndexTolerance}", style = MaterialTheme.typography.titleSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold))
                             }
                         }
                     }
                 }
             }
 
-            // Fleet Preset Selector
+            // Manufacturer Filter Dropdown Selector
             item {
-                Text(
-                    text = "COMMERCIAL FLEET PRESETS",
-                    style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "SELECT MANUFACTURER TO VIEW MODELS",
+                        style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = dropdownExpanded,
+                        onExpandedChange = { dropdownExpanded = !dropdownExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedManufacturer ?: "— Select a Manufacturer —",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = AviationDarkCard,
+                                unfocusedContainerColor = AviationDarkCard,
+                                focusedBorderColor = AviationCyan,
+                                unfocusedBorderColor = AviationDarkBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = if (selectedManufacturer == null) TextSecondary else TextPrimary
+                            )
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false },
+                            modifier = Modifier.background(AviationDarkCard)
+                        ) {
+                            manufacturerList.forEach { mfg ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = if (mfg == "DJI") "DJI Enterprise" else mfg,
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                color = if (selectedManufacturer == mfg) AviationAccent else TextPrimary,
+                                                fontWeight = if (selectedManufacturer == mfg) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedManufacturer = mfg
+                                        dropdownExpanded = false
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
-            items(uiState.allAircraft) { drone ->
-                val isSelected = drone.id == selected.id
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) AviationDarkCard else AviationDarkSurface)
-                        .border(1.dp, if (isSelected) AviationCyan else AviationDarkBorder, RoundedCornerShape(10.dp))
-                        .clickable { onSelectAircraft(drone.id) }
-                        .padding(14.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+            // Filtered Models List
+            if (selectedManufacturer == null) {
+                // Blank state until manufacturer is selected
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(AviationDarkCard.copy(alpha = 0.5f))
+                            .border(1.dp, AviationDarkBorder, RoundedCornerShape(10.dp))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = drone.displayName,
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        color = if (isSelected) AviationAccent else TextPrimary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                                if (drone.isCustom) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(AviationDarkCard)
-                                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                                    ) {
-                                        Text("CUSTOM", style = MaterialTheme.typography.labelMedium.copy(color = AviationAccent, fontSize = 9.sp))
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.FilterList,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(32.dp)
+                            )
                             Text(
-                                text = "Max Gust: ${drone.limitations.maxGustSpeedMph.toInt()} MPH • Temp: ${drone.limitations.minOperatingTempF.toInt()}°F to ${drone.limitations.maxOperatingTempF.toInt()}°F • ${drone.limitations.ipRating}",
+                                text = "NO MANUFACTURER SELECTED",
+                                style = MaterialTheme.typography.titleMedium.copy(color = TextSecondary, fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Select a manufacturer from the dropdown above to view certified enterprise models.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
+                            )
+                        }
+                    }
+                }
+            } else {
+                val filteredModels = uiState.allAircraft.filter { drone ->
+                    when (selectedManufacturer) {
+                        "Custom Profiles" -> drone.isCustom
+                        "DJI" -> drone.manufacturer.contains("DJI", ignoreCase = true) && !drone.isCustom
+                        "Autel Robotics" -> drone.manufacturer.contains("Autel", ignoreCase = true) && !drone.isCustom
+                        "Skydio" -> drone.manufacturer.contains("Skydio", ignoreCase = true) && !drone.isCustom
+                        "Parrot" -> drone.manufacturer.contains("Parrot", ignoreCase = true) && !drone.isCustom
+                        else -> false
+                    }
+                }
+
+                if (filteredModels.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(AviationDarkCard)
+                                .border(1.dp, AviationDarkBorder, RoundedCornerShape(10.dp))
+                                .padding(20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No aircraft profiles found for $selectedManufacturer.",
                                 style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
                             )
                         }
+                    }
+                } else {
+                    items(filteredModels) { drone ->
+                        val isSelected = drone.id == selected.id
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) AviationDarkCard else AviationDarkSurface)
+                                .border(1.5.dp, if (isSelected) AviationCyan else AviationDarkBorder, RoundedCornerShape(10.dp))
+                                .clickable { onSelectAircraft(drone.id) }
+                                .padding(14.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = drone.displayName,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                color = if (isSelected) AviationAccent else TextPrimary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                        if (drone.isCustom) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(AviationDarkCard)
+                                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                                            ) {
+                                                Text("CUSTOM", style = MaterialTheme.typography.labelMedium.copy(color = AviationAccent, fontSize = 9.sp))
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Max Gust: ${drone.limitations.maxGustSpeedMph.toInt()} MPH • Temp: ${drone.limitations.minOperatingTempF.toInt()}°F to ${drone.limitations.maxOperatingTempF.toInt()}°F • ${drone.limitations.ipRating} • Max Alt: ${drone.limitations.maxTakeoffAltitudeMslFt.toInt()} ft MSL",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                                    )
+                                    if (drone.limitations.notes.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = drone.limitations.notes,
+                                            style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 10.sp)
+                                        )
+                                    }
+                                }
 
-                        if (drone.isCustom) {
-                            IconButton(onClick = { onDeleteCustomAircraft(drone.id) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = SafetyNoGoLight)
+                                if (drone.isCustom) {
+                                    IconButton(onClick = { onDeleteCustomAircraft(drone.id) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = SafetyNoGoLight)
+                                    }
+                                } else if (isSelected) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = "Active", tint = AviationCyan)
+                                }
                             }
-                        } else if (isSelected) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = "Active", tint = AviationCyan)
                         }
                     }
                 }
