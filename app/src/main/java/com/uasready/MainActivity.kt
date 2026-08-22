@@ -11,7 +11,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
@@ -213,127 +215,144 @@ class MainActivity : ComponentActivity() {
                             Column(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.SpaceBetween
+                                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Column {
-                                    // Side Drawer Header
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column {
-                                            Text(
-                                                text = "UAS READY",
-                                                style = MaterialTheme.typography.titleLarge.copy(
-                                                    fontWeight = FontWeight.Black,
-                                                    letterSpacing = 1.5.sp,
-                                                    color = TextPrimary
-                                                )
+                                // Side Drawer Header (Compact)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "UAS READY",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Black,
+                                                letterSpacing = 1.2.sp,
+                                                color = TextPrimary
                                             )
-                                            Text(
-                                                text = "FLIGHT READINESS // MENU",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    color = AviationAccent,
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            )
-                                        }
-                                        IconButton(onClick = { scope.launch { drawerState.close() } }) {
-                                            Icon(Icons.Default.Close, contentDescription = "Close Menu", tint = TextSecondary)
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    // Active Status Summary Card in Drawer
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = AviationDarkCard,
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text(
-                                                text = "CRAFT: ${uiState.selectedAircraft.displayName}",
-                                                style = MaterialTheme.typography.labelSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                                            )
-                                            Text(
-                                                text = "PILOT: ${if (uiState.isPilotSelectionPending) "Awaiting Selection" else uiState.currentPilot.activeAuthority.displayName}",
-                                                style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontSize = 10.sp)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    HorizontalDivider(color = AviationDarkBorder)
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    // Navigation Items
-                                    val navItems = listOf(
-                                        Triple(Screen.Home.route, "Flight Readiness", Icons.Default.Dashboard),
-                                        Triple(Screen.Assessment.route, "Assessment Audit", Icons.Default.Assessment),
-                                        Triple(Screen.Map.route, "Aviation Map (openAIP)", Icons.Default.Map),
-                                        Triple(Screen.Reference.route, "Checklists & Emergency", Icons.AutoMirrored.Filled.MenuBook),
-                                        Triple(Screen.Settings.route, "Settings & Fleet", Icons.Default.Settings)
-                                    )
-
-                                    navItems.forEach { (route, label, icon) ->
-                                        val isSelected = currentRoute == route
-                                        NavigationDrawerItem(
-                                            icon = { Icon(icon, contentDescription = label, tint = if (isSelected) AviationAccent else TextSecondary) },
-                                            label = {
-                                                Text(
-                                                    text = label,
-                                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                        color = if (isSelected) AviationAccent else TextPrimary
-                                                    )
-                                                )
-                                            },
-                                            selected = isSelected,
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                navController.navigate(route) {
-                                                    popUpTo(Screen.Home.route) { inclusive = (route == Screen.Home.route) }
-                                                }
-                                            },
-                                            colors = NavigationDrawerItemDefaults.colors(
-                                                selectedContainerColor = AviationDarkCard,
-                                                unselectedContainerColor = Color.Transparent
-                                            ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.padding(vertical = 2.dp)
                                         )
+                                        Text(
+                                            text = "FLIGHT READINESS // MENU",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = AviationAccent,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { scope.launch { drawerState.close() } },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Close, contentDescription = "Close Menu", tint = TextSecondary, modifier = Modifier.size(18.dp))
                                     }
                                 }
 
-                                // Side Drawer Footer
-                                Column {
-                                    HorizontalDivider(color = AviationDarkBorder)
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                // Active Craft & Pilot Chip (Compact)
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = AviationDarkCard,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 5.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "UAS READY // v${BuildConfig.VERSION_NAME}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = TextMuted,
-                                            fontSize = 9.sp,
-                                            fontFamily = FontFamily.Monospace
+                                            text = uiState.selectedAircraft.displayName,
+                                            style = MaterialTheme.typography.labelSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                                            maxLines = 1
                                         )
                                         Text(
-                                            text = "RC PRO OPTIMIZED",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = AviationAccent,
-                                            fontSize = 9.sp,
-                                            fontFamily = FontFamily.Monospace
+                                            text = if (uiState.isPilotSelectionPending) "Pending" else uiState.currentPilot.activeAuthority.displayName,
+                                            style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                            maxLines = 1
                                         )
                                     }
+                                }
+
+                                HorizontalDivider(color = AviationDarkBorder, modifier = Modifier.padding(vertical = 2.dp))
+
+                                // Navigation Items (5 Items: Home, Assessment, Map, Reference, Settings)
+                                val navItems = listOf(
+                                    Triple(Screen.Home.route, "Flight Readiness", Icons.Default.Dashboard),
+                                    Triple(Screen.Assessment.route, "Assessment Audit", Icons.Default.Assessment),
+                                    Triple(Screen.Map.route, "Aviation Map (openAIP)", Icons.Default.Map),
+                                    Triple(Screen.Reference.route, "Checklists & Emergency", Icons.AutoMirrored.Filled.MenuBook),
+                                    Triple(Screen.Settings.route, "Settings & Fleet", Icons.Default.Settings)
+                                )
+
+                                navItems.forEach { (route, label, icon) ->
+                                    val isSelected = currentRoute == route
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isSelected) AviationDarkCard else Color.Transparent,
+                                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, AviationAccent.copy(alpha = 0.5f)) else null,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(42.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                scope.launch { drawerState.close() }
+                                                navController.navigate(route) {
+                                                    popUpTo(Screen.Home.route) { inclusive = (route == Screen.Home.route) }
+                                                }
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                icon,
+                                                contentDescription = label,
+                                                tint = if (isSelected) AviationAccent else TextSecondary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (isSelected) AviationAccent else TextPrimary,
+                                                    fontSize = 12.sp
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+
+                                HorizontalDivider(color = AviationDarkBorder, modifier = Modifier.padding(vertical = 2.dp))
+
+                                // Side Drawer Footer
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "UAS READY // v${BuildConfig.VERSION_NAME}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextMuted,
+                                        fontSize = 9.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Text(
+                                        text = "RC PRO OPTIMIZED",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = AviationAccent,
+                                        fontSize = 9.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
                                 }
                             }
                         }
