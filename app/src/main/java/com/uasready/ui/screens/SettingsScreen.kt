@@ -25,7 +25,7 @@ import com.uasready.ui.viewmodel.MainUiState
 
 enum class SettingsCategory(val title: String, val subtitle: String, val icon: ImageVector) {
     PILOT_AUTHORITY("Pilot Operating Authority", "Configure Licensed vs Non-licensed status", Icons.Default.Badge),
-    AIRCRAFT_FLEET("Aircraft Fleet Management", "Select active craft and view limitations", Icons.Default.FlightTakeoff),
+    AIRCRAFT_FLEET("Aircraft Fleet Management", "Search models, filter manufacturers & build custom", Icons.Default.FlightTakeoff),
     THEME_APPEARANCE("Theme & Appearance", "Select Light, Dark, or System Auto mode", Icons.Default.Palette),
     UNIT_SYSTEM("Unit System & Telemetry", "Toggle US Aviation vs Metric units", Icons.Default.Straighten),
     DATA_SOURCES("Authoritative Telemetry Sources", "Review openAIP, NOAA & weather feeds", Icons.Default.Sensors)
@@ -114,7 +114,13 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { activeCategory = category }
+                                .clickable {
+                                    if (category == SettingsCategory.AIRCRAFT_FLEET) {
+                                        onNavigateToAircraft()
+                                    } else {
+                                        activeCategory = category
+                                    }
+                                }
                         ) {
                             Row(
                                 modifier = Modifier
@@ -238,80 +244,9 @@ fun SettingsScreen(
                         }
 
                         SettingsCategory.AIRCRAFT_FLEET -> {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
-                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationAccent)),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Text(
-                                        text = "Select active aircraft to configure environmental limitations:",
-                                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
-                                    )
-
-                                    uiState.allAircraft.forEach { craft ->
-                                        val isSelected = uiState.selectedAircraft.id == craft.id
-                                        val borderColor = if (isSelected) AviationAccent else AviationDarkBorder
-                                        val bgColor = if (isSelected) AviationDarkSurface else Color.Transparent
-
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-                                                .background(bgColor)
-                                                .clickable { onSelectAircraft(craft.id) }
-                                                .padding(12.dp)
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                    Text(
-                                                        text = craft.displayName,
-                                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = if (isSelected) AviationAccent else TextPrimary
-                                                        )
-                                                    )
-                                                    if (isSelected) {
-                                                        Surface(shape = RoundedCornerShape(4.dp), color = AviationAccent.copy(alpha = 0.15f)) {
-                                                            Text(
-                                                                text = "SELECTED",
-                                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                                style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Text(
-                                                    text = "Max Sustained ${craft.limitations.maxSustainedWindSpeedMph.toInt()} MPH • Max Gust ${craft.limitations.maxGustSpeedMph.toInt()} MPH • ${craft.limitations.ipRating}",
-                                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
-                                                )
-                                            }
-                                            RadioButton(
-                                                selected = isSelected,
-                                                onClick = { onSelectAircraft(craft.id) },
-                                                colors = RadioButtonDefaults.colors(selectedColor = AviationAccent, unselectedColor = TextSecondary)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(4.dp))
-
-                                    OutlinedButton(
-                                        onClick = onNavigateToAircraft,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AviationAccent),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationAccent.copy(alpha = 0.6f))
-                                    ) {
-                                        Icon(Icons.Default.FlightTakeoff, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("CUSTOM DRONE BUILDER & SPECS", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
-                                    }
-                                }
+                            // Direct navigation to AircraftScreen handles this
+                            LaunchedEffect(Unit) {
+                                onNavigateToAircraft()
                             }
                         }
 
