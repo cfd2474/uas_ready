@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,7 +25,6 @@ import com.uasready.ui.components.RuleAuditCard
 import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainUiState
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssessmentDetailScreen(
     uiState: MainUiState,
@@ -36,26 +36,37 @@ fun AssessmentDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "DETAILED REPORT",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
-                            color = TextPrimary
-                        )
+            // Ultra-compact top bar header designed for 360dp landscape
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .background(AviationDarkBackground)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onNavigateBack,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(18.dp)
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AviationDarkBackground
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "DETAILED REPORT",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp,
+                        fontSize = 14.sp,
+                        color = TextPrimary
+                    )
                 )
-            )
+            }
         },
         containerColor = AviationDarkBackground
     ) { paddingValues ->
@@ -75,10 +86,10 @@ fun AssessmentDetailScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Overall Status Summary Card
+            // Compact Overall Status Summary Card
             item {
                 val overallColor = assessment.overallStatus.toColor()
                 val overallBg = assessment.overallStatus.toBgColor()
@@ -86,37 +97,56 @@ fun AssessmentDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(overallBg)
-                        .border(1.5.dp, overallColor, RoundedCornerShape(12.dp))
-                        .padding(16.dp)
+                        .border(1.dp, overallColor, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
-                    Column {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "OVERALL STATUS",
-                                style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary, fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                text = assessment.overallStatus.name,
-                                style = MaterialTheme.typography.titleLarge.copy(color = overallColor, fontWeight = FontWeight.Black)
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(overallColor)
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = assessment.overallStatus.name,
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 11.sp
+                                        )
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = assessment.primaryHeadline,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = TextPrimary
+                                    )
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = assessment.primaryHeadline,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        assessment.primaryReasons.forEach { reason ->
-                            Text(
-                                text = "• $reason",
-                                style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary, lineHeight = 18.sp)
-                            )
+
+                        if (assessment.primaryReasons.isNotEmpty()) {
+                            assessment.primaryReasons.forEach { reason ->
+                                Text(
+                                    text = "• $reason",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = TextPrimary,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -124,19 +154,18 @@ fun AssessmentDetailScreen(
 
             // Category Filter Chips
             item {
-                Spacer(modifier = Modifier.height(4.dp))
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     item {
                         FilterChip(
                             selected = uiState.selectedCategoryFilter == null,
                             onClick = { onCategoryFilterSelected(null) },
-                            label = { Text("ALL (${assessment.allRuleResults.size})") },
+                            label = { Text("ALL (${assessment.allRuleResults.size})", fontSize = 11.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = AviationCyan,
-                                selectedLabelColor = TextPrimary,
+                                selectedLabelColor = Color.White,
                                 containerColor = AviationDarkCard,
                                 labelColor = TextSecondary
                             )
@@ -148,17 +177,16 @@ fun AssessmentDetailScreen(
                         FilterChip(
                             selected = uiState.selectedCategoryFilter == category,
                             onClick = { onCategoryFilterSelected(category) },
-                            label = { Text("${category.displayName.substringBefore(" ")} ($count)") },
+                            label = { Text("${category.displayName.substringBefore(" ")} ($count)", fontSize = 11.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = AviationCyan,
-                                selectedLabelColor = TextPrimary,
+                                selectedLabelColor = Color.White,
                                 containerColor = AviationDarkCard,
                                 labelColor = TextSecondary
                             )
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
             }
 
             // List of Evaluated Categories and Rules
@@ -175,14 +203,15 @@ fun AssessmentDetailScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp)
+                            .padding(vertical = 4.dp)
                     ) {
                         Text(
                             text = catAssessment.category.displayName.uppercase(),
-                            style = MaterialTheme.typography.labelLarge.copy(
+                            style = MaterialTheme.typography.labelMedium.copy(
                                 color = AviationAccent,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
+                                letterSpacing = 0.5.sp,
+                                fontSize = 11.sp
                             )
                         )
                         Box(
@@ -195,7 +224,7 @@ fun AssessmentDetailScreen(
                                 text = catAssessment.status.name,
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     color = catAssessment.status.toColor(),
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             )
@@ -203,13 +232,13 @@ fun AssessmentDetailScreen(
                     }
 
                     catAssessment.ruleResults.forEach { rule ->
-                        RuleAuditCard(rule = rule, modifier = Modifier.padding(bottom = 8.dp))
+                        RuleAuditCard(rule = rule, modifier = Modifier.padding(bottom = 6.dp))
                     }
                 }
             }
 
             item {
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
