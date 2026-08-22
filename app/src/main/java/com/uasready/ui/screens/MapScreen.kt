@@ -47,7 +47,7 @@ fun MapScreen(
             .fillMaxSize()
             .background(AviationDarkBackground)
     ) {
-        // Interactive OpenStreetMap View with openAIP / DJI FlySafe Overlays
+        // Interactive OpenStreetMap View with openAIP Aeronautical Overlays
         AndroidView(
             factory = { context ->
                 Configuration.getInstance().userAgentValue = "UASReady-Android-App/1.0"
@@ -58,7 +58,7 @@ fun MapScreen(
                     val startPoint = GeoPoint(loc.latitude, loc.longitude)
                     controller.setCenter(startPoint)
 
-                    // 1. Render openAIP / DJI FlySafe Airspace Zones
+                    // 1. Render openAIP Airspace Zones
                     val sampleZones = listOf(
                         AirspaceZone(
                             id = "KAJO-CORE",
@@ -208,7 +208,7 @@ fun MapScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
             ) {
                 Text(
-                    text = "OPENAIP // FLYSAFE AIRSPACE",
+                    text = "OPENAIP AIRSPACE DATA",
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = AviationAccent,
@@ -235,7 +235,7 @@ fun MapScreen(
             }
         }
 
-        // Floating openAIP / DJI FlySafe Legend (Top-Right)
+        // Floating openAIP Airspace Legend (Top-Right)
         if (showLegend) {
             Card(
                 modifier = Modifier

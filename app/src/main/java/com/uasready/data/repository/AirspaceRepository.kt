@@ -282,7 +282,7 @@ class LiveAirspaceRepository : AirspaceRepository {
                 nearestAirportCode = airportCode,
                 nearestAirportDistanceNm = airportDist,
                 timestampEpochMs = now,
-                sourceName = if (fetchedFromOpenAip) "openAIP Live Aeronautical API" else "FAA / FlySafe Aeronautical Database",
+                sourceName = if (fetchedFromOpenAip) "openAIP Live Aeronautical API" else "openAIP Aeronautical Database",
                 isStale = false
             )
 
