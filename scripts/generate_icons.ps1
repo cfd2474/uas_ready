@@ -1,5 +1,5 @@
 Add-Type -AssemblyName System.Drawing
-$uploadedFile = Get-ChildItem -Path "C:\Users\Michael\.gemini\antigravity-ide\brain\d2737f68-ed1b-470f-aac8-e283ca8794cc\.user_uploaded" -Filter "media_1787440192495*" | Select-Object -First 1
+$uploadedFile = Get-ChildItem -Path "C:\Users\Michael\.gemini\antigravity-ide\brain\d2737f68-ed1b-470f-aac8-e283ca8794cc\.user_uploaded" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 
 if (-not $uploadedFile) {
     Write-Error "Source image not found."
@@ -57,4 +57,4 @@ $logoBitmap.Save($logoPath, [System.Drawing.Imaging.ImageFormat]::Png)
 $logoBitmap.Dispose()
 
 $srcImg.Dispose()
-Write-Host "Successfully generated all Android launcher icon mipmaps and app_logo.png!"
+Write-Host "Successfully generated all Android launcher icon mipmaps and app_logo.png with new icon!"
