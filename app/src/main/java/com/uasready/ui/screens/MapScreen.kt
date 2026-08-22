@@ -9,6 +9,7 @@ import android.graphics.Path
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,10 +32,23 @@ import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainUiState
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
+
+enum class BasemapType(val displayName: String) {
+    STREET("Street"),
+    TOPO("Topo"),
+    HYBRID("Hybrid")
+}
+
+private val ESRI_SATELLITE = XYTileSource(
+    "EsriSatellite",
+    0, 19, 256, ".jpg",
+    arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/")
+)
 
 @Composable
 fun MapScreen(
@@ -43,7 +57,8 @@ fun MapScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showLegend by remember { mutableStateOf(true) }
+    var showLegend by remember { mutableStateOf(false) }
+    var selectedBasemap by remember { mutableStateOf(BasemapType.STREET) }
 
     val loc = uiState.currentLocation
     val gnss = uiState.estimatedGnss
@@ -54,7 +69,7 @@ fun MapScreen(
             .fillMaxSize()
             .background(AviationDarkBackground)
     ) {
-        // Interactive OpenStreetMap View with Live openAIP Aeronautical Overlays
+        // Interactive Map View with Live Aeronautical Overlays & Selectable Basemap
         AndroidView(
             factory = { context ->
                 Configuration.getInstance().userAgentValue = "UASReady-Android-App/1.0"
@@ -65,11 +80,11 @@ fun MapScreen(
                     val startPoint = GeoPoint(loc.latitude, loc.longitude)
                     controller.setCenter(startPoint)
 
-                    // User Launch Point Marker (Red Map Pin)
+                    // User Launch Point Marker (50% smaller Red Pin)
                     val userMarker = Marker(this).apply {
                         id = "USER_MARKER"
                         position = startPoint
-                        icon = createRedPinDrawable(context)
+                        icon = createSmallRedPinDrawable(context)
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                         title = "Launch Point: ${loc.displayName}"
                         snippet = "Coordinates: ${loc.formattedCoordinates}"
@@ -78,6 +93,16 @@ fun MapScreen(
                 }
             },
             update = { mapView ->
+                // Apply Basemap Tile Source
+                val targetTileSource = when (selectedBasemap) {
+                    BasemapType.STREET -> TileSourceFactory.MAPNIK
+                    BasemapType.TOPO -> TileSourceFactory.OpenTopo
+                    BasemapType.HYBRID -> ESRI_SATELLITE
+                }
+                if (mapView.tileProvider.tileSource != targetTileSource) {
+                    mapView.setTileSource(targetTileSource)
+                }
+
                 val point = GeoPoint(loc.latitude, loc.longitude)
                 mapView.controller.setCenter(point)
 
@@ -89,10 +114,10 @@ fun MapScreen(
                     userMarker.snippet = "Coordinates: ${loc.formattedCoordinates}"
                 }
 
-                // Remove previous airspace polygons to avoid any persisting old elements
+                // Remove previous airspace polygons to avoid duplicate stacking
                 mapView.overlays.removeAll { it is Polygon }
 
-                // Render strictly live openAIP airspace zones in map view extent
+                // Render live airspace zones in map view extent
                 liveAirspaceZones.forEach { zone ->
                     val pointsList: List<GeoPoint> = if (zone.polygonCoordinates.size >= 3) {
                         zone.polygonCoordinates.map { GeoPoint(it.first, it.second) }
@@ -106,23 +131,23 @@ fun MapScreen(
                         snippet = zone.description
                         when (zone.type) {
                             AirspaceZoneType.RESTRICTED_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(70, 218, 54, 51) // Red fill
-                                outlinePaint.color = AndroidColor.argb(255, 218, 54, 51) // Red stroke
+                                fillPaint.color = AndroidColor.argb(70, 218, 54, 51)
+                                outlinePaint.color = AndroidColor.argb(255, 218, 54, 51)
                                 outlinePaint.strokeWidth = 3.5f
                             }
                             AirspaceZoneType.AUTHORIZATION_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(55, 56, 139, 253) // Blue fill
-                                outlinePaint.color = AndroidColor.argb(255, 56, 139, 253) // Blue stroke
+                                fillPaint.color = AndroidColor.argb(55, 56, 139, 253)
+                                outlinePaint.color = AndroidColor.argb(255, 56, 139, 253)
                                 outlinePaint.strokeWidth = 3f
                             }
                             AirspaceZoneType.WARNING_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(55, 227, 179, 65) // Amber fill
-                                outlinePaint.color = AndroidColor.argb(255, 227, 179, 65) // Amber stroke
+                                fillPaint.color = AndroidColor.argb(55, 227, 179, 65)
+                                outlinePaint.color = AndroidColor.argb(255, 227, 179, 65)
                                 outlinePaint.strokeWidth = 3f
                             }
                             AirspaceZoneType.ALTITUDE_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(35, 0, 210, 255) // Cyan fill
-                                outlinePaint.color = AndroidColor.argb(230, 0, 210, 255) // Cyan stroke
+                                fillPaint.color = AndroidColor.argb(35, 0, 210, 255)
+                                outlinePaint.color = AndroidColor.argb(230, 0, 210, 255)
                                 outlinePaint.strokeWidth = 2.5f
                             }
                             AirspaceZoneType.SPECIAL_USE -> {
@@ -135,68 +160,84 @@ fun MapScreen(
                     mapView.overlays.add(polygon)
                 }
 
-                // Refresh map rendering
                 mapView.postInvalidate()
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Top Floating Map Sub-Bar (Legend toggle + Source label)
+        // Top Floating Control Bar (Basemap Selector + Legend Toggle)
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()
-                .padding(10.dp),
+                .padding(8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Basemap Segmented Switcher (Street, Topo, Hybrid)
             Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = AviationDarkCard.copy(alpha = 0.92f),
+                shape = RoundedCornerShape(8.dp),
+                color = AviationDarkCard.copy(alpha = 0.95f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
             ) {
-                Text(
-                    text = "OPENAIP AIRSPACE DATA",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = AviationAccent,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp
-                    )
-                )
+                Row(
+                    modifier = Modifier.padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    BasemapType.values().forEach { mode ->
+                        val isSelected = selectedBasemap == mode
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) AviationCyan else Color.Transparent)
+                                .clickable { selectedBasemap = mode }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = mode.displayName.uppercase(),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    color = if (isSelected) Color.White else TextSecondary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+                    }
+                }
             }
 
+            // Legend Toggle Button
             IconButton(
                 onClick = { showLegend = !showLegend },
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(34.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(AviationDarkCard.copy(alpha = 0.92f))
+                    .background(AviationDarkCard.copy(alpha = 0.95f))
                     .border(1.dp, AviationDarkBorder, RoundedCornerShape(8.dp))
             ) {
                 Icon(
                     Icons.Default.Layers,
                     contentDescription = "Toggle Legend",
                     tint = if (showLegend) AviationAccent else TextSecondary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
 
-        // Floating openAIP Airspace Legend (Top-Right)
+        // Floating Airspace Classification Legend (Top-Right)
         if (showLegend) {
             Card(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 50.dp, end = 10.dp)
-                    .widthIn(max = 230.dp),
+                    .padding(top = 46.dp, end = 8.dp)
+                    .widthIn(max = 220.dp),
                 colors = CardDefaults.cardColors(containerColor = AviationDarkCard.copy(alpha = 0.95f)),
                 border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(8.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = "AIRSPACE CLASSIFICATION",
@@ -208,35 +249,35 @@ fun MapScreen(
                         )
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(SafetyNoGo))
-                        Text("Restricted / Danger / Prohibited (Red)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(SafetyNoGo))
+                        Text("Restricted / Prohibited (Red)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(AviationCyan))
-                        Text("Controlled / CTR / TMA (Blue)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(AviationCyan))
+                        Text("Controlled / Class B, C, D (Blue)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(SafetyCautionLight))
-                        Text("Warning / Class E / TMZ (Amber)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(SafetyCautionLight))
+                        Text("Warning / Class E Surface (Amber)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF00D2FF)))
-                        Text("Altitude / Facility Zone (Cyan)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF00D2FF)))
+                        Text("Facility / Altitude Grid (Cyan)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
                     }
                 }
             }
         }
 
-        // Bottom Telemetry Bar (Optimized for RC Pro Enterprise 640x360 landscape)
+        // Bottom Telemetry Bar (640x360 Landscape Optimized)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(AviationDarkCard.copy(alpha = 0.95f))
-                .border(1.dp, AviationDarkBorder, RoundedCornerShape(10.dp))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .border(1.dp, AviationDarkBorder, RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 5.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -246,22 +287,22 @@ fun MapScreen(
                 Column(modifier = Modifier.weight(1.5f)) {
                     Text(
                         text = loc.displayName,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary)
                     )
                     Text(
                         text = "${loc.formattedCoordinates} • ${loc.elevationFt.toInt()} ft MSL",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 10.sp)
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 9.sp)
                     )
                 }
 
                 Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (gnss != null) "~${gnss.lockedSatellitesCount} Sats Visible" else "12+ Sats Visible",
-                        style = MaterialTheme.typography.bodySmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        style = MaterialTheme.typography.bodySmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                     )
                     Text(
                         text = if (gnss != null) "HDOP ${gnss.estimatedHdop} • 3D Fix" else "HDOP <= 1.5",
-                        style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 9.sp)
+                        style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 8.sp)
                     )
                 }
 
@@ -270,22 +311,23 @@ fun MapScreen(
                 IconButton(
                     onClick = onRefreshGpsLocation,
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(6.dp))
                         .background(AviationDarkSurface)
-                        .border(1.dp, AviationDarkBorder, RoundedCornerShape(8.dp))
+                        .border(1.dp, AviationDarkBorder, RoundedCornerShape(6.dp))
                 ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = "Center GPS", tint = AviationAccent, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.MyLocation, contentDescription = "Center GPS", tint = AviationAccent, modifier = Modifier.size(16.dp))
                 }
             }
         }
     }
 }
 
-private fun createRedPinDrawable(context: Context): BitmapDrawable {
+// 50% Decreased Size Red Location Pin
+private fun createSmallRedPinDrawable(context: Context): BitmapDrawable {
     val density = context.resources.displayMetrics.density
-    val width = (28 * density).toInt()
-    val height = (40 * density).toInt()
+    val width = (14 * density).toInt() // Reduced 50% from 28dp
+    val height = (20 * density).toInt() // Reduced 50% from 40dp
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
@@ -298,13 +340,13 @@ private fun createRedPinDrawable(context: Context): BitmapDrawable {
     }
 
     val pinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.rgb(220, 38, 38) // Vivid Google Maps Red
+        color = AndroidColor.rgb(220, 38, 38) // Vivid Red
         style = Paint.Style.FILL
     }
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.rgb(153, 27, 27)
         style = Paint.Style.STROKE
-        strokeWidth = 2f * density
+        strokeWidth = 1f * density
     }
     val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.WHITE
@@ -313,7 +355,7 @@ private fun createRedPinDrawable(context: Context): BitmapDrawable {
 
     canvas.drawPath(path, pinPaint)
     canvas.drawPath(path, borderPaint)
-    canvas.drawCircle(width / 2f, radius, radius * 0.45f, dotPaint)
+    canvas.drawCircle(width / 2f, radius, radius * 0.4f, dotPaint)
 
     return BitmapDrawable(context.resources, bitmap)
 }
