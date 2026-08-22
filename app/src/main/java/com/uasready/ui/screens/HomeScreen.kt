@@ -29,7 +29,6 @@ import com.uasready.ui.viewmodel.MainUiState
 fun HomeScreen(
     uiState: MainUiState,
     onNavigateToAssessment: () -> Unit,
-    onNavigateToAircraft: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToMap: () -> Unit,
     onRefreshLiveData: () -> Unit,
@@ -48,31 +47,62 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Text(
                             text = "UASREADY",
-                            style = MaterialTheme.typography.titleLarge.copy(
+                            style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Black,
-                                letterSpacing = 1.5.sp,
+                                letterSpacing = 1.sp,
                                 color = TextPrimary
                             )
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(AviationDarkCard)
-                                .border(1.dp, AviationDarkBorder, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+
+                        // Live status chip
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = AviationDarkCard,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
                         ) {
                             Text(
                                 text = "LIVE",
-                                style = MaterialTheme.typography.labelMedium.copy(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(
                                     color = SafetyGoLight,
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             )
+                        }
+
+                        // Active Aircraft Name in top status bar
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = AviationDarkCard,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.FlightTakeoff,
+                                    contentDescription = null,
+                                    tint = AviationAccent,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = uiState.selectedAircraft.displayName,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = TextPrimary,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
                         }
                     }
                 },
@@ -80,15 +110,15 @@ fun HomeScreen(
                     // Refresh Button
                     IconButton(onClick = onRefreshLiveData) {
                         if (uiState.isLiveLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AviationAccent, strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = AviationAccent, strokeWidth = 2.dp)
                         } else {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh Live Telemetry", tint = TextPrimary)
                         }
                     }
 
-                    // Settings / Pilot Authority Gear Button
+                    // Settings / Pilot Authority & Fleet Gear Button
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings & Authority", tint = TextPrimary)
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -117,7 +147,7 @@ fun HomeScreen(
                 }
             }
 
-            // 2. Fast Summary Metric Cards Grid
+            // 2. Operational Overview Header
             item {
                 Text(
                     text = "OPERATIONAL OVERVIEW",
@@ -129,7 +159,7 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Location Card
+                // Card 1: Location
                 MetricSummaryCard(
                     title = "Location",
                     primaryValue = uiState.currentLocation.displayName,
@@ -139,8 +169,8 @@ fun HomeScreen(
                 )
             }
 
+            // Card 2: Weather & Wind
             item {
-                // Weather Summary Card
                 val tempRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AC-TEMP") }
                 val gustRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AC-GUST") }
                 val visRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-VIS") }
@@ -156,8 +186,8 @@ fun HomeScreen(
                 )
             }
 
+            // Card 3: Airspace & Restrictions
             item {
-                // Airspace Summary Card
                 val airspaceRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AIR-CTRL") || it.ruleId.startsWith("AIR-TFR") }
                 MetricSummaryCard(
                     title = "Airspace & Restrictions",
@@ -169,22 +199,21 @@ fun HomeScreen(
                 )
             }
 
+            // Card 4: Daylight & Solar (Moved below Airspace)
             item {
-                // Space Weather & Planetary Kp
-                val kpRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("SP-KP") }
-
+                val sunRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("SUN-") }
                 MetricSummaryCard(
-                    title = "Space Weather & Geomagnetic (Kp)",
-                    primaryValue = kpRule?.inputValueFormatted ?: "Kp 2.0 (Nominal)",
-                    secondaryValue = kpRule?.thresholdFormatted ?: "Normal solar & ionospheric activity",
-                    status = spaceCat?.status,
-                    icon = Icons.Default.Public,
+                    title = "Daylight & Solar",
+                    primaryValue = sunRule?.inputValueFormatted ?: "Full Daylight",
+                    secondaryValue = sunRule?.explanation ?: "Flight window remains within daylight",
+                    status = daylightCat?.status,
+                    icon = Icons.Default.WbSunny,
                     onClick = onNavigateToAssessment
                 )
             }
 
+            // Card 5: GNSS Satellites Visible & HDOP
             item {
-                // GNSS Satellites Visible & HDOP
                 val satsRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-SATS" }
                 val hdopRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-HDOP" }
                 val gnss = uiState.estimatedGnss
@@ -219,32 +248,22 @@ fun HomeScreen(
                 )
             }
 
+            // Card 6: Space Weather & Geomagnetic Kp (Moved below GNSS)
             item {
-                // Daylight Timing
-                val sunRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("SUN-") }
+                val kpRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("SP-KP") }
+
                 MetricSummaryCard(
-                    title = "Daylight & Solar",
-                    primaryValue = sunRule?.inputValueFormatted ?: "Full Daylight",
-                    secondaryValue = sunRule?.explanation ?: "Flight window remains within daylight",
-                    status = daylightCat?.status,
-                    icon = Icons.Default.WbSunny,
+                    title = "Space Weather & Geomagnetic (Kp)",
+                    primaryValue = kpRule?.inputValueFormatted ?: "Kp 2.0 (Nominal)",
+                    secondaryValue = kpRule?.thresholdFormatted ?: "Normal solar & ionospheric activity",
+                    status = spaceCat?.status,
+                    icon = Icons.Default.Public,
                     onClick = onNavigateToAssessment
                 )
             }
 
+            // Card 7: Pilot Operating Authority
             item {
-                // Aircraft Fleet Profile
-                MetricSummaryCard(
-                    title = "Aircraft Fleet Profile",
-                    primaryValue = uiState.selectedAircraft.displayName,
-                    secondaryValue = "Max Sustained ${uiState.selectedAircraft.limitations.maxSustainedWindSpeedMph.toInt()} MPH • Max Gust ${uiState.selectedAircraft.limitations.maxGustSpeedMph.toInt()} MPH",
-                    icon = Icons.Default.Sensors,
-                    onClick = onNavigateToAircraft
-                )
-            }
-
-            item {
-                // Pilot Authority
                 MetricSummaryCard(
                     title = "Pilot Operating Authority",
                     primaryValue = uiState.currentPilot.activeAuthority.displayName,
@@ -255,8 +274,8 @@ fun HomeScreen(
                 )
             }
 
+            // Card 8: 120 Minutes Forecasted Horizon
             item {
-                // 120 Minutes Forecasted Flight Window
                 MetricSummaryCard(
                     title = "Flight Forecast Horizon",
                     primaryValue = "120 Minutes Forecasted",
