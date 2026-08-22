@@ -45,8 +45,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            UASReadyTheme {
-                val uiState by viewModel.uiState.collectAsState()
+            val uiState by viewModel.uiState.collectAsState()
+
+            // Global Theme applied with Light, Dark, or System Auto mode
+            UASReadyTheme(themeMode = uiState.themeMode) {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
@@ -73,7 +75,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // 1. Session Pilot Onboarding Popup (No cutoffs, auto-fitting, deferred check)
+                // 1. Session Pilot Onboarding Popup (No cutoffs, auto-fitting, returns to Flight Readiness)
                 if (uiState.isPilotSelectionPending) {
                     AlertDialog(
                         onDismissRequest = { /* Modal: require explicit pilot selection */ },
@@ -112,6 +114,9 @@ class MainActivity : ComponentActivity() {
                                     Button(
                                         onClick = {
                                             viewModel.setPilotAuthority(PilotAuthorityType.PART_107)
+                                            navController.navigate(Screen.Home.route) {
+                                                popUpTo(0) { inclusive = true }
+                                            }
                                         },
                                         modifier = Modifier
                                             .weight(1f)
@@ -151,6 +156,9 @@ class MainActivity : ComponentActivity() {
                                     Button(
                                         onClick = {
                                             viewModel.setPilotAuthority(PilotAuthorityType.PUBLIC_COA)
+                                            navController.navigate(Screen.Home.route) {
+                                                popUpTo(0) { inclusive = true }
+                                            }
                                         },
                                         modifier = Modifier
                                             .weight(1f)
@@ -411,6 +419,7 @@ class MainActivity : ComponentActivity() {
                                     uiState = uiState,
                                     onSetAuthority = { viewModel.setPilotAuthority(it) },
                                     onSelectAircraft = { viewModel.selectAircraft(it) },
+                                    onSetThemeMode = { viewModel.setThemeMode(it) },
                                     onNavigateToAircraft = { navController.navigate(Screen.Aircraft.route) },
                                     onNavigateBack = { navController.popBackStack() }
                                 )
