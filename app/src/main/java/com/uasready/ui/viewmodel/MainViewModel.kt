@@ -12,17 +12,21 @@ import com.uasready.domain.model.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+import com.uasready.ui.theme.AppThemeMode
+
 data class MainUiState(
     val selectedAircraft: Aircraft = Aircraft.getDefault(),
     val allAircraft: List<Aircraft> = Aircraft.PRESETS,
     val currentPilot: Pilot = Pilot.getDefault(),
     val isPilotSelectionPending: Boolean = true,
+    val themeMode: AppThemeMode = AppThemeMode.DARK,
     val currentLocation: LocationInfo = LocationInfo.defaultLocation(),
     val flightWindow: FlightWindow = FlightWindow.defaultTwoHours(),
     val plannedAltitudeAglFt: Double = 400.0,
     val isLiveLoading: Boolean = false,
     val liveErrorMessage: String? = null,
     val assessmentResult: AssessmentResult? = null,
+    val airspaceInfo: AirspaceInfo? = null,
     val estimatedGnss: GnssEstimation? = null,
     val selectedCategoryFilter: AssessmentCategory? = null
 )
@@ -157,6 +161,7 @@ class MainViewModel @JvmOverloads constructor(
                 it.copy(
                     isLiveLoading = false,
                     assessmentResult = assessment,
+                    airspaceInfo = airspace,
                     estimatedGnss = gnss,
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
                 )
@@ -196,5 +201,9 @@ class MainViewModel @JvmOverloads constructor(
 
     fun setCategoryFilter(category: AssessmentCategory?) {
         _uiState.update { it.copy(selectedCategoryFilter = category) }
+    }
+
+    fun setThemeMode(mode: AppThemeMode) {
+        _uiState.update { it.copy(themeMode = mode) }
     }
 }

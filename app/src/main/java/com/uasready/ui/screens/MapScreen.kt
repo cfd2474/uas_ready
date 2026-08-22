@@ -41,13 +41,14 @@ fun MapScreen(
 
     val loc = uiState.currentLocation
     val gnss = uiState.estimatedGnss
+    val liveAirspaceZones: List<AirspaceZone> = uiState.airspaceInfo?.zones ?: emptyList()
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(AviationDarkBackground)
     ) {
-        // Interactive OpenStreetMap View with openAIP Aeronautical Overlays
+        // Interactive OpenStreetMap View with Live openAIP Aeronautical Overlays
         AndroidView(
             factory = { context ->
                 Configuration.getInstance().userAgentValue = "UASReady-Android-App/1.0"
@@ -58,126 +59,9 @@ fun MapScreen(
                     val startPoint = GeoPoint(loc.latitude, loc.longitude)
                     controller.setCenter(startPoint)
 
-                    // 1. Render openAIP Airspace Zones
-                    val sampleZones = listOf(
-                        AirspaceZone(
-                            id = "KAJO-CORE",
-                            name = "KAJO Class D Core (0 ft Auto-Approval)",
-                            type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                            centerLat = 33.8977,
-                            centerLon = -117.6033,
-                            radiusMeters = 2200.0,
-                            floorFt = 0.0,
-                            ceilingFt = 0.0,
-                            description = "Class D Surface Area. Mandatory LAANC Authorization Required."
-                        ),
-                        AirspaceZone(
-                            id = "KAJO-RING",
-                            name = "KAJO 200 ft LAANC Zone",
-                            type = AirspaceZoneType.ALTITUDE_ZONE,
-                            centerLat = 33.8977,
-                            centerLon = -117.6033,
-                            radiusMeters = 5500.0,
-                            floorFt = 0.0,
-                            ceilingFt = 200.0,
-                            description = "UAS Facility Map grid. Max auto-approved altitude 200 ft AGL."
-                        ),
-                        AirspaceZone(
-                            id = "KONT-CORE",
-                            name = "KONT Class C Surface Area",
-                            type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                            centerLat = 34.0560,
-                            centerLon = -117.6012,
-                            radiusMeters = 4800.0,
-                            floorFt = 0.0,
-                            ceilingFt = 0.0,
-                            description = "Major Commercial Airport. Class C Surface. LAANC Mandatory."
-                        ),
-                        AirspaceZone(
-                            id = "KONT-ALT",
-                            name = "KONT 100 ft Altitude Zone",
-                            type = AirspaceZoneType.ALTITUDE_ZONE,
-                            centerLat = 34.0560,
-                            centerLon = -117.6012,
-                            radiusMeters = 9260.0,
-                            floorFt = 0.0,
-                            ceilingFt = 100.0,
-                            description = "Class C Outer Ring. Max auto-approved altitude 100 ft AGL."
-                        ),
-                        AirspaceZone(
-                            id = "KCNO-CORE",
-                            name = "KCNO Chino Class D",
-                            type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                            centerLat = 33.9748,
-                            centerLon = -117.6366,
-                            radiusMeters = 4200.0,
-                            floorFt = 0.0,
-                            ceilingFt = 200.0,
-                            description = "Chino Airport Class D airspace. LAANC Required."
-                        ),
-                        AirspaceZone(
-                            id = "KRAL-CORE",
-                            name = "KRAL Riverside Class D",
-                            type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                            centerLat = 33.9519,
-                            centerLon = -117.4451,
-                            radiusMeters = 4200.0,
-                            floorFt = 0.0,
-                            ceilingFt = 200.0,
-                            description = "Riverside Municipal Class D. LAANC Required."
-                        ),
-                        AirspaceZone(
-                            id = "PRADO-WARN",
-                            name = "Prado Basin Warning Area",
-                            type = AirspaceZoneType.WARNING_ZONE,
-                            centerLat = 33.9050,
-                            centerLon = -117.6250,
-                            radiusMeters = 3200.0,
-                            floorFt = 0.0,
-                            ceilingFt = 2000.0,
-                            description = "Enhanced Warning Zone: Heightened bird activity and low-flying aircraft."
-                        )
-                    )
-
-                    sampleZones.forEach { zone ->
-                        val circlePoints = Polygon.pointsAsCircle(GeoPoint(zone.centerLat, zone.centerLon), zone.radiusMeters)
-                        val polygon = Polygon(this).apply {
-                            points = circlePoints
-                            title = zone.name
-                            snippet = zone.description
-                            when (zone.type) {
-                                AirspaceZoneType.RESTRICTED_ZONE -> {
-                                    fillPaint.color = android.graphics.Color.argb(70, 218, 54, 51) // Red fill
-                                    outlinePaint.color = android.graphics.Color.argb(255, 218, 54, 51) // Red stroke
-                                    outlinePaint.strokeWidth = 3f
-                                }
-                                AirspaceZoneType.AUTHORIZATION_ZONE -> {
-                                    fillPaint.color = android.graphics.Color.argb(55, 56, 139, 253) // Blue fill
-                                    outlinePaint.color = android.graphics.Color.argb(255, 56, 139, 253) // Blue stroke
-                                    outlinePaint.strokeWidth = 2.5f
-                                }
-                                AirspaceZoneType.WARNING_ZONE -> {
-                                    fillPaint.color = android.graphics.Color.argb(55, 227, 179, 65) // Amber fill
-                                    outlinePaint.color = android.graphics.Color.argb(255, 227, 179, 65) // Amber stroke
-                                    outlinePaint.strokeWidth = 2.5f
-                                }
-                                AirspaceZoneType.ALTITUDE_ZONE -> {
-                                    fillPaint.color = android.graphics.Color.argb(35, 0, 210, 255) // Cyan fill
-                                    outlinePaint.color = android.graphics.Color.argb(230, 0, 210, 255) // Cyan stroke
-                                    outlinePaint.strokeWidth = 2f
-                                }
-                                AirspaceZoneType.SPECIAL_USE -> {
-                                    fillPaint.color = android.graphics.Color.argb(50, 255, 140, 0)
-                                    outlinePaint.color = android.graphics.Color.argb(255, 255, 140, 0)
-                                    outlinePaint.strokeWidth = 2f
-                                }
-                            }
-                        }
-                        overlays.add(polygon)
-                    }
-
-                    // 2. User Launch Point Marker
+                    // User Launch Point Marker
                     val userMarker = Marker(this).apply {
+                        id = "USER_MARKER"
                         position = startPoint
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                         title = "Launch Point: ${loc.displayName}"
@@ -189,6 +73,50 @@ fun MapScreen(
             update = { mapView ->
                 val point = GeoPoint(loc.latitude, loc.longitude)
                 mapView.controller.setCenter(point)
+
+                // Remove previous airspace polygons to avoid any persisting old elements
+                mapView.overlays.removeAll { it is Polygon }
+
+                // Render strictly live openAIP airspace zones
+                liveAirspaceZones.forEach { zone ->
+                    val circlePoints = Polygon.pointsAsCircle(GeoPoint(zone.centerLat, zone.centerLon), zone.radiusMeters)
+                    val polygon = Polygon(mapView).apply {
+                        points = circlePoints
+                        title = zone.name
+                        snippet = zone.description
+                        when (zone.type) {
+                            AirspaceZoneType.RESTRICTED_ZONE -> {
+                                fillPaint.color = android.graphics.Color.argb(70, 218, 54, 51) // Red fill
+                                outlinePaint.color = android.graphics.Color.argb(255, 218, 54, 51) // Red stroke
+                                outlinePaint.strokeWidth = 3f
+                            }
+                            AirspaceZoneType.AUTHORIZATION_ZONE -> {
+                                fillPaint.color = android.graphics.Color.argb(55, 56, 139, 253) // Blue fill
+                                outlinePaint.color = android.graphics.Color.argb(255, 56, 139, 253) // Blue stroke
+                                outlinePaint.strokeWidth = 2.5f
+                            }
+                            AirspaceZoneType.WARNING_ZONE -> {
+                                fillPaint.color = android.graphics.Color.argb(55, 227, 179, 65) // Amber fill
+                                outlinePaint.color = android.graphics.Color.argb(255, 227, 179, 65) // Amber stroke
+                                outlinePaint.strokeWidth = 2.5f
+                            }
+                            AirspaceZoneType.ALTITUDE_ZONE -> {
+                                fillPaint.color = android.graphics.Color.argb(35, 0, 210, 255) // Cyan fill
+                                outlinePaint.color = android.graphics.Color.argb(230, 0, 210, 255) // Cyan stroke
+                                outlinePaint.strokeWidth = 2f
+                            }
+                            AirspaceZoneType.SPECIAL_USE -> {
+                                fillPaint.color = android.graphics.Color.argb(50, 255, 140, 0)
+                                outlinePaint.color = android.graphics.Color.argb(255, 255, 140, 0)
+                                outlinePaint.strokeWidth = 2f
+                            }
+                        }
+                    }
+                    mapView.overlays.add(polygon)
+                }
+
+                // Refresh map invalidation
+                mapView.invalidate()
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -261,19 +189,19 @@ fun MapScreen(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(SafetyNoGo))
-                        Text("Restricted Zone / TFR (Red)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+                        Text("Restricted / Danger / Prohibited (Red)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(AviationCyan))
-                        Text("Authorization Zone (Blue)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+                        Text("Controlled / CTR / TMA (Blue)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(SafetyCautionLight))
-                        Text("Warning / Airport 5NM (Amber)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+                        Text("Warning / Class E / TMZ (Amber)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF00D2FF)))
-                        Text("Altitude Zone (Cyan)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+                        Text("Altitude / Facility Zone (Cyan)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
                     }
                 }
             }

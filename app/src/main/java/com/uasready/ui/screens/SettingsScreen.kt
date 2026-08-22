@@ -26,8 +26,9 @@ import com.uasready.ui.viewmodel.MainUiState
 enum class SettingsCategory(val title: String, val subtitle: String, val icon: ImageVector) {
     PILOT_AUTHORITY("Pilot Operating Authority", "Configure Licensed vs Non-licensed status", Icons.Default.Badge),
     AIRCRAFT_FLEET("Aircraft Fleet Management", "Select active craft and view limitations", Icons.Default.FlightTakeoff),
+    THEME_APPEARANCE("Theme & Appearance", "Select Light, Dark, or System Auto mode", Icons.Default.Palette),
     UNIT_SYSTEM("Unit System & Telemetry", "Toggle US Aviation vs Metric units", Icons.Default.Straighten),
-    DATA_SOURCES("Authoritative Telemetry Sources", "Review NOAA, Open-Meteo & FAA feeds", Icons.Default.Sensors)
+    DATA_SOURCES("Authoritative Telemetry Sources", "Review openAIP, NOAA & weather feeds", Icons.Default.Sensors)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,6 +37,7 @@ fun SettingsScreen(
     uiState: MainUiState,
     onSetAuthority: (PilotAuthorityType) -> Unit,
     onSelectAircraft: (String) -> Unit,
+    onSetThemeMode: (AppThemeMode) -> Unit,
     onNavigateToAircraft: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -101,6 +103,7 @@ fun SettingsScreen(
                         val currentBadge = when (category) {
                             SettingsCategory.PILOT_AUTHORITY -> uiState.currentPilot.activeAuthority.displayName
                             SettingsCategory.AIRCRAFT_FLEET -> uiState.selectedAircraft.displayName
+                            SettingsCategory.THEME_APPEARANCE -> uiState.themeMode.displayName
                             SettingsCategory.UNIT_SYSTEM -> if (isMetric) "Metric" else "US Aviation"
                             SettingsCategory.DATA_SOURCES -> "openAIP API"
                         }
@@ -307,6 +310,70 @@ fun SettingsScreen(
                                         Icon(Icons.Default.FlightTakeoff, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text("CUSTOM DRONE BUILDER & SPECS", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                                    }
+                                }
+                            }
+                        }
+
+                        SettingsCategory.THEME_APPEARANCE -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationAccent)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(
+                                        text = "Select application display theme:",
+                                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                                    )
+
+                                    AppThemeMode.values().forEach { mode ->
+                                        val isSelected = uiState.themeMode == mode
+                                        val borderColor = if (isSelected) AviationAccent else AviationDarkBorder
+                                        val bgColor = if (isSelected) AviationDarkSurface else Color.Transparent
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                                                .background(bgColor)
+                                                .clickable { onSetThemeMode(mode) }
+                                                .padding(12.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text(
+                                                        text = mode.displayName,
+                                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSelected) AviationAccent else TextPrimary
+                                                        )
+                                                    )
+                                                    if (isSelected) {
+                                                        Surface(shape = RoundedCornerShape(4.dp), color = AviationAccent.copy(alpha = 0.15f)) {
+                                                            Text(
+                                                                text = "ACTIVE",
+                                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                                style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(3.dp))
+                                                Text(
+                                                    text = mode.description,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
+                                                )
+                                            }
+                                            RadioButton(
+                                                selected = isSelected,
+                                                onClick = { onSetThemeMode(mode) },
+                                                colors = RadioButtonDefaults.colors(selectedColor = AviationAccent, unselectedColor = TextSecondary)
+                                            )
+                                        }
                                     }
                                 }
                             }

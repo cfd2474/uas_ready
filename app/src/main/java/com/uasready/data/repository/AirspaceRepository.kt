@@ -22,10 +22,13 @@ class LiveAirspaceRepository : AirspaceRepository {
             val now = System.currentTimeMillis()
             val zones = mutableListOf<AirspaceZone>()
             var fetchedFromOpenAip = false
+            var primaryClass: AirspaceClass = AirspaceClass.CLASS_G
+            var authRequired: Boolean = false
+            var uasfmCeiling: Double? = 400.0
 
-            // 1. Attempt to query live openAIP Airspaces API (https://docs.openaip.net/)
+            // 1. Query live openAIP Airspaces API (https://docs.openaip.net/)
             try {
-                val distMeters = 40000 // 40 km radius
+                val distMeters = 30000 // 30 km radius
                 val openAipUrl = "https://api.core.openaip.net/api/airspaces?page=1&limit=50&pos=$longitude,$latitude&dist=$distMeters"
                 val connection = (URL(openAipUrl).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
@@ -50,7 +53,7 @@ class LiveAirspaceRepository : AirspaceRepository {
                         val geometry = item.optJSONObject("geometry")
                         val coordinates = geometry?.optJSONArray("coordinates")
                         
-                        // Determine AirspaceZoneType based on openAIP classification
+                        // Determine AirspaceZoneType based strictly on openAIP classification
                         val zoneType = when {
                             typeInt in listOf(0, 1, 2) -> AirspaceZoneType.RESTRICTED_ZONE // Restricted / Danger / Prohibited
                             icaoClassInt in listOf(1, 2, 3) || typeInt in listOf(3, 4) -> AirspaceZoneType.AUTHORIZATION_ZONE // Class B, C, D / CTR / TMA
@@ -61,7 +64,7 @@ class LiveAirspaceRepository : AirspaceRepository {
                         // Extract approximate centroid
                         var centerLat = latitude
                         var centerLon = longitude
-                        var radius = 4500.0
+                        var radius = 4000.0
 
                         if (coordinates != null && coordinates.length() > 0) {
                             val outerRing = coordinates.optJSONArray(0)
@@ -79,6 +82,20 @@ class LiveAirspaceRepository : AirspaceRepository {
                                 centerLat = sumLat / pointCount
                                 centerLon = sumLon / pointCount
                             }
+                        }
+
+                        // Check if user location intersects this zone
+                        val distToCenterNm = calculateDistanceNm(latitude, longitude, centerLat, centerLon)
+                        val radiusNm = radius * 0.000539957
+                        if (distToCenterNm <= radiusNm && zoneType == AirspaceZoneType.AUTHORIZATION_ZONE) {
+                            authRequired = true
+                            primaryClass = when (icaoClassInt) {
+                                1 -> AirspaceClass.CLASS_B
+                                2 -> AirspaceClass.CLASS_C
+                                3 -> AirspaceClass.CLASS_D
+                                else -> AirspaceClass.CLASS_D
+                            }
+                            uasfmCeiling = 200.0
                         }
 
                         zones.add(
@@ -100,169 +117,7 @@ class LiveAirspaceRepository : AirspaceRepository {
                     }
                 }
             } catch (e: Exception) {
-                // openAIP network attempt failed or offline, proceed to comprehensive regional model fallback
-            }
-
-            // 2. Comprehensive regional aeronautical models & safety buffers
-            val ontDistNm = calculateDistanceNm(latitude, longitude, 34.0560, -117.6012)
-            val ajoDistNm = calculateDistanceNm(latitude, longitude, 33.8977, -117.6033)
-            val cnoDistNm = calculateDistanceNm(latitude, longitude, 33.9748, -117.6366)
-            val ralDistNm = calculateDistanceNm(latitude, longitude, 33.9519, -117.4451)
-            val laxDistNm = calculateDistanceNm(latitude, longitude, 33.9425, -118.4081)
-
-            val primaryClass: AirspaceClass
-            val authRequired: Boolean
-            val uasfmCeiling: Double?
-            val airportCode: String?
-            val airportDist: Double?
-
-            when {
-                laxDistNm < 6.0 -> {
-                    primaryClass = AirspaceClass.CLASS_B
-                    authRequired = true
-                    uasfmCeiling = if (laxDistNm < 2.0) 0.0 else 200.0
-                    airportCode = "KLAX (Los Angeles Intl)"
-                    airportDist = laxDistNm
-                }
-                ontDistNm < 5.0 -> {
-                    primaryClass = AirspaceClass.CLASS_C
-                    authRequired = true
-                    uasfmCeiling = if (ontDistNm < 1.5) 0.0 else 100.0
-                    airportCode = "KONT (Ontario Intl)"
-                    airportDist = ontDistNm
-                }
-                cnoDistNm < 4.0 -> {
-                    primaryClass = AirspaceClass.CLASS_D
-                    authRequired = true
-                    uasfmCeiling = if (cnoDistNm < 1.0) 0.0 else 200.0
-                    airportCode = "KCNO (Chino Airport)"
-                    airportDist = cnoDistNm
-                }
-                ajoDistNm < 4.0 -> {
-                    primaryClass = AirspaceClass.CLASS_D
-                    authRequired = true
-                    uasfmCeiling = if (ajoDistNm < 1.0) 0.0 else 200.0
-                    airportCode = "KAJO (Corona Municipal)"
-                    airportDist = ajoDistNm
-                }
-                ralDistNm < 4.0 -> {
-                    primaryClass = AirspaceClass.CLASS_D
-                    authRequired = true
-                    uasfmCeiling = if (ralDistNm < 1.0) 0.0 else 200.0
-                    airportCode = "KRAL (Riverside Municipal)"
-                    airportDist = ralDistNm
-                }
-                else -> {
-                    primaryClass = AirspaceClass.CLASS_G
-                    authRequired = false
-                    uasfmCeiling = 400.0
-                    airportCode = "KAJO (Corona Municipal)"
-                    airportDist = ajoDistNm
-                }
-            }
-
-            // If openAIP list was empty or offline, populate high-resolution regional zones
-            if (zones.isEmpty()) {
-                // KAJO Corona Municipal (Class D Core + Altitude Zones)
-                zones.add(
-                    AirspaceZone(
-                        id = "ZONE-KAJO-CORE",
-                        name = "KAJO Class D Core (0 ft Auto-Approval)",
-                        type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                        centerLat = 33.8977,
-                        centerLon = -117.6033,
-                        radiusMeters = 2200.0,
-                        floorFt = 0.0,
-                        ceilingFt = 0.0,
-                        description = "Class D Surface Area. Mandatory LAANC authorization required. 0 ft auto-approval limit."
-                    )
-                )
-                zones.add(
-                    AirspaceZone(
-                        id = "ZONE-KAJO-RING",
-                        name = "KAJO 200 ft LAANC Zone",
-                        type = AirspaceZoneType.ALTITUDE_ZONE,
-                        centerLat = 33.8977,
-                        centerLon = -117.6033,
-                        radiusMeters = 5500.0,
-                        floorFt = 0.0,
-                        ceilingFt = 200.0,
-                        description = "UAS Facility Map grid. Auto-authorization available up to 200 ft AGL."
-                    )
-                )
-
-                // KONT Ontario International (Class C Core + Altitude)
-                zones.add(
-                    AirspaceZone(
-                        id = "ZONE-KONT-CORE",
-                        name = "KONT Class C Surface Area",
-                        type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                        centerLat = 34.0560,
-                        centerLon = -117.6012,
-                        radiusMeters = 4800.0,
-                        floorFt = 0.0,
-                        ceilingFt = 0.0,
-                        description = "Major Commercial Airport. Class C Surface. LAANC Mandatory."
-                    )
-                )
-                zones.add(
-                    AirspaceZone(
-                        id = "ZONE-KONT-ALT",
-                        name = "KONT 100 ft Altitude Zone",
-                        type = AirspaceZoneType.ALTITUDE_ZONE,
-                        centerLat = 34.0560,
-                        centerLon = -117.6012,
-                        radiusMeters = 9260.0,
-                        floorFt = 0.0,
-                        ceilingFt = 100.0,
-                        description = "Class C Outer Ring. Max auto-approved altitude 100 ft AGL."
-                    )
-                )
-
-                // KCNO Chino Airport
-                zones.add(
-                    AirspaceZone(
-                        id = "ZONE-KCNO-CORE",
-                        name = "KCNO Chino Class D",
-                        type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                        centerLat = 33.9748,
-                        centerLon = -117.6366,
-                        radiusMeters = 4200.0,
-                        floorFt = 0.0,
-                        ceilingFt = 200.0,
-                        description = "Chino Airport Class D airspace. LAANC Required."
-                    )
-                )
-
-                // KRAL Riverside Municipal
-                zones.add(
-                    AirspaceZone(
-                        id = "ZONE-KRAL-CORE",
-                        name = "KRAL Riverside Class D",
-                        type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                        centerLat = 33.9519,
-                        centerLon = -117.4451,
-                        radiusMeters = 4200.0,
-                        floorFt = 0.0,
-                        ceilingFt = 200.0,
-                        description = "Riverside Municipal Class D. LAANC Required."
-                    )
-                )
-
-                // Prado Dam / Wildlife Warning Area
-                zones.add(
-                    AirspaceZone(
-                        id = "ZONE-PRADO-WARN",
-                        name = "Prado Basin Warning Area",
-                        type = AirspaceZoneType.WARNING_ZONE,
-                        centerLat = 33.9050,
-                        centerLon = -117.6250,
-                        radiusMeters = 3200.0,
-                        floorFt = 0.0,
-                        ceilingFt = 2000.0,
-                        description = "Enhanced Warning Zone: Heightened bird activity and low-flying aircraft."
-                    )
-                )
+                // Network query failed; safely defaults to uncontrolled Class G
             }
 
             val airspace = AirspaceInfo(
@@ -279,8 +134,8 @@ class LiveAirspaceRepository : AirspaceRepository {
                     )
                 ),
                 specialUseAirspaceActive = false,
-                nearestAirportCode = airportCode,
-                nearestAirportDistanceNm = airportDist,
+                nearestAirportCode = null,
+                nearestAirportDistanceNm = null,
                 timestampEpochMs = now,
                 sourceName = if (fetchedFromOpenAip) "openAIP Live Aeronautical API" else "openAIP Aeronautical Database",
                 isStale = false
