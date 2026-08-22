@@ -5,7 +5,8 @@
 - **Package**: `com.uasready`
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
-- **Current Version**: `v1.3.0` (Build 8)
+- **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
+- **Current Version**: `v1.3.1` (Build 9)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `main`)
 
@@ -13,42 +14,37 @@
 
 ## What Has Been Completed
 
-### 1. GNSS Constellation & Terrain Viewshed Engine
-- **Multi-Constellation Modeling**: Modeled GPS, GLONASS, Galileo, and BeiDou density based on receiver latitude and elevation.
-- **NOAA SWPC Scintillation**: Modeled ionospheric scintillation lock loss as a function of Planetary Kp.
-- **Online DEM Terrain Shading Viewshed**: Integrated Open-Meteo 90m SRTM/Copernicus Digital Elevation API across 8 radial compass azimuths at 1.5 km and 3.0 km radii to compute horizon ridge mask angles $\theta(\alpha) = \arctan\left(\frac{\Delta E}{D}\right)$ and solid-angle sky occlusion.
-- **Companion Safety Criteria**:
-  - **GO**: $\ge 12$ Visible Satellites, $\text{HDOP} \le 1.5$.
-  - **CAUTION**: $8\text{--}11$ Visible Satellites, $\text{HDOP } 1.5\text{--}2.5$.
-  - **NO-GO**: $\le 7$ Visible Satellites or $\text{HDOP} > 2.5$.
+### 1. DJI FlySafe Airspace Mapping Engine
+- **Spatial Zone Geometry**: Defined `AirspaceZone` and `AirspaceZoneType` covering Restricted (TFR/Prohibited), Authorization (Class B/C/D), Warning (5 NM Airport Buffers), and Altitude Zones (UASFM).
+- **Map Overlays**: Rendered multi-colored DJI FlySafe polygons on `MapView`:
+  - 🔴 **Restricted Zones (Red)**: `0xFFDA3633` outline, translucent fill (TFRs, strict no-fly).
+  - 🔵 **Authorization Zones (Blue)**: `0xFF388BFD` outline, translucent fill (Class B/C/D core).
+  - 🟡 **Warning Zones (Amber)**: `0xFFE3B341` outline, translucent fill (5 NM airport vicinity, wildlife).
+  - 🔷 **Altitude Zones (Cyan)**: `0xFF00D2FF` outline (UASFM grids).
+- **FlySafe Legend**: Floating top-right overlay with zone color codes.
 
-### 2. Pilot-Agnostic Settings & Operating Authority
-- Removed pilot names, license numbers, and COA agency registration fields.
-- Implemented **Pilot Operating Authority** settings:
-  - **107 License**: Cleared for day and night flight operations with aircraft 3 SM anti-collision lighting.
-  - **Public COA**: Flight restricted to 30 minutes before civil sunrise to 30 minutes after civil sunset. Night flight is a **hard NO-GO** (no night waiver references).
-- Replaced bottom bar pilot tab with top header **Settings gear icon**.
+### 2. Active Aircraft in Top Status Bar & Fleet in Settings
+- **Top Status Bar Active Craft**: Compact chip (`✈ DJI Mavic 3T`) in the top app bar next to `LIVE` badge.
+- **Removed Fleet Card**: Removed standalone fleet profile card from the Home overview.
+- **Fleet in Settings**: Integrated aircraft fleet switcher and specifications into `SettingsScreen.kt`, linked to custom aircraft creation.
+- **Bottom Navigation**: Streamlined 4-button landscape navigation (**Ready**, **Audit**, **Map**, **Checklists**) optimized for RC Pro Enterprise thumb zones.
 
-### 3. Flight Forecast Horizon & 120-Minute Tiering
-- Verbiage updated to **"120 Minutes Forecasted"**.
-- Implemented time-decay safety tiering across hourly sampling intervals:
-  - Limit exceedances occurring within **$0 \le T < 60\text{ min}$** $\rightarrow$ 🔴 **NO-GO** (immediate launch prohibited).
-  - Limit exceedances occurring within **$60 \le T \le 120\text{ min}$** $\rightarrow$ 🟡 **CAUTION** (short mission $<60\text{ min}$ permitted; return to base before deterioration).
+### 3. Reordered Home Overview Cards
+Cards are ordered sequentially:
+1. Location
+2. Weather & Wind
+3. Airspace & Restrictions
+4. **Daylight & Solar** (moved below Airspace)
+5. **GNSS Satellites & Geometry** (Satellites Visible)
+6. **Space Weather & Geomagnetic (Kp)** (moved below GNSS)
+7. Pilot Operating Authority (107 License / Public COA)
+8. Flight Forecast Horizon (120 Minutes Forecasted)
 
-### 4. UI Polish & Verbiage
-- Replaced "Satellites Locked" / "Sats Locked" with **"Satellites Visible"** / **"Sats Visible"**.
-- Removed testing scenarios from main application; default is live telemetry.
-- Cleaned up navigation and deprecated icon imports.
-
----
-
-## Active & Upcoming Chunks
-- [x] **Chunk 1**: Pilot-Agnostic Domain Model & Rule Evaluator Updates.
-- [x] **Chunk 2**: 120-Minute Forecast Tiering & UI Refactoring.
-- [x] **Chunk 3**: Full Test Suite Validation & Signed Release `v1.3.0`.
+### 4. DJI RC Pro Enterprise 640x360 Landscape Optimization
+- Adheres to `physical-parameters.md`: high-contrast dark theme, touch targets $\ge 48\text{ dp}$, edge-to-edge full canvas mapping with translucent floating overlays.
 
 ---
 
 ## Decisions Made & Rationale
-1. **Pilot Authority Model**: Replaced individual pilot data classes with `PilotAuthorityType.PART_107` and `PilotAuthorityType.PUBLIC_COA`.
-2. **Forecast Window Degradation**: Tiered forecast failures at $T < 60\text{m}$ as NO-GO and $60\text{m} \le T \le 120\text{m}$ as CAUTION to allow immediate tactical flights while warning pilots of impending weather fronts.
+1. **Airspace Map Visuals**: Styled exactly to DJI FlySafe visual language (Red for TFR/Restricted, Blue for Controlled Airspace, Amber for Airport Warning, Cyan for Altitude) to provide immediate familiarity to enterprise UAS pilots.
+2. **Top Bar Aircraft Chip**: Kept the active aircraft visible on all main screens without consuming vertical screen space on the 360 dp canvas.

@@ -31,6 +31,7 @@ fun HomeScreen(
     onNavigateToAssessment: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToMap: () -> Unit,
+    onOpenDrawer: () -> Unit,
     onRefreshLiveData: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -116,9 +117,18 @@ fun HomeScreen(
                         }
                     }
 
-                    // Settings / Pilot Authority & Fleet Gear Button
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextPrimary)
+                    Spacer(modifier = Modifier.width(2.dp))
+
+                    // Menu FAB / Button in upper-right corner that opens the side bar
+                    IconButton(
+                        onClick = onOpenDrawer,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(AviationDarkCard)
+                            .border(1.dp, AviationDarkBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(Icons.Default.Menu, contentDescription = "Open Navigation Menu", tint = AviationAccent, modifier = Modifier.size(20.dp))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -133,12 +143,12 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
-                // 1. Dominant GO / CAUTION / NO-GO Status Banner
+                // 1. Dominant GO / CAUTION / NO-GO Status Banner (Compact Height)
                 if (assessment != null) {
                     StatusBanner(
                         assessmentResult = assessment,
@@ -157,7 +167,7 @@ fun HomeScreen(
                         fontWeight = FontWeight.Bold
                     )
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 // Card 1: Location
                 MetricSummaryCard(
@@ -195,7 +205,7 @@ fun HomeScreen(
                     secondaryValue = airspaceRule?.thresholdFormatted ?: "No active TFRs in flight area",
                     status = airspaceCat?.status,
                     icon = Icons.Default.Flight,
-                    onClick = onNavigateToAssessment
+                    onClick = onNavigateToMap
                 )
             }
 
@@ -287,29 +297,30 @@ fun HomeScreen(
 
             // View Full Assessment Button
             item {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Button(
                     onClick = onNavigateToAssessment,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .height(48.dp),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AviationCyan,
                         contentColor = TextPrimary
                     )
                 ) {
-                    Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "VIEW FULL ASSESSMENT AUDIT",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.5.sp,
+                            fontSize = 13.sp
                         )
                     )
                 }
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

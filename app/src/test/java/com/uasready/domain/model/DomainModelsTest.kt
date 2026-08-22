@@ -20,11 +20,11 @@ class DomainModelsTest {
     fun testPilotAuthorityDistinction() {
         val pilot107 = Pilot(activeAuthority = PilotAuthorityType.PART_107)
         assertEquals(PilotAuthorityType.PART_107, pilot107.activeAuthority)
-        assertEquals("107 License", pilot107.activeAuthority.displayName)
+        assertEquals("Licensed Pilot", pilot107.activeAuthority.displayName)
 
         val pilotCoa = Pilot(activeAuthority = PilotAuthorityType.PUBLIC_COA)
         assertEquals(PilotAuthorityType.PUBLIC_COA, pilotCoa.activeAuthority)
-        assertEquals("Public COA", pilotCoa.activeAuthority.displayName)
+        assertEquals("Non-licensed Pilot", pilotCoa.activeAuthority.displayName)
     }
 
     @Test

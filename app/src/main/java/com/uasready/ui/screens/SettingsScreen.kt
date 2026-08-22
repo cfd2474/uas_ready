@@ -15,12 +15,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uasready.domain.model.PilotAuthorityType
 import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainUiState
+
+enum class SettingsCategory(val title: String, val subtitle: String, val icon: ImageVector) {
+    PILOT_AUTHORITY("Pilot Operating Authority", "Configure Licensed vs Non-licensed status", Icons.Default.Badge),
+    AIRCRAFT_FLEET("Aircraft Fleet Management", "Select active craft and view limitations", Icons.Default.FlightTakeoff),
+    UNIT_SYSTEM("Unit System & Telemetry", "Toggle US Aviation vs Metric units", Icons.Default.Straighten),
+    DATA_SOURCES("Authoritative Telemetry Sources", "Review NOAA, Open-Meteo & FAA feeds", Icons.Default.Sensors)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +40,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var activeCategory by remember { mutableStateOf<SettingsCategory?>(null) }
     var isMetric by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -39,8 +48,8 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "SETTINGS & PREFERENCES",
-                        style = MaterialTheme.typography.titleLarge.copy(
+                        text = if (activeCategory != null) activeCategory!!.title.uppercase() else "SETTINGS & PREFERENCES",
+                        style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp,
                             color = TextPrimary
@@ -48,7 +57,15 @@ fun SettingsScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = {
+                            if (activeCategory != null) {
+                                activeCategory = null
+                            } else {
+                                onNavigateBack()
+                            }
+                        }
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
@@ -62,258 +79,307 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. Pilot Operating Authority (Part 107 vs Public COA)
-            item {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "PILOT OPERATING AUTHORITY",
-                    style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = "Select operating authority profile to configure regulatory flight permissions:",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+            // If no category is selected: Show category selection buttons
+            if (activeCategory == null) {
+                item {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "SELECT CONFIGURATION CATEGORY",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
                         )
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
 
-                        PilotAuthorityType.values().forEach { authority ->
-                            val isSelected = uiState.currentPilot.activeAuthority == authority
-                            val borderColor = if (isSelected) AviationAccent else AviationDarkBorder
-                            val bgColor = if (isSelected) AviationDarkSurface else Color.Transparent
+                SettingsCategory.values().forEach { category ->
+                    item {
+                        val currentBadge = when (category) {
+                            SettingsCategory.PILOT_AUTHORITY -> uiState.currentPilot.activeAuthority.displayName
+                            SettingsCategory.AIRCRAFT_FLEET -> uiState.selectedAircraft.displayName
+                            SettingsCategory.UNIT_SYSTEM -> if (isMetric) "Metric" else "US Aviation"
+                            SettingsCategory.DATA_SOURCES -> "NOAA / FAA AIS"
+                        }
 
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                            border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { activeCategory = category }
+                        ) {
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-                                    .background(bgColor)
-                                    .clickable { onSetAuthority(authority) }
-                                    .padding(12.dp)
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(AviationDarkSurface)
+                                            .border(1.dp, AviationDarkBorder, RoundedCornerShape(8.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(category.icon, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(22.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
                                         Text(
-                                            text = authority.displayName,
-                                            style = MaterialTheme.typography.bodyLarge.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isSelected) AviationAccent else TextPrimary
-                                            )
+                                            text = category.title,
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
                                         )
-                                        if (isSelected) {
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = AviationAccent.copy(alpha = 0.15f)
-                                            ) {
+                                        Text(
+                                            text = category.subtitle,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = AviationDarkSurface,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+                                ) {
+                                    Text(
+                                        text = currentBadge,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = AviationAccent,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Category-specific interactive data entry card
+                item {
+                    when (activeCategory!!) {
+                        SettingsCategory.PILOT_AUTHORITY -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationAccent)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(
+                                        text = "Select pilot certification status for session evaluation:",
+                                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                                    )
+
+                                    PilotAuthorityType.values().forEach { authority ->
+                                        val isSelected = uiState.currentPilot.activeAuthority == authority
+                                        val borderColor = if (isSelected) AviationAccent else AviationDarkBorder
+                                        val bgColor = if (isSelected) AviationDarkSurface else Color.Transparent
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                                                .background(bgColor)
+                                                .clickable { onSetAuthority(authority) }
+                                                .padding(12.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text(
+                                                        text = authority.displayName,
+                                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSelected) AviationAccent else TextPrimary
+                                                        )
+                                                    )
+                                                    if (isSelected) {
+                                                        Surface(shape = RoundedCornerShape(4.dp), color = AviationAccent.copy(alpha = 0.15f)) {
+                                                            Text(
+                                                                text = "ACTIVE",
+                                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                                style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(3.dp))
                                                 Text(
-                                                    text = "ACTIVE",
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                    style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                                    text = authority.description,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
                                                 )
                                             }
+                                            RadioButton(
+                                                selected = isSelected,
+                                                onClick = { onSetAuthority(authority) },
+                                                colors = RadioButtonDefaults.colors(selectedColor = AviationAccent, unselectedColor = TextSecondary)
+                                            )
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        SettingsCategory.AIRCRAFT_FLEET -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationAccent)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(
+                                        text = "Select active aircraft to configure environmental limitations:",
+                                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                                    )
+
+                                    uiState.allAircraft.forEach { craft ->
+                                        val isSelected = uiState.selectedAircraft.id == craft.id
+                                        val borderColor = if (isSelected) AviationAccent else AviationDarkBorder
+                                        val bgColor = if (isSelected) AviationDarkSurface else Color.Transparent
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                                                .background(bgColor)
+                                                .clickable { onSelectAircraft(craft.id) }
+                                                .padding(12.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text(
+                                                        text = craft.displayName,
+                                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSelected) AviationAccent else TextPrimary
+                                                        )
+                                                    )
+                                                    if (isSelected) {
+                                                        Surface(shape = RoundedCornerShape(4.dp), color = AviationAccent.copy(alpha = 0.15f)) {
+                                                            Text(
+                                                                text = "SELECTED",
+                                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                                style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = "Max Sustained ${craft.limitations.maxSustainedWindSpeedMph.toInt()} MPH • Max Gust ${craft.limitations.maxGustSpeedMph.toInt()} MPH • ${craft.limitations.ipRating}",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
+                                                )
+                                            }
+                                            RadioButton(
+                                                selected = isSelected,
+                                                onClick = { onSelectAircraft(craft.id) },
+                                                colors = RadioButtonDefaults.colors(selectedColor = AviationAccent, unselectedColor = TextSecondary)
+                                            )
+                                        }
+                                    }
+
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = authority.description,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, color = TextSecondary)
-                                    )
+
+                                    OutlinedButton(
+                                        onClick = onNavigateToAircraft,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AviationAccent),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationAccent.copy(alpha = 0.6f))
+                                    ) {
+                                        Icon(Icons.Default.FlightTakeoff, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("CUSTOM DRONE BUILDER & SPECS", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                                    }
                                 }
-                                RadioButton(
-                                    selected = isSelected,
-                                    onClick = { onSetAuthority(authority) },
-                                    colors = RadioButtonDefaults.colors(
-                                        selectedColor = AviationAccent,
-                                        unselectedColor = TextSecondary
-                                    )
-                                )
                             }
                         }
-                    }
-                }
-            }
 
-            // 2. Aircraft Fleet Management
-            item {
-                Text(
-                    text = "AIRCRAFT FLEET MANAGEMENT",
-                    style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = "Select active aircraft to apply environmental flight limitations:",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
-                        )
-
-                        uiState.allAircraft.forEach { craft ->
-                            val isSelected = uiState.selectedAircraft.id == craft.id
-                            val borderColor = if (isSelected) AviationAccent else AviationDarkBorder
-                            val bgColor = if (isSelected) AviationDarkSurface else Color.Transparent
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-                                    .background(bgColor)
-                                    .clickable { onSelectAircraft(craft.id) }
-                                    .padding(12.dp)
+                        SettingsCategory.UNIT_SYSTEM -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationAccent)),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            text = craft.displayName,
-                                            style = MaterialTheme.typography.bodyLarge.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isSelected) AviationAccent else TextPrimary
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (isMetric) "Metric System (m/s, °C, m, km)" else "US Aviation Standard (MPH, °F, ft, SM)",
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                                            )
+                                            Text(
+                                                text = if (isMetric) "International standard metric units" else "Standard FAA aeronautical telemetry",
+                                                style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                                            )
+                                        }
+                                        Switch(
+                                            checked = isMetric,
+                                            onCheckedChange = { isMetric = it },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = TextPrimary,
+                                                checkedTrackColor = AviationAccent,
+                                                uncheckedThumbColor = TextSecondary,
+                                                uncheckedTrackColor = AviationDarkSurface
                                             )
                                         )
-                                        if (isSelected) {
-                                            Surface(
-                                                shape = RoundedCornerShape(4.dp),
-                                                color = AviationAccent.copy(alpha = 0.15f)
-                                            ) {
-                                                Text(
-                                                    text = "SELECTED",
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                    style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-                                                )
-                                            }
-                                        }
                                     }
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "Max Sustained ${craft.limitations.maxSustainedWindSpeedMph.toInt()} MPH • Max Gust ${craft.limitations.maxGustSpeedMph.toInt()} MPH • ${craft.limitations.ipRating}",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
-                                    )
                                 }
-                                RadioButton(
-                                    selected = isSelected,
-                                    onClick = { onSelectAircraft(craft.id) },
-                                    colors = RadioButtonDefaults.colors(
-                                        selectedColor = AviationAccent,
-                                        unselectedColor = TextSecondary
-                                    )
-                                )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        OutlinedButton(
-                            onClick = onNavigateToAircraft,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AviationAccent),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationAccent.copy(alpha = 0.6f))
-                        ) {
-                            Icon(Icons.Default.FlightTakeoff, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("MANAGE FLEET & CUSTOM AIRCRAFT", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
-                        }
-                    }
-                }
-            }
-
-            // 3. Unit System
-            item {
-                Text(
-                    text = "UNIT SYSTEM",
-                    style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isMetric) "Metric System (m/s, °C, m, km)" else "US Aviation Standard (MPH, °F, ft, SM)",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
-                                )
-                                Text(
-                                    text = if (isMetric) "International standard metric units" else "Standard FAA aeronautical telemetry",
-                                    style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
-                                )
+                        SettingsCategory.DATA_SOURCES -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationAccent)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("• Weather & Forecast: Open-Meteo & NOAA National Weather Service", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• Space Weather & GNSS: NOAA SWPC Planetary K-Index Feed", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• Terrain Elevation DEM: Open-Meteo 90m SRTM / Copernicus Digital Elevation", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• Solar Ephemeris: NOAA Astronomical Solar Geometry Algorithm", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• Airspace & FlySafe: FAA Aeronautical Information Services (AIS) & FlySafe Model", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                }
                             }
-                            Switch(
-                                checked = isMetric,
-                                onCheckedChange = { isMetric = it },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = TextPrimary,
-                                    checkedTrackColor = AviationAccent,
-                                    uncheckedThumbColor = TextSecondary,
-                                    uncheckedTrackColor = AviationDarkSurface
-                                )
-                            )
                         }
                     }
-                }
-            }
 
-            // 4. Authoritative Data Sources
-            item {
-                Text(
-                    text = "AUTHORITATIVE TELEMETRY SOURCES",
-                    style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("• Weather & Forecast: Open-Meteo & NOAA National Weather Service", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                        Text("• Space Weather & GNSS: NOAA SWPC Planetary K-Index Feed", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                        Text("• Terrain Elevation DEM: Open-Meteo 90m SRTM / Copernicus Digital Elevation", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                        Text("• Solar Ephemeris: NOAA Astronomical Solar Geometry Algorithm", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                        Text("• Airspace & FlySafe: FAA Aeronautical Information Services (AIS) & FlySafe Model", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                    Button(
+                        onClick = { activeCategory = null },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AviationDarkSurface, contentColor = AviationAccent),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("BACK TO CATEGORIES MENU", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                     }
                 }
-            }
-
-            // 5. App Info Footer
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("UASReady Preflight Decision Support", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold))
-                        Text("Deterministic Safety Assessment Engine", style = MaterialTheme.typography.bodyMedium.copy(color = TextMuted, fontSize = 11.sp))
-                    }
-                }
-                Spacer(modifier = Modifier.height(20.dp))
             }
         }
     }
