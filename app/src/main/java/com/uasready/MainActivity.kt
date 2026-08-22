@@ -280,10 +280,10 @@ class MainActivity : ComponentActivity() {
 
                                 HorizontalDivider(color = AviationDarkBorder, modifier = Modifier.padding(vertical = 2.dp))
 
-                                // Navigation Items (5 Items: Home, Assessment, Map, Reference, Settings)
+                                // Navigation Items (5 Items: Home, Detailed Report, Map, Reference, Settings)
                                 val navItems = listOf(
                                     Triple(Screen.Home.route, "Flight Readiness", Icons.Default.Dashboard),
-                                    Triple(Screen.Assessment.route, "Assessment Audit", Icons.Default.Assessment),
+                                    Triple(Screen.Assessment.route, "Detailed Report", Icons.Default.Assessment),
                                     Triple(Screen.Map.route, "Aviation Map (openAIP)", Icons.Default.Map),
                                     Triple(Screen.Reference.route, "Checklists & Emergency", Icons.AutoMirrored.Filled.MenuBook),
                                     Triple(Screen.Settings.route, "Settings & Fleet", Icons.Default.Settings)
@@ -379,7 +379,10 @@ class MainActivity : ComponentActivity() {
                             composable(Screen.Home.route) {
                                 HomeScreen(
                                     uiState = uiState,
-                                    onNavigateToAssessment = { navController.navigate(Screen.Assessment.route) },
+                                    onNavigateToAssessment = { category ->
+                                        viewModel.setCategoryFilter(category)
+                                        navController.navigate(Screen.Assessment.route)
+                                    },
                                     onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                                     onNavigateToMap = { navController.navigate(Screen.Map.route) }
                                 )
@@ -460,91 +463,185 @@ fun AviationTopStatusBar(
     onRefresh: () -> Unit,
     onOpenDrawer: () -> Unit
 ) {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
     TopAppBar(
         title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "UASREADY",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.2.sp,
-                        color = TextPrimary
-                    )
-                )
-
-                // Live status chip
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = AviationDarkCard,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+            if (isLandscape) {
+                // Landscape Single-Line Row
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "LIVE",
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = SafetyGoLight,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
+                        text = "UASREADY",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.2.sp,
+                            color = TextPrimary
                         )
                     )
-                }
 
-                // Active Aircraft Chip
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = AviationDarkCard,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    // Live status chip
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = AviationDarkCard,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
                     ) {
-                        Icon(
-                            Icons.Default.FlightTakeoff,
-                            contentDescription = null,
-                            tint = AviationAccent,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = currentAircraftName,
+                            text = "LIVE",
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall.copy(
-                                color = TextPrimary,
+                                color = SafetyGoLight,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         )
                     }
-                }
 
-                // Pilot Status Chip
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = AviationDarkCard,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
-                ) {
+                    // Active Aircraft Chip
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = AviationDarkCard,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.FlightTakeoff,
+                                contentDescription = null,
+                                tint = AviationAccent,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = currentAircraftName,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = TextPrimary,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                    }
+
+                    // Pilot Status Chip
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = AviationDarkCard,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Badge,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = currentPilotName,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = AviationAccent,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Portrait Multi-Line Layout (Prevents crushing)
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Badge,
-                            contentDescription = null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = currentPilotName,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = AviationAccent,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
+                            text = "UASREADY",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.2.sp,
+                                color = TextPrimary
                             )
                         )
+
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = AviationDarkCard,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+                        ) {
+                            Text(
+                                text = "LIVE",
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = SafetyGoLight,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = AviationDarkCard,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.FlightTakeoff,
+                                    contentDescription = null,
+                                    tint = AviationAccent,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = currentAircraftName,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = TextPrimary,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    // Line 2: Pilot Status Chip
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = AviationDarkCard,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Badge,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "PILOT: $currentPilotName",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = AviationAccent,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
                     }
                 }
             }

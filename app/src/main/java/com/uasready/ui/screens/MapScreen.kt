@@ -1,6 +1,12 @@
 package com.uasready.ui.screens
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -59,10 +65,11 @@ fun MapScreen(
                     val startPoint = GeoPoint(loc.latitude, loc.longitude)
                     controller.setCenter(startPoint)
 
-                    // User Launch Point Marker
+                    // User Launch Point Marker (Red Map Pin)
                     val userMarker = Marker(this).apply {
                         id = "USER_MARKER"
                         position = startPoint
+                        icon = createRedPinDrawable(context)
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                         title = "Launch Point: ${loc.displayName}"
                         snippet = "Coordinates: ${loc.formattedCoordinates}"
@@ -74,49 +81,62 @@ fun MapScreen(
                 val point = GeoPoint(loc.latitude, loc.longitude)
                 mapView.controller.setCenter(point)
 
+                // Update or reposition User Marker
+                val userMarker = mapView.overlays.filterIsInstance<Marker>().firstOrNull { it.id == "USER_MARKER" }
+                if (userMarker != null) {
+                    userMarker.position = point
+                    userMarker.title = "Launch Point: ${loc.displayName}"
+                    userMarker.snippet = "Coordinates: ${loc.formattedCoordinates}"
+                }
+
                 // Remove previous airspace polygons to avoid any persisting old elements
                 mapView.overlays.removeAll { it is Polygon }
 
-                // Render strictly live openAIP airspace zones
+                // Render strictly live openAIP airspace zones in map view extent
                 liveAirspaceZones.forEach { zone ->
-                    val circlePoints = Polygon.pointsAsCircle(GeoPoint(zone.centerLat, zone.centerLon), zone.radiusMeters)
+                    val pointsList: List<GeoPoint> = if (zone.polygonCoordinates.size >= 3) {
+                        zone.polygonCoordinates.map { GeoPoint(it.first, it.second) }
+                    } else {
+                        Polygon.pointsAsCircle(GeoPoint(zone.centerLat, zone.centerLon), zone.radiusMeters)
+                    }
+
                     val polygon = Polygon(mapView).apply {
-                        points = circlePoints
+                        points = pointsList
                         title = zone.name
                         snippet = zone.description
                         when (zone.type) {
                             AirspaceZoneType.RESTRICTED_ZONE -> {
-                                fillPaint.color = android.graphics.Color.argb(70, 218, 54, 51) // Red fill
-                                outlinePaint.color = android.graphics.Color.argb(255, 218, 54, 51) // Red stroke
-                                outlinePaint.strokeWidth = 3f
+                                fillPaint.color = AndroidColor.argb(70, 218, 54, 51) // Red fill
+                                outlinePaint.color = AndroidColor.argb(255, 218, 54, 51) // Red stroke
+                                outlinePaint.strokeWidth = 3.5f
                             }
                             AirspaceZoneType.AUTHORIZATION_ZONE -> {
-                                fillPaint.color = android.graphics.Color.argb(55, 56, 139, 253) // Blue fill
-                                outlinePaint.color = android.graphics.Color.argb(255, 56, 139, 253) // Blue stroke
-                                outlinePaint.strokeWidth = 2.5f
+                                fillPaint.color = AndroidColor.argb(55, 56, 139, 253) // Blue fill
+                                outlinePaint.color = AndroidColor.argb(255, 56, 139, 253) // Blue stroke
+                                outlinePaint.strokeWidth = 3f
                             }
                             AirspaceZoneType.WARNING_ZONE -> {
-                                fillPaint.color = android.graphics.Color.argb(55, 227, 179, 65) // Amber fill
-                                outlinePaint.color = android.graphics.Color.argb(255, 227, 179, 65) // Amber stroke
-                                outlinePaint.strokeWidth = 2.5f
+                                fillPaint.color = AndroidColor.argb(55, 227, 179, 65) // Amber fill
+                                outlinePaint.color = AndroidColor.argb(255, 227, 179, 65) // Amber stroke
+                                outlinePaint.strokeWidth = 3f
                             }
                             AirspaceZoneType.ALTITUDE_ZONE -> {
-                                fillPaint.color = android.graphics.Color.argb(35, 0, 210, 255) // Cyan fill
-                                outlinePaint.color = android.graphics.Color.argb(230, 0, 210, 255) // Cyan stroke
-                                outlinePaint.strokeWidth = 2f
+                                fillPaint.color = AndroidColor.argb(35, 0, 210, 255) // Cyan fill
+                                outlinePaint.color = AndroidColor.argb(230, 0, 210, 255) // Cyan stroke
+                                outlinePaint.strokeWidth = 2.5f
                             }
                             AirspaceZoneType.SPECIAL_USE -> {
-                                fillPaint.color = android.graphics.Color.argb(50, 255, 140, 0)
-                                outlinePaint.color = android.graphics.Color.argb(255, 255, 140, 0)
-                                outlinePaint.strokeWidth = 2f
+                                fillPaint.color = AndroidColor.argb(50, 255, 140, 0)
+                                outlinePaint.color = AndroidColor.argb(255, 255, 140, 0)
+                                outlinePaint.strokeWidth = 2.5f
                             }
                         }
                     }
                     mapView.overlays.add(polygon)
                 }
 
-                // Refresh map invalidation
-                mapView.invalidate()
+                // Refresh map rendering
+                mapView.postInvalidate()
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -260,4 +280,40 @@ fun MapScreen(
             }
         }
     }
+}
+
+private fun createRedPinDrawable(context: Context): BitmapDrawable {
+    val density = context.resources.displayMetrics.density
+    val width = (28 * density).toInt()
+    val height = (40 * density).toInt()
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val radius = width / 2f
+    val path = Path().apply {
+        arcTo(0f, 0f, width.toFloat(), width.toFloat(), 180f, 180f, true)
+        quadTo(width.toFloat(), width * 0.85f, width / 2f, height.toFloat())
+        quadTo(0f, width * 0.85f, 0f, radius)
+        close()
+    }
+
+    val pinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.rgb(220, 38, 38) // Vivid Google Maps Red
+        style = Paint.Style.FILL
+    }
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.rgb(153, 27, 27)
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * density
+    }
+    val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        style = Paint.Style.FILL
+    }
+
+    canvas.drawPath(path, pinPaint)
+    canvas.drawPath(path, borderPaint)
+    canvas.drawCircle(width / 2f, radius, radius * 0.45f, dotPaint)
+
+    return BitmapDrawable(context.resources, bitmap)
 }

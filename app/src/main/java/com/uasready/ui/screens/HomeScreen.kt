@@ -32,7 +32,7 @@ import com.uasready.ui.viewmodel.MainUiState
 @Composable
 fun HomeScreen(
     uiState: MainUiState,
-    onNavigateToAssessment: () -> Unit,
+    onNavigateToAssessment: (AssessmentCategory?) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToMap: () -> Unit,
     modifier: Modifier = Modifier
@@ -43,12 +43,22 @@ fun HomeScreen(
 
     val assessment = uiState.assessmentResult
 
-    // Extract quick status categories
+    // Extract category assessments
     val weatherCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.WEATHER }
     val airspaceCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.AIRSPACE }
     val spaceCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.SPACE_WEATHER }
     val daylightCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.DAYLIGHT }
     val pilotCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.PILOT_QUALIFICATIONS }
+    val aircraftCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.AIRCRAFT_LIMITS }
+
+    // 120-Minute Forecast Status Calculation:
+    // Any failure in 0-60m window -> NO-GO; Failures in 60-120m window -> CAUTION; Otherwise -> GO
+    val forecastStatus: AssessmentStatus = when {
+        assessment == null -> AssessmentStatus.DATA_UNAVAILABLE
+        weatherCat?.status == AssessmentStatus.NO_GO || daylightCat?.status == AssessmentStatus.NO_GO -> AssessmentStatus.NO_GO
+        weatherCat?.status == AssessmentStatus.CAUTION || daylightCat?.status == AssessmentStatus.CAUTION -> AssessmentStatus.CAUTION
+        else -> AssessmentStatus.GO
+    }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
@@ -67,7 +77,7 @@ fun HomeScreen(
                 if (assessment != null && !uiState.isLiveLoading) {
                     StatusBanner(
                         assessmentResult = assessment,
-                        onTap = onNavigateToAssessment
+                        onTap = { onNavigateToAssessment(null) }
                     )
                 } else {
                     // Obtaining Telemetry Placeholder Banner
@@ -116,11 +126,11 @@ fun HomeScreen(
                 secondaryValue = weatherSummary,
                 status = weatherCat?.status,
                 icon = Icons.Default.Cloud,
-                onClick = onNavigateToAssessment
+                onClick = { onNavigateToAssessment(AssessmentCategory.WEATHER) }
             )
         }
 
-        // Card 3: Airspace & Restrictions (Square Card)
+        // Card 3: Airspace & openAIP (Square Card)
         item {
             val airspaceRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AIR-CTRL") || it.ruleId.startsWith("AIR-TFR") }
             SquareMetricCard(
@@ -129,7 +139,7 @@ fun HomeScreen(
                 secondaryValue = airspaceRule?.thresholdFormatted ?: "No active flight restrictions",
                 status = airspaceCat?.status,
                 icon = Icons.Default.Flight,
-                onClick = onNavigateToMap
+                onClick = { onNavigateToAssessment(AssessmentCategory.AIRSPACE) }
             )
         }
 
@@ -142,7 +152,7 @@ fun HomeScreen(
                 secondaryValue = sunRule?.explanation ?: "Flight window within daylight",
                 status = daylightCat?.status,
                 icon = Icons.Default.WbSunny,
-                onClick = onNavigateToAssessment
+                onClick = { onNavigateToAssessment(AssessmentCategory.DAYLIGHT) }
             )
         }
 
@@ -177,7 +187,7 @@ fun HomeScreen(
                 secondaryValue = secondaryText,
                 status = gnssWorstStatus,
                 icon = Icons.Default.Satellite,
-                onClick = onNavigateToAssessment
+                onClick = { onNavigateToAssessment(AssessmentCategory.SPACE_WEATHER) }
             )
         }
 
@@ -191,7 +201,7 @@ fun HomeScreen(
                 secondaryValue = kpRule?.thresholdFormatted ?: "Normal solar activity",
                 status = spaceCat?.status,
                 icon = Icons.Default.Public,
-                onClick = onNavigateToAssessment
+                onClick = { onNavigateToAssessment(AssessmentCategory.SPACE_WEATHER) }
             )
         }
 
@@ -203,49 +213,25 @@ fun HomeScreen(
                 secondaryValue = if (uiState.isPilotSelectionPending) "Select certification" else uiState.currentPilot.activeAuthority.description,
                 status = pilotCat?.status,
                 icon = Icons.Default.Badge,
-                onClick = onNavigateToSettings
+                onClick = { onNavigateToAssessment(AssessmentCategory.PILOT_QUALIFICATIONS) }
             )
         }
 
-        // Card 8: 120 Minutes Forecasted Horizon (Square Card)
+        // Card 8: 120 Minute Forecast (Square Card with Status)
         item {
             SquareMetricCard(
-                title = "120m Horizon",
-                primaryValue = "120m Forecasted",
+                title = "120 Minute Forecast",
+                primaryValue = if (forecastStatus == AssessmentStatus.GO) "Window Cleared" else if (forecastStatus == AssessmentStatus.CAUTION) "Caution Ahead" else "Restricted",
                 secondaryValue = "0–60m Launch • 60–120m Watch",
+                status = forecastStatus,
                 icon = Icons.Default.Schedule,
-                onClick = onNavigateToAssessment
+                onClick = { onNavigateToAssessment(null) }
             )
         }
 
-        // Full Assessment Audit Button (Spans All Columns)
+        // Bottom spacing
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Column {
-                Spacer(modifier = Modifier.height(2.dp))
-                Button(
-                    onClick = onNavigateToAssessment,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AviationCyan,
-                        contentColor = TextPrimary
-                    )
-                ) {
-                    Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "VIEW FULL ASSESSMENT AUDIT",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp,
-                            fontSize = 13.sp
-                        )
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+            Spacer(modifier = Modifier.height(14.dp))
         }
     }
 }

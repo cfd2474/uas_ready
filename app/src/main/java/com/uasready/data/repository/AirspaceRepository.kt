@@ -28,8 +28,8 @@ class LiveAirspaceRepository : AirspaceRepository {
 
             // 1. Query live openAIP Airspaces API (https://docs.openaip.net/)
             try {
-                val distMeters = 30000 // 30 km radius
-                val openAipUrl = "https://api.core.openaip.net/api/airspaces?page=1&limit=50&pos=$longitude,$latitude&dist=$distMeters"
+                val distMeters = 35000 // 35 km map view radius
+                val openAipUrl = "https://api.core.openaip.net/api/airspaces?page=1&limit=100&pos=$longitude,$latitude&dist=$distMeters"
                 val connection = (URL(openAipUrl).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     connectTimeout = 4000
@@ -49,9 +49,10 @@ class LiveAirspaceRepository : AirspaceRepository {
                         val icaoClassInt = item.optInt("icaoClass", -1)
                         val typeInt = item.optInt("type", -1)
                         
-                        // Parse geometry center / radius
+                        // Parse geometry coordinates
                         val geometry = item.optJSONObject("geometry")
                         val coordinates = geometry?.optJSONArray("coordinates")
+                        val polyPoints = mutableListOf<Pair<Double, Double>>()
                         
                         // Determine AirspaceZoneType based strictly on openAIP classification
                         val zoneType = when {
@@ -61,7 +62,6 @@ class LiveAirspaceRepository : AirspaceRepository {
                             else -> AirspaceZoneType.ALTITUDE_ZONE
                         }
 
-                        // Extract approximate centroid
                         var centerLat = latitude
                         var centerLon = longitude
                         var radius = 4000.0
@@ -75,16 +75,21 @@ class LiveAirspaceRepository : AirspaceRepository {
                                 for (p in 0 until pointCount) {
                                     val pt = outerRing.optJSONArray(p)
                                     if (pt != null && pt.length() >= 2) {
-                                        sumLon += pt.optDouble(0, longitude)
-                                        sumLat += pt.optDouble(1, latitude)
+                                        val pLon = pt.optDouble(0, longitude)
+                                        val pLat = pt.optDouble(1, latitude)
+                                        polyPoints.add(Pair(pLat, pLon))
+                                        sumLon += pLon
+                                        sumLat += pLat
                                     }
                                 }
-                                centerLat = sumLat / pointCount
-                                centerLon = sumLon / pointCount
+                                if (pointCount > 0) {
+                                    centerLat = sumLat / pointCount
+                                    centerLon = sumLon / pointCount
+                                }
                             }
                         }
 
-                        // Check if user location intersects this zone
+                        // Check if operator location intersects this zone
                         val distToCenterNm = calculateDistanceNm(latitude, longitude, centerLat, centerLon)
                         val radiusNm = radius * 0.000539957
                         if (distToCenterNm <= radiusNm && zoneType == AirspaceZoneType.AUTHORIZATION_ZONE) {
@@ -108,7 +113,8 @@ class LiveAirspaceRepository : AirspaceRepository {
                                 radiusMeters = radius,
                                 floorFt = 0.0,
                                 ceilingFt = 400.0,
-                                description = "openAIP Aeronautical Service: $name"
+                                description = "openAIP Aeronautical Service: $name",
+                                polygonCoordinates = polyPoints
                             )
                         )
                     }

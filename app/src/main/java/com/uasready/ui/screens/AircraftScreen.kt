@@ -75,13 +75,13 @@ fun AircraftScreen(
                         },
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = AviationCyan,
-                            contentColor = TextPrimary
+                            contentColor = Color.White
                         ),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("CLONE CUSTOM", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                        Text("BUILD CUSTOM", color = Color.White, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AviationDarkBackground)
@@ -322,9 +322,9 @@ fun AircraftScreen(
                         onSaveCustomAircraft(newCustom)
                         showCustomDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AviationCyan)
+                    colors = ButtonDefaults.buttonColors(containerColor = AviationCyan, contentColor = Color.White)
                 ) {
-                    Text("SAVE TO FLEET")
+                    Text("SAVE TO FLEET", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
