@@ -14,6 +14,28 @@ enum class AirspaceClass {
 }
 
 @Serializable
+enum class AirspaceZoneType {
+    RESTRICTED_ZONE,       // Red: TFRs, Prohibited P-areas, Strict No-Fly
+    AUTHORIZATION_ZONE,    // Blue: Class B, C, D Controlled Airspace (LAANC authorization required)
+    WARNING_ZONE,          // Amber: 5 NM Airport vicinity buffer, Class E surface, Wildlife
+    ALTITUDE_ZONE,         // Cyan: UAS Facility Map altitude restriction grids
+    SPECIAL_USE            // Orange: Military Operations Areas (MOA), Alert areas
+}
+
+@Serializable
+data class AirspaceZone(
+    val id: String,
+    val name: String,
+    val type: AirspaceZoneType,
+    val centerLat: Double,
+    val centerLon: Double,
+    val radiusMeters: Double,
+    val floorFt: Double = 0.0,
+    val ceilingFt: Double? = null,
+    val description: String = ""
+)
+
+@Serializable
 data class TemporaryFlightRestriction(
     val id: String,
     val description: String,
@@ -22,7 +44,9 @@ data class TemporaryFlightRestriction(
     val maxAltitudeFt: Double,
     val effectiveStartEpochMs: Long,
     val effectiveEndEpochMs: Long,
-    val radiusNm: Double
+    val radiusNm: Double,
+    val centerLat: Double? = null,
+    val centerLon: Double? = null
 ) {
     fun isActiveAt(timeMs: Long): Boolean {
         return timeMs in effectiveStartEpochMs..effectiveEndEpochMs
@@ -44,6 +68,7 @@ data class AirspaceInfo(
     val controlledAirspaceAuthorizationRequired: Boolean = false,
     val uasFacilityMapMaxAltitudeFt: Double? = null, // Max auto-approved LAANC ceiling (0 - 400 ft)
     val activeTfrs: List<TemporaryFlightRestriction> = emptyList(),
+    val zones: List<AirspaceZone> = emptyList(),
     val notams: List<NoticeToAirmen> = emptyList(),
     val specialUseAirspaceActive: Boolean = false,
     val specialUseName: String? = null,

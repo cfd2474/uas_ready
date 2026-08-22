@@ -27,6 +27,8 @@ import com.uasready.ui.viewmodel.MainUiState
 fun SettingsScreen(
     uiState: MainUiState,
     onSetAuthority: (PilotAuthorityType) -> Unit,
+    onSelectAircraft: (String) -> Unit,
+    onNavigateToAircraft: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -140,7 +142,98 @@ fun SettingsScreen(
                 }
             }
 
-            // 2. Unit System
+            // 2. Aircraft Fleet Management
+            item {
+                Text(
+                    text = "AIRCRAFT FLEET MANAGEMENT",
+                    style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Select active aircraft to apply environmental flight limitations:",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                        )
+
+                        uiState.allAircraft.forEach { craft ->
+                            val isSelected = uiState.selectedAircraft.id == craft.id
+                            val borderColor = if (isSelected) AviationAccent else AviationDarkBorder
+                            val bgColor = if (isSelected) AviationDarkSurface else Color.Transparent
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                                    .background(bgColor)
+                                    .clickable { onSelectAircraft(craft.id) }
+                                    .padding(12.dp)
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = craft.displayName,
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSelected) AviationAccent else TextPrimary
+                                            )
+                                        )
+                                        if (isSelected) {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = AviationAccent.copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    text = "SELECTED",
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Max Sustained ${craft.limitations.maxSustainedWindSpeedMph.toInt()} MPH • Max Gust ${craft.limitations.maxGustSpeedMph.toInt()} MPH • ${craft.limitations.ipRating}",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
+                                    )
+                                }
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { onSelectAircraft(craft.id) },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = AviationAccent,
+                                        unselectedColor = TextSecondary
+                                    )
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        OutlinedButton(
+                            onClick = onNavigateToAircraft,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AviationAccent),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationAccent.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.Default.FlightTakeoff, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("MANAGE FLEET & CUSTOM AIRCRAFT", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                        }
+                    }
+                }
+            }
+
+            // 3. Unit System
             item {
                 Text(
                     text = "UNIT SYSTEM",
@@ -184,7 +277,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 3. Authoritative Data Sources
+            // 4. Authoritative Data Sources
             item {
                 Text(
                     text = "AUTHORITATIVE TELEMETRY SOURCES",
@@ -202,12 +295,12 @@ fun SettingsScreen(
                         Text("• Space Weather & GNSS: NOAA SWPC Planetary K-Index Feed", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                         Text("• Terrain Elevation DEM: Open-Meteo 90m SRTM / Copernicus Digital Elevation", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                         Text("• Solar Ephemeris: NOAA Astronomical Solar Geometry Algorithm", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                        Text("• Airspace: FAA Aeronautical Information Services (AIS)", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                        Text("• Airspace & FlySafe: FAA Aeronautical Information Services (AIS) & FlySafe Model", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                     }
                 }
             }
 
-            // 4. App Info Footer
+            // 5. App Info Footer
             item {
                 Box(
                     modifier = Modifier

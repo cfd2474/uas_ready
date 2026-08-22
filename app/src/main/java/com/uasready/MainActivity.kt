@@ -109,19 +109,6 @@ class MainActivity : ComponentActivity() {
                                     )
                                 )
                                 NavigationBarItem(
-                                    selected = currentRoute == Screen.Aircraft.route,
-                                    onClick = { navController.navigate(Screen.Aircraft.route) },
-                                    icon = { Icon(Icons.Default.FlightTakeoff, contentDescription = "Fleet") },
-                                    label = { Text("Fleet") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = AviationAccent,
-                                        selectedTextColor = AviationAccent,
-                                        unselectedIconColor = TextSecondary,
-                                        unselectedTextColor = TextSecondary,
-                                        indicatorColor = AviationDarkCard
-                                    )
-                                )
-                                NavigationBarItem(
                                     selected = currentRoute == Screen.Reference.route,
                                     onClick = { navController.navigate(Screen.Reference.route) },
                                     icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "Checklists") },
@@ -177,7 +164,6 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 uiState = uiState,
                                 onNavigateToAssessment = { navController.navigate(Screen.Assessment.route) },
-                                onNavigateToAircraft = { navController.navigate(Screen.Aircraft.route) },
                                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                                 onNavigateToMap = { navController.navigate(Screen.Map.route) },
                                 onRefreshLiveData = { viewModel.fetchLiveData() }
@@ -237,6 +223,8 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen(
                                 uiState = uiState,
                                 onSetAuthority = { viewModel.setPilotAuthority(it) },
+                                onSelectAircraft = { viewModel.selectAircraft(it) },
+                                onNavigateToAircraft = { navController.navigate(Screen.Aircraft.route) },
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }
