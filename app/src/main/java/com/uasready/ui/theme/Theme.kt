@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import kotlinx.serialization.Serializable
 
@@ -15,23 +16,23 @@ enum class AppThemeMode(val displayName: String, val description: String) {
     AUTO("Auto / System Theme", "Automatically matches your device's system theme")
 }
 
-private val DarkColorScheme = darkColorScheme(
-    primary = AviationCyan,
-    onPrimary = TextPrimary,
-    primaryContainer = AviationDarkCard,
-    onPrimaryContainer = AviationAccent,
-    secondary = SafetyGoLight,
-    onSecondary = TextPrimary,
-    background = AviationDarkBackground,
-    onBackground = TextPrimary,
-    surface = AviationDarkSurface,
-    onSurface = TextPrimary,
-    surfaceVariant = AviationDarkCard,
-    onSurfaceVariant = TextSecondary,
-    outline = AviationDarkBorder
+private val DarkMaterialColorScheme = darkColorScheme(
+    primary = Color(0xFF388BFD),
+    onPrimary = Color(0xFFF0F6FC),
+    primaryContainer = Color(0xFF1A222D),
+    onPrimaryContainer = Color(0xFF58A6FF),
+    secondary = Color(0xFF3FB950),
+    onSecondary = Color(0xFFF0F6FC),
+    background = Color(0xFF0A0E14),
+    onBackground = Color(0xFFF0F6FC),
+    surface = Color(0xFF121820),
+    onSurface = Color(0xFFF0F6FC),
+    surfaceVariant = Color(0xFF1A222D),
+    onSurfaceVariant = Color(0xFF8B949E),
+    outline = Color(0xFF2B3644)
 )
 
-private val LightColorScheme = lightColorScheme(
+private val LightMaterialColorScheme = lightColorScheme(
     primary = Color(0xFF0969DA),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFDDF4FF),
@@ -58,9 +59,16 @@ fun UASReadyTheme(
         AppThemeMode.AUTO -> isSystemInDarkTheme()
     }
 
-    MaterialTheme(
-        colorScheme = if (isDark) DarkColorScheme else LightColorScheme,
-        typography = Typography,
-        content = content
-    )
+    val aviationColors = if (isDark) DarkAviationColors else LightAviationColors
+    val materialColorScheme = if (isDark) DarkMaterialColorScheme else LightMaterialColorScheme
+
+    CompositionLocalProvider(
+        LocalAviationColors provides aviationColors
+    ) {
+        MaterialTheme(
+            colorScheme = materialColorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }
