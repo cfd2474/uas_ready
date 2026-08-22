@@ -102,7 +102,7 @@ fun SettingsScreen(
                             SettingsCategory.PILOT_AUTHORITY -> uiState.currentPilot.activeAuthority.displayName
                             SettingsCategory.AIRCRAFT_FLEET -> uiState.selectedAircraft.displayName
                             SettingsCategory.UNIT_SYSTEM -> if (isMetric) "Metric" else "US Aviation"
-                            SettingsCategory.DATA_SOURCES -> "NOAA / FAA AIS"
+                            SettingsCategory.DATA_SOURCES -> "openAIP API"
                         }
 
                         Card(
@@ -360,7 +360,7 @@ fun SettingsScreen(
                                     Text("• Space Weather & GNSS: NOAA SWPC Planetary K-Index Feed", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                                     Text("• Terrain Elevation DEM: Open-Meteo 90m SRTM / Copernicus Digital Elevation", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                                     Text("• Solar Ephemeris: NOAA Astronomical Solar Geometry Algorithm", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                                    Text("• Airspace & FlySafe: FAA Aeronautical Information Services (AIS) & FlySafe Model", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• Airspace: openAIP Worldwide Aeronautical Database & API", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                                 }
                             }
                         }
