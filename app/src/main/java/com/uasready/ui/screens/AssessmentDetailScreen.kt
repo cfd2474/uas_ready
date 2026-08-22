@@ -39,7 +39,7 @@ fun AssessmentDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "DETAILED ASSESSMENT",
+                        text = "DETAILED REPORT",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp,

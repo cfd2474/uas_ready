@@ -386,31 +386,79 @@ fun SettingsScreen(
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Text(
+                                        text = "Select preferred unit system for flight telemetry:",
+                                        style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                                    )
+
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween,
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(AviationDarkSurface)
+                                            .padding(horizontal = 14.dp, vertical = 12.dp)
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
+                                        // Left: US Standard
+                                        Column(
+                                            horizontalAlignment = Alignment.Start,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { isMetric = false }
+                                        ) {
                                             Text(
-                                                text = if (isMetric) "Metric System (m/s, °C, m, km)" else "US Aviation Standard (MPH, °F, ft, SM)",
-                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                                                text = "Standard (US)",
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (!isMetric) AviationAccent else TextSecondary
+                                                )
                                             )
                                             Text(
-                                                text = if (isMetric) "International standard metric units" else "Standard FAA aeronautical telemetry",
-                                                style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                                                text = "MPH • °F • ft • SM",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    color = if (!isMetric) TextPrimary else TextMuted,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (!isMetric) FontWeight.SemiBold else FontWeight.Normal
+                                                )
                                             )
                                         }
+
+                                        // Center: Toggle Switch
                                         Switch(
                                             checked = isMetric,
                                             onCheckedChange = { isMetric = it },
                                             colors = SwitchDefaults.colors(
-                                                checkedThumbColor = TextPrimary,
+                                                checkedThumbColor = Color.White,
                                                 checkedTrackColor = AviationAccent,
-                                                uncheckedThumbColor = TextSecondary,
-                                                uncheckedTrackColor = AviationDarkSurface
+                                                uncheckedThumbColor = Color.White,
+                                                uncheckedTrackColor = AviationDarkBorder
                                             )
                                         )
+
+                                        // Right: Metric System
+                                        Column(
+                                            horizontalAlignment = Alignment.End,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { isMetric = true }
+                                        ) {
+                                            Text(
+                                                text = "Metric (SI)",
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isMetric) AviationAccent else TextSecondary
+                                                )
+                                            )
+                                            Text(
+                                                text = "m/s • °C • m • km",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    color = if (isMetric) TextPrimary else TextMuted,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (isMetric) FontWeight.SemiBold else FontWeight.Normal
+                                                )
+                                            )
+                                        }
                                     }
                                 }
                             }

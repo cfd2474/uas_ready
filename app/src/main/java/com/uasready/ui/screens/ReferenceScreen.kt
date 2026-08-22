@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -47,21 +48,21 @@ fun ReferenceScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
                 actions = {
-                    FilledTonalButton(
+                    Button(
                         onClick = { showCsvImportDialog = true },
-                        colors = ButtonDefaults.filledTonalButtonColors(
+                        colors = ButtonDefaults.buttonColors(
                             containerColor = AviationCyan,
-                            contentColor = TextPrimary
+                            contentColor = Color.White
                         ),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.UploadFile, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("IMPORT CSV", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                        Text("IMPORT CSV", color = Color.White, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AviationDarkBackground)
@@ -224,9 +225,9 @@ fun ReferenceScreen(
                             csvContent = ""
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AviationCyan)
+                    colors = ButtonDefaults.buttonColors(containerColor = AviationCyan, contentColor = Color.White)
                 ) {
-                    Text("IMPORT")
+                    Text("IMPORT", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

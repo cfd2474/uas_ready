@@ -32,7 +32,8 @@ data class AirspaceZone(
     val radiusMeters: Double,
     val floorFt: Double = 0.0,
     val ceilingFt: Double? = null,
-    val description: String = ""
+    val description: String = "",
+    val polygonCoordinates: List<Pair<Double, Double>> = emptyList()
 )
 
 @Serializable
