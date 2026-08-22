@@ -16,6 +16,7 @@ data class MainUiState(
     val selectedAircraft: Aircraft = Aircraft.getDefault(),
     val allAircraft: List<Aircraft> = Aircraft.PRESETS,
     val currentPilot: Pilot = Pilot.getDefault(),
+    val isPilotSelectionPending: Boolean = true,
     val currentLocation: LocationInfo = LocationInfo.defaultLocation(),
     val flightWindow: FlightWindow = FlightWindow.defaultTwoHours(),
     val plannedAltitudeAglFt: Double = 400.0,
@@ -56,21 +57,22 @@ class MainViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             aircraftRepo.selectedAircraftState.collect { selected ->
                 _uiState.update { it.copy(selectedAircraft = selected) }
-                reevaluateAssessment()
+                if (!_uiState.value.isPilotSelectionPending) {
+                    reevaluateAssessment()
+                }
             }
         }
         viewModelScope.launch {
             pilotRepo.pilotState.collect { pilot ->
                 _uiState.update { it.copy(currentPilot = pilot) }
-                reevaluateAssessment()
+                if (!_uiState.value.isPilotSelectionPending) {
+                    reevaluateAssessment()
+                }
             }
         }
 
         // Try to obtain initial GPS location silently if permission is already granted
         refreshGpsLocation(silent = true)
-
-        // Initial live telemetry fetch
-        fetchLiveData()
     }
 
     fun refreshGpsLocation(silent: Boolean = false) {
@@ -80,13 +82,23 @@ class MainViewModel @JvmOverloads constructor(
                 if (gpsLoc != null) {
                     Log.i(TAG, "GPS location acquired: ${gpsLoc.formattedCoordinates} (${gpsLoc.displayName})")
                     _uiState.update { it.copy(currentLocation = gpsLoc) }
-                    fetchLiveData()
+                    if (!_uiState.value.isPilotSelectionPending) {
+                        fetchLiveData()
+                    }
                 } else if (!silent) {
                     Log.w(TAG, "Could not acquire GPS fix (permission not granted or no GPS signal)")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error acquiring GPS location: ${e.message}", e)
             }
+        }
+    }
+
+    fun setPilotAuthority(type: PilotAuthorityType) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isPilotSelectionPending = false) }
+            pilotRepo.setAuthority(type)
+            fetchLiveData()
         }
     }
 
@@ -168,18 +180,18 @@ class MainViewModel @JvmOverloads constructor(
         aircraftRepo.deleteCustomAircraft(aircraftId)
     }
 
-    fun setPilotAuthority(type: PilotAuthorityType) {
-        pilotRepo.setAuthority(type)
-    }
-
     fun updateLocation(location: LocationInfo) {
         _uiState.update { it.copy(currentLocation = location) }
-        fetchLiveData()
+        if (!_uiState.value.isPilotSelectionPending) {
+            fetchLiveData()
+        }
     }
 
     fun updateFlightWindow(startMs: Long, endMs: Long) {
         _uiState.update { it.copy(flightWindow = FlightWindow(startMs, endMs)) }
-        fetchLiveData()
+        if (!_uiState.value.isPilotSelectionPending) {
+            fetchLiveData()
+        }
     }
 
     fun setCategoryFilter(category: AssessmentCategory?) {
