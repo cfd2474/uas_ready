@@ -248,14 +248,90 @@ class AssessmentEngineTest {
     }
 
     @Test
-    fun testPart107NightWithoutEndorsementProducesNOGO() {
-        val nightPilot = defaultPilot.copy(
-            part107Profile = Part107Profile(
-                certificateNumber = "12345",
-                nightTrainingCompleted = false
+    fun testForecastTiering60to120MinProducesCaution() {
+        // Wind gust spikes at T+90 min (in 60-120 min window) -> CAUTION (not NO-GO)
+        val now = System.currentTimeMillis()
+        val window120 = FlightWindow(
+            startEpochMs = now,
+            endEpochMs = now + 120 * 60 * 1000L // 120-minute forecast horizon
+        )
+        val hourlyForecast = listOf(
+            HourlyForecastInterval(
+                timestampEpochMs = now + 30 * 60 * 1000L,
+                temperatureF = 72.0,
+                windSpeedMph = 12.0,
+                windGustMph = 18.0,
+                windDirectionDegrees = 240,
+                visibilityStatuteMiles = 10.0,
+                cloudCeilingFt = 5000.0,
+                precipitationProbabilityPercent = 0,
+                precipitationRateInchesPerHour = 0.0,
+                conditionsDescription = "Clear"
+            ),
+            HourlyForecastInterval(
+                timestampEpochMs = now + 90 * 60 * 1000L,
+                temperatureF = 70.0,
+                windSpeedMph = 26.0,
+                windGustMph = 39.0, // Exceeds M3T 34 MPH limit, but at T+90 min (in 60-120 min window)
+                windDirectionDegrees = 260,
+                visibilityStatuteMiles = 10.0,
+                cloudCeilingFt = 5000.0,
+                precipitationProbabilityPercent = 0,
+                precipitationRateInchesPerHour = 0.0,
+                conditionsDescription = "High Wind Spike"
             )
         )
-        // Flight window takes place at night (sunset was 2 hours ago)
+        val forecast = WeatherForecast(
+            intervals = hourlyForecast,
+            generatedAtEpochMs = now
+        )
+        val context = AssessmentContext(
+            aircraft = defaultAircraft,
+            pilot = defaultPilot,
+            weather = nominalWeather,
+            forecast = forecast,
+            spaceWeather = nominalSpaceWeather,
+            airspace = nominalAirspace,
+            sunData = nominalSunData,
+            flightWindow = window120,
+            location = defaultLocation
+        )
+
+        val result = engine.assess(context)
+        assertEquals(AssessmentStatus.CAUTION, result.overallStatus)
+        assertTrue(result.cautionRules.any { it.ruleId == "AC-FCST-GUST-002" })
+    }
+
+    @Test
+    fun testPart107NightWithStrobeProducesGO() {
+        val part107Pilot = Pilot(activeAuthority = PilotAuthorityType.PART_107)
+        val nightSunData = nominalSunData.copy(
+            sunriseEpochMs = defaultFlightWindow.startEpochMs - 12 * 60 * 60 * 1000L,
+            sunsetEpochMs = defaultFlightWindow.startEpochMs - 2 * 60 * 60 * 1000L,
+            civilDuskEpochMs = defaultFlightWindow.startEpochMs - 100 * 60 * 1000L,
+            isDaylight = false
+        )
+
+        val context = AssessmentContext(
+            aircraft = defaultAircraft, // M3T has night strobe capability
+            pilot = part107Pilot,
+            weather = nominalWeather,
+            forecast = null,
+            spaceWeather = nominalSpaceWeather,
+            airspace = nominalAirspace,
+            sunData = nightSunData,
+            flightWindow = defaultFlightWindow,
+            location = defaultLocation
+        )
+
+        val result = engine.assess(context)
+        val nightRule = result.allRuleResults.first { it.ruleId == "PLT-107-NGT-002" }
+        assertEquals(AssessmentStatus.GO, nightRule.status)
+    }
+
+    @Test
+    fun testPublicCoaNightProducesHardNOGO() {
+        val coaPilot = Pilot(activeAuthority = PilotAuthorityType.PUBLIC_COA)
         val nightSunData = nominalSunData.copy(
             sunriseEpochMs = defaultFlightWindow.startEpochMs - 12 * 60 * 60 * 1000L,
             sunsetEpochMs = defaultFlightWindow.startEpochMs - 2 * 60 * 60 * 1000L,
@@ -265,7 +341,7 @@ class AssessmentEngineTest {
 
         val context = AssessmentContext(
             aircraft = defaultAircraft,
-            pilot = nightPilot,
+            pilot = coaPilot,
             weather = nominalWeather,
             forecast = null,
             spaceWeather = nominalSpaceWeather,
@@ -277,7 +353,7 @@ class AssessmentEngineTest {
 
         val result = engine.assess(context)
         assertEquals(AssessmentStatus.NO_GO, result.overallStatus)
-        assertTrue(result.noGoRules.any { it.ruleId == "PLT-107-NGT-001" })
+        assertTrue(result.noGoRules.any { it.ruleId == "PLT-COA-NGT-001" })
     }
 
     @Test

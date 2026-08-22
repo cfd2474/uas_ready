@@ -70,25 +70,30 @@
 
 ## 9. Active Plan: DEM Terrain Shading GNSS Occlusion Engine
 
-### Chunk 1: Online DEM Elevation Client & Terrain-Shaded GNSS Engine ✅
-- [x] Step 1.1: Created `TerrainRepository.kt` with `LiveTerrainRepository` querying Open-Meteo 90m SRTM/Copernicus batch elevation endpoint for 8 radial azimuth points (N, NE, E, SE, S, SW, W, NW at 1.5 km and 3.0 km radius).
-- [x] Step 1.2: Implemented `TerrainObstructionProfile` in `GnssModel.kt` with trigonometric radial horizon mask angle calculation $\theta(\alpha) = \arctan\left(\frac{\Delta E}{D}\right)$ and terrain classification (Open Horizon, Moderate Ridge, Steep Valley, Deep Canyon).
-- [x] Step 1.3: Updated `GnssEstimation.estimate(...)` to incorporate solid-angle terrain horizon occlusion alongside ionospheric Kp scintillation to compute final locked satellites and HDOP.
-- [x] Step 1.4: Updated `AssessmentContext.kt` to carry `terrainProfile`.
-- [x] Step 1.5: Enforced user constraint: Terrain shading contributes directly to GNSS satellite count and HDOP calculations, with no standalone arbitrary No-Go rules for steep terrain.
+## 11. Active Plan: Pilot-Agnostic Settings, 120-Min Forecast Tiering & Live Telemetry Streamlining
 
-### Chunk 2: Repository Integration, UI Readouts, Tests & Release v1.2.0 ✅
-- [x] Step 2.1: Injected `TerrainRepository` into `MainViewModel` (with automatic fallback handling for live and offline states).
-- [x] Step 2.2: Updated `HomeScreen.kt`, `AssessmentDetailScreen.kt`, and `MapScreen.kt` to display terrain shading metrics and horizon mask angles.
-- [x] Step 2.3: Wrote comprehensive unit tests in `DataLayerTest.kt` and `AssessmentEngineTest.kt` verifying canyon occlusion calculations and assessment thresholds.
-- [x] Step 2.4: Built signed release APK `releases/current/UASReady-v1.2.0.apk`, archived `v1.1.0`, and pushed to GitHub.
+### Chunk 1: Domain Modeling, Pilot Authority & 120-Minute Forecast Tiering (IN PROGRESS)
+- [ ] Step 1.1: Create `PilotAuthority.kt` with `PilotAuthorityType` enum (`PART_107` vs `PUBLIC_COA`) and update `Pilot.kt` to be pilot-agnostic.
+- [ ] Step 1.2: Update `DaylightRuleEvaluator.kt` so `PART_107` is cleared for night operations (GO), while `PUBLIC_COA` is strictly restricted to civil twilight / daylight (30 min before sunrise to 30 min after sunset) with night operations being a hard NO-GO.
+- [ ] Step 1.3: Update `WeatherForecastRuleEvaluator.kt` with tiered 120-minute forecast logic: Limit violations at 0–60 min $\rightarrow$ NO-GO; limit violations at 60–120 min $\rightarrow$ CAUTION.
+- [ ] Step 1.4: Update `GnssModel.kt` and `SpaceWeatherRuleEvaluator.kt` verbiage from "Satellites Locked" to "Satellites Visible".
+- [ ] Step 1.5: Update `MainViewModel.kt` to persist and manage `PilotAuthorityType` and remove test scenario selection.
 
-## 10. Constraints & Decisions
-- **User Constraint Enforced**: Terrain shading is evaluated strictly against its effect on GNSS satellite solution and HDOP. Steep terrain alone without GNSS degradation is not an automatic flight prohibition.
-- **GNSS Thresholds**:
-  - 🟢 **GO**: Satellites ≥ 12, HDOP ≤ 1.5. 3D fix with stable home point.
-  - 🟡 **CAUTION**: Satellites 8–11, HDOP 1.5–2.5. Marginal satellite geometry; verify home point.
-  - 🔴 **NO-GO**: Satellites ≤ 7 or HDOP > 2.5. High risk of flyaway/ATTI mode transition.
+### Chunk 2: UI Streamlining, Settings Top Bar, Unit Tests & Release v1.3.0 (PENDING)
+- [ ] Step 2.1: Add top header bar with gear icon in `MainActivity.kt` navigating to Settings; streamline bottom navigation to Home, Assessment, Map, and Aircraft.
+- [ ] Step 2.2: Refactor `SettingsScreen.kt` with Pilot Operating Authority toggle (`Part 107 License` vs `Public COA`) and remove scenario testing picker.
+- [ ] Step 2.3: Update `HomeScreen.kt`, `AssessmentDetailScreen.kt`, and `MapScreen.kt` with "120 Minutes Forecasted" and "Satellites Visible" labels and remove scenario controls.
+- [ ] Step 2.4: Update and expand unit tests in `AssessmentEngineTest.kt` for COA hard night NO-GO, Part 107 night GO, 0-60min NO-GO vs 60-120min CAUTION forecast tiering.
+- [ ] Step 2.5: Build signed release APK `releases/current/UASReady-v1.3.0.apk`, archive `v1.2.0`, and push to GitHub.
+
+## 12. Constraints & Decisions
+- **Pilot Operating Authority**:
+  - **Part 107 License**: Cleared for night operations.
+  - **Public COA**: Flight strictly limited to 30 min before civil sunrise to 30 min after civil sunset. Night flight is a hard NO-GO (no waiver mentions).
+- **120-Minute Forecast Tiering**:
+  - Exceedances within **0–60 minutes** $\rightarrow$ 🔴 **NO-GO**.
+  - Exceedances within **60–120 minutes** $\rightarrow$ 🟡 **CAUTION** (Return to base before 60 min).
+- **GNSS Verbiage**: "Satellites Visible" (formerly "Satellites Locked").
 - **Keystore**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (alias `key0`, password `zml61313`).
 - **Target Repository**: `https://github.com/cfd2474/UAS_Ready.git` (branch `main`).
 

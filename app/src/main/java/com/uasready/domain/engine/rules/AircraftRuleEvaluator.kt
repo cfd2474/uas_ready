@@ -207,7 +207,7 @@ class AircraftRuleEvaluator : CategoryRuleEvaluator {
             )
         }
 
-        // 5. Forecast Wind degradation across flight window
+        // 5. Forecast Wind degradation across 120-minute flight window
         val forecast = context.forecast
         if (forecast != null && forecast.intervals.isNotEmpty()) {
             val windowSampling = context.flightWindow.getSamplingIntervals()
@@ -216,30 +216,47 @@ class AircraftRuleEvaluator : CategoryRuleEvaluator {
                 if (interval != null) {
                     val offsetMin = (sampleTime - context.flightWindow.startEpochMs) / (60 * 1000)
                     if (interval.windGustMph > maxGust) {
-                        rules.add(
-                            RuleResult(
-                                ruleId = "AC-FCST-GUST-001",
-                                category = category,
-                                status = AssessmentStatus.NO_GO,
-                                title = "Forecast Wind Gusts Exceed Aircraft Envelope",
-                                inputValueFormatted = String.format("%.1f MPH at +%dm", interval.windGustMph, offsetMin),
-                                thresholdFormatted = String.format("Max %.1f MPH (%s)", maxGust, aircraft.displayName),
-                                explanation = String.format("Forecast wind gusts of %.1f MPH exceed %s's max gust limit (%.1f MPH) at +%d minutes into planned flight.", interval.windGustMph, aircraft.displayName, maxGust, offsetMin),
-                                applicableAircraft = aircraft.displayName,
-                                isForecastDerived = true,
-                                forecastTimeOffsetMinutes = offsetMin
+                        if (offsetMin < 60) {
+                            rules.add(
+                                RuleResult(
+                                    ruleId = "AC-FCST-GUST-001",
+                                    category = category,
+                                    status = AssessmentStatus.NO_GO,
+                                    title = "Forecast Gusts Exceed Limit (< 60m)",
+                                    inputValueFormatted = String.format("%.1f MPH at +%dm", interval.windGustMph, offsetMin),
+                                    thresholdFormatted = String.format("Max %.1f MPH (%s)", maxGust, aircraft.displayName),
+                                    explanation = String.format("Forecast wind gusts of %.1f MPH exceed %s's limit (%.1f MPH) at +%d min into the 0–60 min flight window. Immediate flight prohibited.", interval.windGustMph, aircraft.displayName, maxGust, offsetMin),
+                                    applicableAircraft = aircraft.displayName,
+                                    isForecastDerived = true,
+                                    forecastTimeOffsetMinutes = offsetMin
+                                )
                             )
-                        )
+                        } else {
+                            rules.add(
+                                RuleResult(
+                                    ruleId = "AC-FCST-GUST-002",
+                                    category = category,
+                                    status = AssessmentStatus.CAUTION,
+                                    title = "Forecast Gusts Exceed Limit in 60-120m Window",
+                                    inputValueFormatted = String.format("%.1f MPH at +%dm", interval.windGustMph, offsetMin),
+                                    thresholdFormatted = String.format("Max %.1f MPH (%s)", maxGust, aircraft.displayName),
+                                    explanation = String.format("Forecast gusts increase to %.1f MPH at +%d min (60–120 min window). Short flight under 60 minutes permitted; ensure return to base before deterioration.", interval.windGustMph, offsetMin, aircraft.displayName),
+                                    applicableAircraft = aircraft.displayName,
+                                    isForecastDerived = true,
+                                    forecastTimeOffsetMinutes = offsetMin
+                                )
+                            )
+                        }
                     } else if (interval.windGustMph >= maxGust - 5.0) {
                         rules.add(
                             RuleResult(
-                                ruleId = "AC-FCST-GUST-002",
+                                ruleId = "AC-FCST-GUST-003",
                                 category = category,
                                 status = AssessmentStatus.CAUTION,
                                 title = "Forecast Wind Gusts Approaching Limit",
                                 inputValueFormatted = String.format("%.1f MPH at +%dm", interval.windGustMph, offsetMin),
                                 thresholdFormatted = String.format("Max %.1f MPH (%s)", maxGust, aircraft.displayName),
-                                explanation = String.format("Forecast gusts increase to %.1f MPH near the end of the planned flight window (+%d min), approaching %s's limit.", interval.windGustMph, offsetMin, aircraft.displayName),
+                                explanation = String.format("Forecast gusts reach %.1f MPH at +%d min, approaching %s's limit.", interval.windGustMph, offsetMin, aircraft.displayName),
                                 applicableAircraft = aircraft.displayName,
                                 isForecastDerived = true,
                                 forecastTimeOffsetMinutes = offsetMin

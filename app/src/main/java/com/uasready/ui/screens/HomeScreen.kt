@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.uasready.data.repository.SimulationScenario
 import com.uasready.domain.model.AssessmentCategory
 import com.uasready.domain.model.AssessmentStatus
 import com.uasready.ui.components.MetricSummaryCard
@@ -31,14 +30,11 @@ fun HomeScreen(
     uiState: MainUiState,
     onNavigateToAssessment: () -> Unit,
     onNavigateToAircraft: () -> Unit,
-    onNavigateToPilot: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     onNavigateToMap: () -> Unit,
-    onScenarioSelected: (SimulationScenario) -> Unit,
     onRefreshLiveData: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showScenarioMenu by remember { mutableStateOf(false) }
-
     val assessment = uiState.assessmentResult
 
     // Extract quick status categories
@@ -70,9 +66,9 @@ fun HomeScreen(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "PREFLIGHT",
+                                text = "LIVE",
                                 style = MaterialTheme.typography.labelMedium.copy(
-                                    color = AviationAccent,
+                                    color = SafetyGoLight,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -81,60 +77,6 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    // Scenario Switcher Button
-                    Box {
-                        FilledTonalButton(
-                            onClick = { showScenarioMenu = true },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = AviationDarkCard,
-                                contentColor = AviationAccent
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.Tune, contentDescription = "Scenarios", modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "SCENARIO",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showScenarioMenu,
-                            onDismissRequest = { showScenarioMenu = false },
-                            modifier = Modifier
-                                .background(AviationDarkCard)
-                                .border(1.dp, AviationDarkBorder)
-                        ) {
-                            SimulationScenario.values().forEach { scenario ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(
-                                                text = scenario.title,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    fontWeight = if (uiState.currentScenario == scenario) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (uiState.currentScenario == scenario) AviationAccent else TextPrimary
-                                                )
-                                            )
-                                            Text(
-                                                text = scenario.description,
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        showScenarioMenu = false
-                                        onScenarioSelected(scenario)
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
                     // Refresh Button
                     IconButton(onClick = onRefreshLiveData) {
                         if (uiState.isLiveLoading) {
@@ -142,6 +84,11 @@ fun HomeScreen(
                         } else {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh Live Telemetry", tint = TextPrimary)
                         }
+                    }
+
+                    // Settings / Pilot Authority Gear Button
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings & Authority", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -160,38 +107,6 @@ fun HomeScreen(
         ) {
             item {
                 Spacer(modifier = Modifier.height(4.dp))
-                // Active Scenario Indicator
-                if (uiState.currentScenario != SimulationScenario.LIVE_DATA) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(AviationDarkCard)
-                            .border(1.dp, AviationDarkBorder, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Science, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "SIMULATION: ${uiState.currentScenario.title}",
-                                    style = MaterialTheme.typography.labelMedium.copy(color = AviationAccent, fontWeight = FontWeight.Bold)
-                                )
-                            }
-                            Text(
-                                text = "TAP TO LIVE",
-                                style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary, fontSize = 10.sp),
-                                modifier = Modifier.clickable { onScenarioSelected(SimulationScenario.LIVE_DATA) }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                }
 
                 // 1. Dominant GO / CAUTION / NO-GO Status Banner
                 if (assessment != null) {
@@ -257,8 +172,6 @@ fun HomeScreen(
             item {
                 // Space Weather & Planetary Kp
                 val kpRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("SP-KP") }
-                val satsRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-SATS" }
-                val hdopRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-HDOP" }
 
                 MetricSummaryCard(
                     title = "Space Weather & Geomagnetic (Kp)",
@@ -271,15 +184,15 @@ fun HomeScreen(
             }
 
             item {
-                // GNSS Satellite Navigation Solution & HDOP
+                // GNSS Satellites Visible & HDOP
                 val satsRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-SATS" }
                 val hdopRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-HDOP" }
                 val gnss = uiState.estimatedGnss
 
                 val primaryText = if (gnss != null) {
-                    "~${gnss.lockedSatellitesCount} Satellites Locked"
+                    "~${gnss.lockedSatellitesCount} Satellites Visible"
                 } else {
-                    satsRule?.inputValueFormatted ?: "12+ Satellites Expected"
+                    satsRule?.inputValueFormatted ?: "12+ Satellites Visible"
                 }
 
                 val secondaryText = if (gnss != null) {
@@ -320,7 +233,7 @@ fun HomeScreen(
             }
 
             item {
-                // Aircraft Profile
+                // Aircraft Fleet Profile
                 MetricSummaryCard(
                     title = "Aircraft Fleet Profile",
                     primaryValue = uiState.selectedAircraft.displayName,
@@ -334,20 +247,20 @@ fun HomeScreen(
                 // Pilot Authority
                 MetricSummaryCard(
                     title = "Pilot Operating Authority",
-                    primaryValue = uiState.currentPilot.name,
-                    secondaryValue = "Authority: ${uiState.currentPilot.activeAuthority.name} • Night Qualified",
+                    primaryValue = uiState.currentPilot.activeAuthority.displayName,
+                    secondaryValue = uiState.currentPilot.activeAuthority.description,
                     status = pilotCat?.status,
                     icon = Icons.Default.Badge,
-                    onClick = onNavigateToPilot
+                    onClick = onNavigateToSettings
                 )
             }
 
             item {
-                // Flight Window
+                // 120 Minutes Forecasted Flight Window
                 MetricSummaryCard(
-                    title = "Flight Window",
-                    primaryValue = "${uiState.flightWindow.durationMinutes} Minutes Planned",
-                    secondaryValue = "Active sampling across forecast intervals",
+                    title = "Flight Forecast Horizon",
+                    primaryValue = "120 Minutes Forecasted",
+                    secondaryValue = "0–60m Immediate Launch • 60–120m Degradation Watch",
                     icon = Icons.Default.Schedule,
                     onClick = onNavigateToAssessment
                 )

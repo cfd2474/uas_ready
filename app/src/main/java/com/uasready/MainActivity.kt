@@ -9,9 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -83,10 +83,10 @@ class MainActivity : ComponentActivity() {
                                     )
                                 )
                                 NavigationBarItem(
-                                    selected = currentRoute == Screen.Map.route,
-                                    onClick = { navController.navigate(Screen.Map.route) },
-                                    icon = { Icon(Icons.Default.Map, contentDescription = "Map") },
-                                    label = { Text("Map") },
+                                    selected = currentRoute == Screen.Assessment.route,
+                                    onClick = { navController.navigate(Screen.Assessment.route) },
+                                    icon = { Icon(Icons.Default.Assessment, contentDescription = "Audit") },
+                                    label = { Text("Audit") },
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = AviationAccent,
                                         selectedTextColor = AviationAccent,
@@ -96,10 +96,10 @@ class MainActivity : ComponentActivity() {
                                     )
                                 )
                                 NavigationBarItem(
-                                    selected = currentRoute == Screen.Timeline.route,
-                                    onClick = { navController.navigate(Screen.Timeline.route) },
-                                    icon = { Icon(Icons.Default.Schedule, contentDescription = "Timeline") },
-                                    label = { Text("Timeline") },
+                                    selected = currentRoute == Screen.Map.route,
+                                    onClick = { navController.navigate(Screen.Map.route) },
+                                    icon = { Icon(Icons.Default.Map, contentDescription = "Map") },
+                                    label = { Text("Map") },
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = AviationAccent,
                                         selectedTextColor = AviationAccent,
@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = currentRoute == Screen.Reference.route,
                                     onClick = { navController.navigate(Screen.Reference.route) },
-                                    icon = { Icon(Icons.Default.MenuBook, contentDescription = "Checklists") },
+                                    icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "Checklists") },
                                     label = { Text("Checklists") },
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = AviationAccent,
@@ -178,9 +178,8 @@ class MainActivity : ComponentActivity() {
                                 uiState = uiState,
                                 onNavigateToAssessment = { navController.navigate(Screen.Assessment.route) },
                                 onNavigateToAircraft = { navController.navigate(Screen.Aircraft.route) },
-                                onNavigateToPilot = { navController.navigate(Screen.Pilot.route) },
+                                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                                 onNavigateToMap = { navController.navigate(Screen.Map.route) },
-                                onScenarioSelected = { viewModel.selectScenario(it) },
                                 onRefreshLiveData = { viewModel.fetchLiveData() }
                             )
                         }
@@ -228,15 +227,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        composable(Screen.Pilot.route) {
-                            PilotScreen(
-                                uiState = uiState,
-                                onSetAuthority = { viewModel.setPilotAuthority(it) },
-                                onSetNightEndorsement = { viewModel.setNightEndorsement(it) },
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
-
                         composable(Screen.Reference.route) {
                             ReferenceScreen(
                                 onNavigateBack = { navController.popBackStack() }
@@ -246,7 +236,7 @@ class MainActivity : ComponentActivity() {
                         composable(Screen.Settings.route) {
                             SettingsScreen(
                                 uiState = uiState,
-                                onScenarioSelected = { viewModel.selectScenario(it) },
+                                onSetAuthority = { viewModel.setPilotAuthority(it) },
                                 onNavigateBack = { navController.popBackStack() }
                             )
                         }

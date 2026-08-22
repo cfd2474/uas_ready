@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,7 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.uasready.data.repository.SimulationScenario
+import com.uasready.domain.model.PilotAuthorityType
 import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainUiState
 
@@ -25,7 +26,7 @@ import com.uasready.ui.viewmodel.MainUiState
 @Composable
 fun SettingsScreen(
     uiState: MainUiState,
-    onScenarioSelected: (SimulationScenario) -> Unit,
+    onSetAuthority: (PilotAuthorityType) -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -46,7 +47,7 @@ fun SettingsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AviationDarkBackground)
@@ -61,8 +62,86 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // 1. Pilot Operating Authority (Part 107 vs Public COA)
             item {
                 Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "PILOT OPERATING AUTHORITY",
+                    style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Select operating authority profile to configure regulatory flight permissions:",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                        )
+
+                        PilotAuthorityType.values().forEach { authority ->
+                            val isSelected = uiState.currentPilot.activeAuthority == authority
+                            val borderColor = if (isSelected) AviationAccent else AviationDarkBorder
+                            val bgColor = if (isSelected) AviationDarkSurface else Color.Transparent
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+                                    .background(bgColor)
+                                    .clickable { onSetAuthority(authority) }
+                                    .padding(12.dp)
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = authority.displayName,
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSelected) AviationAccent else TextPrimary
+                                            )
+                                        )
+                                        if (isSelected) {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = AviationAccent.copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    text = "ACTIVE",
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = authority.description,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp, color = TextSecondary)
+                                    )
+                                }
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { onSetAuthority(authority) },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = AviationAccent,
+                                        unselectedColor = TextSecondary
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Unit System
+            item {
                 Text(
                     text = "UNIT SYSTEM",
                     style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -105,63 +184,10 @@ fun SettingsScreen(
                 }
             }
 
-            // Scenario Simulator Quick Selector
+            // 3. Authoritative Data Sources
             item {
                 Text(
-                    text = "FIELD SCENARIO SIMULATOR",
-                    style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = "Instant 1-tap test scenarios for safety drills and evaluations:",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
-                        )
-
-                        SimulationScenario.values().forEach { scenario ->
-                            val isSelected = uiState.currentScenario == scenario
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) AviationDarkSurface else Color.Transparent)
-                                    .clickable { onScenarioSelected(scenario) }
-                                    .padding(vertical = 8.dp, horizontal = 8.dp)
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = scenario.title,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) AviationAccent else TextPrimary
-                                        )
-                                    )
-                                    Text(
-                                        text = scenario.description,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp, color = TextSecondary)
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = "Active", tint = AviationAccent, modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Authoritative Data Sources
-            item {
-                Text(
-                    text = "AUTHORITATIVE DATA SOURCES",
+                    text = "AUTHORITATIVE TELEMETRY SOURCES",
                     style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 )
                 Spacer(modifier = Modifier.height(6.dp))
@@ -172,15 +198,16 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("• Weather: Open-Meteo & NOAA National Weather Service", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                        Text("• Space Weather: NOAA SWPC Planetary K-Index Feed", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                        Text("• Solar Ephemeris: NOAA Standard Solar Algorithm", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                        Text("• Weather & Forecast: Open-Meteo & NOAA National Weather Service", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                        Text("• Space Weather & GNSS: NOAA SWPC Planetary K-Index Feed", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                        Text("• Terrain Elevation DEM: Open-Meteo 90m SRTM / Copernicus Digital Elevation", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                        Text("• Solar Ephemeris: NOAA Astronomical Solar Geometry Algorithm", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                         Text("• Airspace: FAA Aeronautical Information Services (AIS)", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                     }
                 }
             }
 
-            // App Build Info
+            // 4. App Info Footer
             item {
                 Box(
                     modifier = Modifier
@@ -189,8 +216,8 @@ fun SettingsScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("UASReady v1.0.0", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold))
-                        Text("Public-Safety UAS Operational Decision Support System", style = MaterialTheme.typography.bodyMedium.copy(color = TextMuted, fontSize = 11.sp))
+                        Text("UASReady Preflight Decision Support", style = MaterialTheme.typography.labelLarge.copy(color = TextSecondary, fontWeight = FontWeight.Bold))
+                        Text("Deterministic Safety Assessment Engine", style = MaterialTheme.typography.bodyMedium.copy(color = TextMuted, fontSize = 11.sp))
                     }
                 }
                 Spacer(modifier = Modifier.height(20.dp))

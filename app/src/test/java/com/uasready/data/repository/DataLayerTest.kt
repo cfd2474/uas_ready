@@ -67,8 +67,8 @@ class DataLayerTest {
 
     @Test
     fun testPilotRepositoryAuthoritySwitching() {
-        pilotRepo.setAuthority(PilotAuthorityType.COA_COW)
-        assertEquals(PilotAuthorityType.COA_COW, pilotRepo.pilotState.value.activeAuthority)
+        pilotRepo.setAuthority(PilotAuthorityType.PUBLIC_COA)
+        assertEquals(PilotAuthorityType.PUBLIC_COA, pilotRepo.pilotState.value.activeAuthority)
 
         pilotRepo.setAuthority(PilotAuthorityType.PART_107)
         assertEquals(PilotAuthorityType.PART_107, pilotRepo.pilotState.value.activeAuthority)
