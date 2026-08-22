@@ -31,9 +31,10 @@ import com.uasready.domain.model.LocationInfo
 import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainUiState
 import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
@@ -44,11 +45,33 @@ enum class BasemapType(val displayName: String) {
     HYBRID("Hybrid")
 }
 
-private val ESRI_SATELLITE = XYTileSource(
-    "EsriSatellite",
-    0, 19, 256, ".jpg",
-    arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/")
-)
+// High-reliability global Hybrid tile provider (Satellite + Roads + Labels)
+private val HYBRID_TILE_SOURCE = object : OnlineTileSourceBase(
+    "HybridTiles",
+    0, 20, 256, ".png",
+    arrayOf("https://mt0.google.com/vt/lyrs=y&x=", "https://mt1.google.com/vt/lyrs=y&x=", "https://mt2.google.com/vt/lyrs=y&x=", "https://mt3.google.com/vt/lyrs=y&x=")
+) {
+    override fun getTileURLString(pMapTileIndex: Long): String {
+        val zoom = MapTileIndex.getZoom(pMapTileIndex)
+        val x = MapTileIndex.getX(pMapTileIndex)
+        val y = MapTileIndex.getY(pMapTileIndex)
+        return "${baseUrl}$x&y=$y&z=$zoom"
+    }
+}
+
+// Topographic Terrain tile provider
+private val TOPO_TILE_SOURCE = object : OnlineTileSourceBase(
+    "TopoTerrainTiles",
+    0, 20, 256, ".png",
+    arrayOf("https://mt0.google.com/vt/lyrs=p&x=", "https://mt1.google.com/vt/lyrs=p&x=")
+) {
+    override fun getTileURLString(pMapTileIndex: Long): String {
+        val zoom = MapTileIndex.getZoom(pMapTileIndex)
+        val x = MapTileIndex.getX(pMapTileIndex)
+        val y = MapTileIndex.getY(pMapTileIndex)
+        return "${baseUrl}$x&y=$y&z=$zoom"
+    }
+}
 
 @Composable
 fun MapScreen(
@@ -96,10 +119,10 @@ fun MapScreen(
                 // Apply Basemap Tile Source
                 val targetTileSource = when (selectedBasemap) {
                     BasemapType.STREET -> TileSourceFactory.MAPNIK
-                    BasemapType.TOPO -> TileSourceFactory.OpenTopo
-                    BasemapType.HYBRID -> ESRI_SATELLITE
+                    BasemapType.TOPO -> TOPO_TILE_SOURCE
+                    BasemapType.HYBRID -> HYBRID_TILE_SOURCE
                 }
-                if (mapView.tileProvider.tileSource != targetTileSource) {
+                if (mapView.tileProvider.tileSource.name() != targetTileSource.name()) {
                     mapView.setTileSource(targetTileSource)
                 }
 
