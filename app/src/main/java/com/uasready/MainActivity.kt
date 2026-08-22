@@ -77,8 +77,33 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // 1. Session Pilot Onboarding Popup (No cutoffs, auto-fitting, returns to Flight Readiness)
-                if (uiState.isPilotSelectionPending) {
+                // 0. App Splash Screen (Dark background, fits any orientation without cutoff, lasts 3 seconds)
+                var showSplash by remember { mutableStateOf(true) }
+
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(3000L)
+                    showSplash = false
+                }
+
+                if (showSplash) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(AviationDarkBackground),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.app_logo),
+                            contentDescription = "UASReady Splash Logo",
+                            modifier = Modifier
+                                .padding(24.dp)
+                                .fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                        )
+                    }
+                } else {
+                    // 1. Session Pilot Onboarding Popup (No cutoffs, auto-fitting, returns to Flight Readiness)
+                    if (uiState.isPilotSelectionPending) {
                     AlertDialog(
                         onDismissRequest = { /* Modal: require explicit pilot selection */ },
                         containerColor = AviationDarkCard,
@@ -452,6 +477,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
