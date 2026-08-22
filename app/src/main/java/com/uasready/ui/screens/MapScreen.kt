@@ -32,7 +32,6 @@ import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainUiState
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
@@ -45,31 +44,60 @@ enum class BasemapType(val displayName: String) {
     HYBRID("Hybrid")
 }
 
-// High-reliability global Hybrid tile provider (Satellite + Roads + Labels)
-private val HYBRID_TILE_SOURCE = object : OnlineTileSourceBase(
-    "HybridTiles",
-    0, 20, 256, ".png",
-    arrayOf("https://mt0.google.com/vt/lyrs=y&x=", "https://mt1.google.com/vt/lyrs=y&x=", "https://mt2.google.com/vt/lyrs=y&x=", "https://mt3.google.com/vt/lyrs=y&x=")
+// Google Street NO-POIs
+private val STREET_TILE_SOURCE = object : OnlineTileSourceBase(
+    "GoogleStreetNoPOI",
+    0, 21, 256, ".png",
+    arrayOf(
+        "https://mt0.google.com/vt/lyrs=m&",
+        "https://mt1.google.com/vt/lyrs=m&",
+        "https://mt2.google.com/vt/lyrs=m&",
+        "https://mt3.google.com/vt/lyrs=m&"
+    )
 ) {
     override fun getTileURLString(pMapTileIndex: Long): String {
         val zoom = MapTileIndex.getZoom(pMapTileIndex)
         val x = MapTileIndex.getX(pMapTileIndex)
         val y = MapTileIndex.getY(pMapTileIndex)
-        return "${baseUrl}$x&y=$y&z=$zoom"
+        return "${baseUrl}x=$x&y=$y&z=$zoom&s=Gal&apistyle=s.t%3A2%7Cs.e%3Al%7Cp.v%3Aoff"
     }
 }
 
-// Topographic Terrain tile provider
+// Google Terrain NO-POIs
 private val TOPO_TILE_SOURCE = object : OnlineTileSourceBase(
-    "TopoTerrainTiles",
-    0, 20, 256, ".png",
-    arrayOf("https://mt0.google.com/vt/lyrs=p&x=", "https://mt1.google.com/vt/lyrs=p&x=")
+    "GoogleTerrainNoPOI",
+    0, 21, 256, ".png",
+    arrayOf(
+        "https://mt0.google.com/vt/lyrs=p&",
+        "https://mt1.google.com/vt/lyrs=p&",
+        "https://mt2.google.com/vt/lyrs=p&",
+        "https://mt3.google.com/vt/lyrs=p&"
+    )
 ) {
     override fun getTileURLString(pMapTileIndex: Long): String {
         val zoom = MapTileIndex.getZoom(pMapTileIndex)
         val x = MapTileIndex.getX(pMapTileIndex)
         val y = MapTileIndex.getY(pMapTileIndex)
-        return "${baseUrl}$x&y=$y&z=$zoom"
+        return "${baseUrl}x=$x&y=$y&z=$zoom&s=Gal&apistyle=s.t%3A2%7Cs.e%3Al%7Cp.v%3Aoff"
+    }
+}
+
+// Google Hybrid NO-POIs
+private val HYBRID_TILE_SOURCE = object : OnlineTileSourceBase(
+    "GoogleHybridNoPOI",
+    0, 21, 256, ".png",
+    arrayOf(
+        "https://mt0.google.com/vt/lyrs=y&",
+        "https://mt1.google.com/vt/lyrs=y&",
+        "https://mt2.google.com/vt/lyrs=y&",
+        "https://mt3.google.com/vt/lyrs=y&"
+    )
+) {
+    override fun getTileURLString(pMapTileIndex: Long): String {
+        val zoom = MapTileIndex.getZoom(pMapTileIndex)
+        val x = MapTileIndex.getX(pMapTileIndex)
+        val y = MapTileIndex.getY(pMapTileIndex)
+        return "${baseUrl}x=$x&y=$y&z=$zoom&s=Gal&apistyle=s.t%3A2%7Cs.e%3Al%7Cp.v%3Aoff"
     }
 }
 
@@ -92,12 +120,12 @@ fun MapScreen(
             .fillMaxSize()
             .background(AviationDarkBackground)
     ) {
-        // Interactive Map View with Live Aeronautical Overlays & Selectable Basemap
+        // Interactive Map View with Live Aeronautical Overlays & Selectable NO-POI Basemaps
         AndroidView(
             factory = { context ->
                 Configuration.getInstance().userAgentValue = "UASReady-Android-App/1.0"
                 MapView(context).apply {
-                    setTileSource(TileSourceFactory.MAPNIK)
+                    setTileSource(STREET_TILE_SOURCE)
                     setMultiTouchControls(true)
                     controller.setZoom(12.8)
                     val startPoint = GeoPoint(loc.latitude, loc.longitude)
@@ -116,9 +144,9 @@ fun MapScreen(
                 }
             },
             update = { mapView ->
-                // Apply Basemap Tile Source
+                // Apply Selected NO-POI Basemap Tile Source
                 val targetTileSource = when (selectedBasemap) {
-                    BasemapType.STREET -> TileSourceFactory.MAPNIK
+                    BasemapType.STREET -> STREET_TILE_SOURCE
                     BasemapType.TOPO -> TOPO_TILE_SOURCE
                     BasemapType.HYBRID -> HYBRID_TILE_SOURCE
                 }
