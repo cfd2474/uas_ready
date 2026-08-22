@@ -7,17 +7,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
@@ -25,10 +30,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.uasready.BuildConfig
+import com.uasready.domain.model.PilotAuthorityType
 import com.uasready.ui.navigation.Screen
 import com.uasready.ui.screens.*
 import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -42,6 +49,10 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
+
+                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                val scope = rememberCoroutineScope()
+                var showPilotOnboardingDialog by remember { mutableStateOf(true) }
 
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -62,171 +73,327 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                Scaffold(
-                    bottomBar = {
-                        Column {
-                            NavigationBar(
-                                containerColor = AviationDarkSurface,
-                                contentColor = TextPrimary
-                            ) {
-                                NavigationBarItem(
-                                    selected = currentRoute == Screen.Home.route,
-                                    onClick = { navController.navigate(Screen.Home.route) { popUpTo(Screen.Home.route) { inclusive = true } } },
-                                    icon = { Icon(Icons.Default.Dashboard, contentDescription = "Ready") },
-                                    label = { Text("Ready") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = AviationAccent,
-                                        selectedTextColor = AviationAccent,
-                                        unselectedIconColor = TextSecondary,
-                                        unselectedTextColor = TextSecondary,
-                                        indicatorColor = AviationDarkCard
-                                    )
-                                )
-                                NavigationBarItem(
-                                    selected = currentRoute == Screen.Assessment.route,
-                                    onClick = { navController.navigate(Screen.Assessment.route) },
-                                    icon = { Icon(Icons.Default.Assessment, contentDescription = "Audit") },
-                                    label = { Text("Audit") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = AviationAccent,
-                                        selectedTextColor = AviationAccent,
-                                        unselectedIconColor = TextSecondary,
-                                        unselectedTextColor = TextSecondary,
-                                        indicatorColor = AviationDarkCard
-                                    )
-                                )
-                                NavigationBarItem(
-                                    selected = currentRoute == Screen.Map.route,
-                                    onClick = { navController.navigate(Screen.Map.route) },
-                                    icon = { Icon(Icons.Default.Map, contentDescription = "Map") },
-                                    label = { Text("Map") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = AviationAccent,
-                                        selectedTextColor = AviationAccent,
-                                        unselectedIconColor = TextSecondary,
-                                        unselectedTextColor = TextSecondary,
-                                        indicatorColor = AviationDarkCard
-                                    )
-                                )
-                                NavigationBarItem(
-                                    selected = currentRoute == Screen.Reference.route,
-                                    onClick = { navController.navigate(Screen.Reference.route) },
-                                    icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "Checklists") },
-                                    label = { Text("Checklists") },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = AviationAccent,
-                                        selectedTextColor = AviationAccent,
-                                        unselectedIconColor = TextSecondary,
-                                        unselectedTextColor = TextSecondary,
-                                        indicatorColor = AviationDarkCard
+                // 1. Session Pilot Onboarding Popup
+                if (showPilotOnboardingDialog) {
+                    AlertDialog(
+                        onDismissRequest = { /* Non-dismissible by tapping outside */ },
+                        containerColor = AviationDarkCard,
+                        shape = RoundedCornerShape(14.dp),
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Badge, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "PILOT CERTIFICATION",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp,
+                                        color = TextPrimary
                                     )
                                 )
                             }
-                            // Persistent High-Contrast App Footer with Version
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = AviationDarkBackground,
-                                tonalElevation = 1.dp
-                            ) {
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(
+                                    text = "Select your pilot qualification status for this operational flight session:",
+                                    style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary)
+                                )
+
+                                // Side-by-side selection buttons
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Text(
-                                        text = "UAS READY // FLIGHT READINESS",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = TextMuted,
-                                        fontSize = 9.sp,
-                                        fontFamily = FontFamily.Monospace
+                                    // Button 1: Licensed Pilot
+                                    Button(
+                                        onClick = {
+                                            viewModel.setPilotAuthority(PilotAuthorityType.PART_107)
+                                            showPilotOnboardingDialog = false
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(72.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = AviationDarkSurface),
+                                        border = androidx.compose.foundation.BorderStroke(1.5.dp, AviationAccent)
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(22.dp))
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Licensed Pilot",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    color = TextPrimary,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp
+                                                )
+                                            )
+                                            Text(
+                                                text = "14 CFR Part 107",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = AviationAccent,
+                                                    fontSize = 9.sp
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    // Button 2: Non-licensed Pilot
+                                    Button(
+                                        onClick = {
+                                            viewModel.setPilotAuthority(PilotAuthorityType.PUBLIC_COA)
+                                            showPilotOnboardingDialog = false
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(72.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = AviationDarkSurface),
+                                        border = androidx.compose.foundation.BorderStroke(1.5.dp, AviationDarkBorder)
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(22.dp))
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "Non-licensed Pilot",
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    color = TextPrimary,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp
+                                                )
+                                            )
+                                            Text(
+                                                text = "Daylight Only",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = TextMuted,
+                                                    fontSize = 9.sp
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {}
+                    )
+                }
+
+                // 2. Main App Structure with Slide-out Navigation Side Drawer (Replacing Bottom Bar)
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet(
+                            drawerContainerColor = AviationDarkSurface,
+                            drawerContentColor = TextPrimary,
+                            modifier = Modifier.width(280.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    // Side Drawer Header
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = "UAS READY",
+                                                style = MaterialTheme.typography.titleLarge.copy(
+                                                    fontWeight = FontWeight.Black,
+                                                    letterSpacing = 1.5.sp,
+                                                    color = TextPrimary
+                                                )
+                                            )
+                                            Text(
+                                                text = "FLIGHT READINESS // MENU",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = AviationAccent,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            )
+                                        }
+                                        IconButton(onClick = { scope.launch { drawerState.close() } }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Close Menu", tint = TextSecondary)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Active craft and authority badge
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = AviationDarkCard,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                text = "ACTIVE CRAFT: ${uiState.selectedAircraft.displayName}",
+                                                style = MaterialTheme.typography.labelSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                            )
+                                            Text(
+                                                text = "AUTHORITY: ${uiState.currentPilot.activeAuthority.displayName}",
+                                                style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontSize = 10.sp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                    HorizontalDivider(color = AviationDarkBorder)
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // Navigation Items
+                                    val navItems = listOf(
+                                        Triple(Screen.Home.route, "Flight Readiness", Icons.Default.Dashboard),
+                                        Triple(Screen.Assessment.route, "Assessment Audit", Icons.Default.Assessment),
+                                        Triple(Screen.Map.route, "Aviation Map (FlySafe)", Icons.Default.Map),
+                                        Triple(Screen.Reference.route, "Checklists & Emergency", Icons.AutoMirrored.Filled.MenuBook),
+                                        Triple(Screen.Settings.route, "Settings & Fleet", Icons.Default.Settings)
                                     )
-                                    Text(
-                                        text = "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = AviationAccent,
-                                        fontSize = 9.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
+
+                                    navItems.forEach { (route, label, icon) ->
+                                        val isSelected = currentRoute == route
+                                        NavigationDrawerItem(
+                                            icon = { Icon(icon, contentDescription = label, tint = if (isSelected) AviationAccent else TextSecondary) },
+                                            label = {
+                                                Text(
+                                                    text = label,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isSelected) AviationAccent else TextPrimary
+                                                    )
+                                                )
+                                            },
+                                            selected = isSelected,
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                navController.navigate(route) {
+                                                    popUpTo(Screen.Home.route) { inclusive = (route == Screen.Home.route) }
+                                                }
+                                            },
+                                            colors = NavigationDrawerItemDefaults.colors(
+                                                selectedContainerColor = AviationDarkCard,
+                                                unselectedContainerColor = Color.Transparent
+                                            ),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.padding(vertical = 3.dp)
+                                        )
+                                    }
+                                }
+
+                                // Side Drawer Footer
+                                Column {
+                                    HorizontalDivider(color = AviationDarkBorder)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "UAS READY // v${BuildConfig.VERSION_NAME}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextMuted,
+                                            fontSize = 9.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        Text(
+                                            text = "RC PRO OPTIMIZED",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = AviationAccent,
+                                            fontSize = 9.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
                                 }
                             }
                         }
-                    },
-                    containerColor = AviationDarkBackground
-                ) { innerPadding ->
-                    NavHost(
-                        navController = navController,
-                        startDestination = Screen.Home.route,
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable(Screen.Home.route) {
-                            HomeScreen(
-                                uiState = uiState,
-                                onNavigateToAssessment = { navController.navigate(Screen.Assessment.route) },
-                                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                                onNavigateToMap = { navController.navigate(Screen.Map.route) },
-                                onRefreshLiveData = { viewModel.fetchLiveData() }
-                            )
-                        }
+                    }
+                ) {
+                    Scaffold(
+                        containerColor = AviationDarkBackground
+                    ) { innerPadding ->
+                        NavHost(
+                            navController = navController,
+                            startDestination = Screen.Home.route,
+                            modifier = Modifier.padding(innerPadding)
+                        ) {
+                            composable(Screen.Home.route) {
+                                HomeScreen(
+                                    uiState = uiState,
+                                    onNavigateToAssessment = { navController.navigate(Screen.Assessment.route) },
+                                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                                    onNavigateToMap = { navController.navigate(Screen.Map.route) },
+                                    onOpenDrawer = { scope.launch { drawerState.open() } },
+                                    onRefreshLiveData = { viewModel.fetchLiveData() }
+                                )
+                            }
 
-                        composable(Screen.Assessment.route) {
-                            AssessmentDetailScreen(
-                                uiState = uiState,
-                                onCategoryFilterSelected = { viewModel.setCategoryFilter(it) },
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable(Screen.Assessment.route) {
+                                AssessmentDetailScreen(
+                                    uiState = uiState,
+                                    onCategoryFilterSelected = { viewModel.setCategoryFilter(it) },
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable(Screen.Map.route) {
-                            MapScreen(
-                                uiState = uiState,
-                                onLocationChanged = { viewModel.updateLocation(it) },
-                                onRefreshGpsLocation = {
-                                    permissionLauncher.launch(
-                                        arrayOf(
-                                            Manifest.permission.ACCESS_FINE_LOCATION,
-                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                            composable(Screen.Map.route) {
+                                MapScreen(
+                                    uiState = uiState,
+                                    onLocationChanged = { viewModel.updateLocation(it) },
+                                    onRefreshGpsLocation = {
+                                        permissionLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                                Manifest.permission.ACCESS_COARSE_LOCATION
+                                            )
                                         )
-                                    )
-                                    viewModel.refreshGpsLocation()
-                                },
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                                        viewModel.refreshGpsLocation()
+                                    },
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable(Screen.Timeline.route) {
-                            FlightTimelineScreen(
-                                uiState = uiState,
-                                onUpdateFlightWindow = { start, end -> viewModel.updateFlightWindow(start, end) },
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable(Screen.Timeline.route) {
+                                FlightTimelineScreen(
+                                    uiState = uiState,
+                                    onUpdateFlightWindow = { start, end -> viewModel.updateFlightWindow(start, end) },
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable(Screen.Aircraft.route) {
-                            AircraftScreen(
-                                uiState = uiState,
-                                onSelectAircraft = { viewModel.selectAircraft(it) },
-                                onSaveCustomAircraft = { viewModel.saveCustomAircraft(it) },
-                                onDeleteCustomAircraft = { viewModel.deleteCustomAircraft(it) },
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable(Screen.Aircraft.route) {
+                                AircraftScreen(
+                                    uiState = uiState,
+                                    onSelectAircraft = { viewModel.selectAircraft(it) },
+                                    onSaveCustomAircraft = { viewModel.saveCustomAircraft(it) },
+                                    onDeleteCustomAircraft = { viewModel.deleteCustomAircraft(it) },
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable(Screen.Reference.route) {
-                            ReferenceScreen(
-                                onNavigateBack = { navController.popBackStack() }
-                            )
-                        }
+                            composable(Screen.Reference.route) {
+                                ReferenceScreen(
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
 
-                        composable(Screen.Settings.route) {
-                            SettingsScreen(
-                                uiState = uiState,
-                                onSetAuthority = { viewModel.setPilotAuthority(it) },
-                                onSelectAircraft = { viewModel.selectAircraft(it) },
-                                onNavigateToAircraft = { navController.navigate(Screen.Aircraft.route) },
-                                onNavigateBack = { navController.popBackStack() }
-                            )
+                            composable(Screen.Settings.route) {
+                                SettingsScreen(
+                                    uiState = uiState,
+                                    onSetAuthority = { viewModel.setPilotAuthority(it) },
+                                    onSelectAircraft = { viewModel.selectAircraft(it) },
+                                    onNavigateToAircraft = { navController.navigate(Screen.Aircraft.route) },
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
+                            }
                         }
                     }
                 }

@@ -5,12 +5,12 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class PilotAuthorityType(val displayName: String, val description: String) {
     PART_107(
-        displayName = "107 License",
-        description = "Cleared for night operations with anti-collision lighting."
+        displayName = "Licensed Pilot",
+        description = "FAA Part 107 Remote Pilot. Cleared for day and night operations (with anti-collision strobe)."
     ),
     PUBLIC_COA(
-        displayName = "Public COA",
-        description = "Flight strictly restricted to daylight (30 min before sunrise to 30 min after sunset)."
+        displayName = "Non-licensed Pilot",
+        description = "Operating without Part 107 license. Daylight window only (30 min before sunrise to 30 min after sunset)."
     )
 }
 
