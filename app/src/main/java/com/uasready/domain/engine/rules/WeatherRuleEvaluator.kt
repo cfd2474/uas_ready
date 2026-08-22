@@ -161,7 +161,7 @@ class WeatherRuleEvaluator : CategoryRuleEvaluator {
             )
         }
 
-        // 4. Forecast degradation evaluation across flight window
+        // 4. Forecast degradation evaluation across 120-minute flight window
         val forecast = context.forecast
         if (forecast != null && forecast.intervals.isNotEmpty()) {
             val windowSampling = context.flightWindow.getSamplingIntervals()
@@ -171,30 +171,40 @@ class WeatherRuleEvaluator : CategoryRuleEvaluator {
                 if (interval != null) {
                     val offsetMin = (sampleTime - context.flightWindow.startEpochMs) / (60 * 1000)
                     if (interval.visibilityStatuteMiles < 3.0) {
+                        val status = if (offsetMin < 60) AssessmentStatus.NO_GO else AssessmentStatus.CAUTION
                         rules.add(
                             RuleResult(
-                                ruleId = "WX-FCST-VIS-001",
+                                ruleId = if (offsetMin < 60) "WX-FCST-VIS-001" else "WX-FCST-VIS-002",
                                 category = category,
-                                status = AssessmentStatus.NO_GO,
-                                title = "Forecast Visibility Degradation",
+                                status = status,
+                                title = if (offsetMin < 60) "Forecast Visibility Below Min (< 60m)" else "Forecast Visibility Degraded in 60-120m Window",
                                 inputValueFormatted = String.format("%.1f SM at +%dm", interval.visibilityStatuteMiles, offsetMin),
                                 thresholdFormatted = ">= 3.0 SM",
-                                explanation = String.format("Forecast visibility drops below regulatory minimums (%.1f SM) at +%d minutes into flight window.", interval.visibilityStatuteMiles, offsetMin),
+                                explanation = if (offsetMin < 60) {
+                                    String.format("Forecast visibility drops below 3.0 SM (%.1f SM) at +%d min into the 0–60 min flight window. Flight prohibited.", interval.visibilityStatuteMiles, offsetMin)
+                                } else {
+                                    String.format("Forecast visibility drops to %.1f SM at +%d min (60–120 min window). Short flight under 60 min permitted; plan for deteriorating visibility.", interval.visibilityStatuteMiles, offsetMin)
+                                },
                                 isForecastDerived = true,
                                 forecastTimeOffsetMinutes = offsetMin
                             )
                         )
                     }
                     if (interval.thunderstormProbabilityPercent >= 50) {
+                        val status = if (offsetMin < 60) AssessmentStatus.NO_GO else AssessmentStatus.CAUTION
                         rules.add(
                             RuleResult(
-                                ruleId = "WX-FCST-STM-001",
+                                ruleId = if (offsetMin < 60) "WX-FCST-STM-001" else "WX-FCST-STM-002",
                                 category = category,
-                                status = AssessmentStatus.NO_GO,
-                                title = "Forecast Thunderstorm Hazard",
+                                status = status,
+                                title = if (offsetMin < 60) "Forecast Thunderstorm Hazard (< 60m)" else "Forecast Thunderstorm in 60-120m Window",
                                 inputValueFormatted = String.format("%d%% at +%dm", interval.thunderstormProbabilityPercent, offsetMin),
                                 thresholdFormatted = "< 50%",
-                                explanation = String.format("Forecast thunderstorm probability increases to %d%% at +%d minutes into flight window.", interval.thunderstormProbabilityPercent, offsetMin),
+                                explanation = if (offsetMin < 60) {
+                                    String.format("Forecast thunderstorm probability increases to %d%% at +%d min into the 0–60 min flight window. Immediate flight prohibited.", interval.thunderstormProbabilityPercent, offsetMin)
+                                } else {
+                                    String.format("Forecast convective activity increases to %d%% at +%d min (60–120 min window). Caution: Complete operations before cell development.", interval.thunderstormProbabilityPercent, offsetMin)
+                                },
                                 isForecastDerived = true,
                                 forecastTimeOffsetMinutes = offsetMin
                             )

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -56,7 +57,7 @@ fun MapScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
                 actions = {
@@ -189,7 +190,7 @@ fun MapScreen(
                         }
                         Column {
                             Text("GNSS SATS", style = MaterialTheme.typography.labelMedium.copy(color = TextMuted, fontSize = 10.sp))
-                            val satsText = if (uiState.estimatedGnss != null) "~${uiState.estimatedGnss.lockedSatellitesCount} (HDOP ${uiState.estimatedGnss.estimatedHdop})" else "12+ Locked"
+                            val satsText = if (uiState.estimatedGnss != null) "~${uiState.estimatedGnss.lockedSatellitesCount} (HDOP ${uiState.estimatedGnss.estimatedHdop})" else "12+ Visible"
                             Text(satsText, style = MaterialTheme.typography.bodyLarge.copy(color = AviationAccent, fontWeight = FontWeight.SemiBold))
                         }
                     }

@@ -109,10 +109,10 @@ class SpaceWeatherRuleEvaluator : CategoryRuleEvaluator {
                     ruleId = "SP-GNSS-SATS",
                     category = category,
                     status = AssessmentStatus.GO,
-                    title = "GNSS Satellite Constellation Lock",
-                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
+                    title = "GNSS Satellites Visible",
+                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Visible",
                     thresholdFormatted = ">= 12 Sats (3D Fix)",
-                    explanation = "${gnss.lockedSatellitesCount} multi-GNSS satellites in navigation solution$terrainNote. 3D fix verified; stable home point confirmed."
+                    explanation = "${gnss.lockedSatellitesCount} multi-GNSS satellites visible in navigation solution$terrainNote. 3D fix verified; stable home point confirmed."
                 )
             )
             gnss.lockedSatellitesCount in 8..11 -> rules.add(
@@ -120,10 +120,10 @@ class SpaceWeatherRuleEvaluator : CategoryRuleEvaluator {
                     ruleId = "SP-GNSS-SATS",
                     category = category,
                     status = AssessmentStatus.CAUTION,
-                    title = "Marginal GNSS Satellite Lock (8-11 Sats)",
-                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
+                    title = "Marginal GNSS Satellites Visible (8-11 Sats)",
+                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Visible",
                     thresholdFormatted = "12+ Sats for Full Nominal",
-                    explanation = "${gnss.lockedSatellitesCount} satellites locked$terrainNote. Marginal constellation geometry; verify home point manually and avoid GNSS-dependent precision automated mapping."
+                    explanation = "${gnss.lockedSatellitesCount} satellites visible. Marginal constellation geometry; verify home point manually and avoid GNSS-dependent precision automated mapping."
                 )
             )
             else -> rules.add(
@@ -131,10 +131,10 @@ class SpaceWeatherRuleEvaluator : CategoryRuleEvaluator {
                     ruleId = "SP-GNSS-SATS",
                     category = category,
                     status = AssessmentStatus.NO_GO,
-                    title = "Insufficient GNSS Satellites (<= 7 Sats)",
-                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Locked",
+                    title = "Insufficient GNSS Satellites Visible (<= 7 Sats)",
+                    inputValueFormatted = "${gnss.lockedSatellitesCount} Sats Visible",
                     thresholdFormatted = "Min 8 Sats Required",
-                    explanation = "Only ${gnss.lockedSatellitesCount} satellites locked in navigation solution (<= 7)$terrainNote. Severe risk of GPS loss-of-lock, ATTI mode fallback, or uncommanded fly-away."
+                    explanation = "Only ${gnss.lockedSatellitesCount} satellites visible in navigation solution (<= 7)$terrainNote. Severe risk of GPS loss-of-lock, ATTI mode fallback, or uncommanded fly-away."
                 )
             )
         }

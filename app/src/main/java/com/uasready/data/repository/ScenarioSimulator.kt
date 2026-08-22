@@ -235,10 +235,7 @@ object ScenarioSimulator {
 
             SimulationScenario.NIGHT_UNQUALIFIED_NOGO -> {
                 val nightPilot = pilot.copy(
-                    part107Profile = Part107Profile(
-                        certificateNumber = "381920",
-                        nightTrainingCompleted = false
-                    )
+                    activeAuthority = PilotAuthorityType.PUBLIC_COA
                 )
                 val nightSun = defaultSunData.copy(
                     sunriseEpochMs = flightWindow.startEpochMs - 14 * 3600 * 1000L,
@@ -263,7 +260,7 @@ object ScenarioSimulator {
             SimulationScenario.DETERIORATING_FORECAST_NOGO -> {
                 val hourly = listOf(
                     HourlyForecastInterval(
-                        timestampEpochMs = flightWindow.startEpochMs + 30 * 60 * 1000L,
+                        timestampEpochMs = flightWindow.startEpochMs,
                         temperatureF = 72.0,
                         windSpeedMph = 14.0,
                         windGustMph = 20.0,
@@ -275,10 +272,10 @@ object ScenarioSimulator {
                         conditionsDescription = "Clear"
                     ),
                     HourlyForecastInterval(
-                        timestampEpochMs = flightWindow.startEpochMs + 90 * 60 * 1000L,
+                        timestampEpochMs = flightWindow.startEpochMs + 30 * 60 * 1000L,
                         temperatureF = 65.0,
                         windSpeedMph = 28.0,
-                        windGustMph = 39.0, // Exceeds limit later in flight window
+                        windGustMph = 39.0, // Exceeds limit at +30m into flight window (< 60m NO-GO)
                         windDirectionDegrees = 290,
                         visibilityStatuteMiles = 3.0,
                         cloudCeilingFt = 1200.0,

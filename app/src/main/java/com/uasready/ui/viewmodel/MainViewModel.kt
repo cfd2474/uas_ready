@@ -21,7 +21,6 @@ data class MainUiState(
     val plannedAltitudeAglFt: Double = 400.0,
     val isLiveLoading: Boolean = false,
     val liveErrorMessage: String? = null,
-    val currentScenario: SimulationScenario = SimulationScenario.NOMINAL_GO,
     val assessmentResult: AssessmentResult? = null,
     val estimatedGnss: GnssEstimation? = null,
     val selectedCategoryFilter: AssessmentCategory? = null
@@ -70,24 +69,8 @@ class MainViewModel @JvmOverloads constructor(
         // Try to obtain initial GPS location silently if permission is already granted
         refreshGpsLocation(silent = true)
 
-        // Initial evaluation
-        reevaluateAssessment()
-    }
-
-    fun selectScenario(scenario: SimulationScenario) {
-        _uiState.update { it.copy(currentScenario = scenario) }
-        if (scenario == SimulationScenario.LIVE_DATA) {
-            fetchLiveData()
-        } else {
-            val context = ScenarioSimulator.generateContext(
-                scenario = scenario,
-                aircraft = _uiState.value.selectedAircraft,
-                pilot = _uiState.value.currentPilot,
-                location = _uiState.value.currentLocation
-            )
-            val result = assessmentEngine.assess(context)
-            _uiState.update { it.copy(assessmentResult = result, estimatedGnss = context.gnss, liveErrorMessage = null) }
-        }
+        // Initial live telemetry fetch
+        fetchLiveData()
     }
 
     fun refreshGpsLocation(silent: Boolean = false) {
@@ -97,11 +80,7 @@ class MainViewModel @JvmOverloads constructor(
                 if (gpsLoc != null) {
                     Log.i(TAG, "GPS location acquired: ${gpsLoc.formattedCoordinates} (${gpsLoc.displayName})")
                     _uiState.update { it.copy(currentLocation = gpsLoc) }
-                    if (_uiState.value.currentScenario == SimulationScenario.LIVE_DATA) {
-                        fetchLiveData()
-                    } else {
-                        reevaluateAssessment()
-                    }
+                    fetchLiveData()
                 } else if (!silent) {
                     Log.w(TAG, "Could not acquire GPS fix (permission not granted or no GPS signal)")
                 }
@@ -174,7 +153,7 @@ class MainViewModel @JvmOverloads constructor(
     }
 
     fun reevaluateAssessment() {
-        selectScenario(_uiState.value.currentScenario)
+        fetchLiveData()
     }
 
     fun selectAircraft(aircraftId: String) {
@@ -193,18 +172,14 @@ class MainViewModel @JvmOverloads constructor(
         pilotRepo.setAuthority(type)
     }
 
-    fun setNightEndorsement(enabled: Boolean) {
-        pilotRepo.setNightEndorsement(enabled)
-    }
-
     fun updateLocation(location: LocationInfo) {
         _uiState.update { it.copy(currentLocation = location) }
-        reevaluateAssessment()
+        fetchLiveData()
     }
 
     fun updateFlightWindow(startMs: Long, endMs: Long) {
         _uiState.update { it.copy(flightWindow = FlightWindow(startMs, endMs)) }
-        reevaluateAssessment()
+        fetchLiveData()
     }
 
     fun setCategoryFilter(category: AssessmentCategory?) {
