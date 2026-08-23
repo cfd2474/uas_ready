@@ -7,10 +7,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.uasready.BuildConfig
+import com.uasready.domain.model.Aircraft
 import com.uasready.domain.model.PilotAuthorityType
 import com.uasready.ui.navigation.Screen
 import com.uasready.ui.screens.*
@@ -102,16 +106,26 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 } else {
-                    // 1. Session Pilot Onboarding Popup (No cutoffs, auto-fitting, returns to Flight Readiness)
-                    if (uiState.isPilotSelectionPending) {
-                    AlertDialog(
-                        onDismissRequest = { /* Modal: require explicit pilot selection */ },
-                        containerColor = AviationDarkCard,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth(0.92f)
-                            .wrapContentHeight(),
-                        title = {
+                    // 1. First-Time Setup: Fleet Picker Setup Dialog
+                    if (uiState.showFirstTimeFleetSetup) {
+                        FirstTimeFleetSetupDialog(
+                            allAircraft = uiState.allAircraft,
+                            currentSelectedAircraft = uiState.selectedAircraft,
+                            onConfirmAircraft = { aircraftId ->
+                                viewModel.selectAircraft(aircraftId)
+                                viewModel.completeFirstTimeFleetSetup()
+                            }
+                        )
+                    } else if (uiState.isPilotSelectionPending) {
+                        // 2. Session Pilot Onboarding Popup (No cutoffs, auto-fitting, returns to Flight Readiness)
+                        AlertDialog(
+                            onDismissRequest = { /* Modal: require explicit pilot selection */ },
+                            containerColor = AviationDarkCard,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth(0.92f)
+                                .wrapContentHeight(),
+                            title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Badge, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -704,5 +718,233 @@ fun AviationTopStatusBar(
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = AviationDarkBackground
         )
+    )
+}
+
+@Composable
+fun FirstTimeFleetSetupDialog(
+    allAircraft: List<Aircraft>,
+    currentSelectedAircraft: Aircraft,
+    onConfirmAircraft: (String) -> Unit
+) {
+    var selectedId by remember { mutableStateOf(currentSelectedAircraft.id) }
+    var selectedManufacturer by remember { mutableStateOf<String?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val manufacturerList = listOf(
+        "All Manufacturers",
+        "DJI",
+        "Autel Robotics",
+        "Skydio",
+        "Parrot",
+        "Custom Profiles"
+    )
+
+    val filteredList = allAircraft.filter { craft ->
+        val matchesManufacturer = when (selectedManufacturer) {
+            null, "All Manufacturers" -> true
+            "Custom Profiles" -> craft.isCustom
+            else -> craft.manufacturer.contains(selectedManufacturer ?: "", ignoreCase = true)
+        }
+        val matchesSearch = searchQuery.isBlank() ||
+                craft.displayName.contains(searchQuery, ignoreCase = true) ||
+                craft.model.contains(searchQuery, ignoreCase = true)
+
+        matchesManufacturer && matchesSearch
+    }
+
+    AlertDialog(
+        onDismissRequest = { /* Modal: require explicit aircraft confirmation */ },
+        containerColor = AviationDarkCard,
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth(0.95f)
+            .wrapContentHeight(),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.FlightTakeoff, contentDescription = null, tint = AviationCyan, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "FIRST-TIME SETUP: SELECT AIRCRAFT",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp,
+                            color = TextPrimary,
+                            fontSize = 13.sp
+                        )
+                    )
+                    Text(
+                        text = "Step 1 of 2: Configure primary fleet airframe",
+                        style = MaterialTheme.typography.bodySmall.copy(color = AviationAccent, fontSize = 10.sp)
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 210.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Filters Row: Dropdown & Search
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Manufacturer Dropdown
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedButton(
+                            onClick = { dropdownExpanded = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(36.dp),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                            border = BorderStroke(1.dp, AviationDarkBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = selectedManufacturer ?: "All Manufacturers",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = TextPrimary
+                                    ),
+                                    maxLines = 1
+                                )
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(16.dp))
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false },
+                            modifier = Modifier.background(AviationDarkSurface)
+                        ) {
+                            manufacturerList.forEach { mfg ->
+                                DropdownMenuItem(
+                                    text = { Text(mfg, style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 11.sp)) },
+                                    onClick = {
+                                        selectedManufacturer = if (mfg == "All Manufacturers") null else mfg
+                                        dropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Search text field
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search model...", fontSize = 11.sp, color = TextMuted) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = TextPrimary),
+                        shape = RoundedCornerShape(6.dp),
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        }
+                    )
+                }
+
+                // Scrollable Aircraft Cards List
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(filteredList) { craft ->
+                        val isCraftSelected = craft.id == selectedId
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isCraftSelected) AviationDarkSurface else AviationDarkCard,
+                            border = BorderStroke(
+                                if (isCraftSelected) 1.5.dp else 1.dp,
+                                if (isCraftSelected) AviationCyan else AviationDarkBorder
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedId = craft.id }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    RadioButton(
+                                        selected = isCraftSelected,
+                                        onClick = { selectedId = craft.id },
+                                        colors = RadioButtonDefaults.colors(
+                                            selectedColor = AviationCyan,
+                                            unselectedColor = TextSecondary
+                                        ),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = craft.displayName,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = if (isCraftSelected) AviationCyan else TextPrimary,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                        Text(
+                                            text = "${craft.manufacturer} • Wind: ${craft.limitations.maxGustSpeedMph.toInt()} MPH • Temp: ${craft.limitations.minOperatingTempF.toInt()}°F to ${craft.limitations.maxOperatingTempF.toInt()}°F",
+                                            style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 9.sp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirmAircraft(selectedId) },
+                colors = ButtonDefaults.buttonColors(containerColor = AviationCyan, contentColor = Color.White),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "ACCEPT SELECTION & PROCEED",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
     )
 }
