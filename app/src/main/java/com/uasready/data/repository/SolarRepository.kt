@@ -2,7 +2,6 @@ package com.uasready.data.repository
 
 import com.uasready.domain.model.SunData
 import java.util.Calendar
-import java.util.TimeZone
 
 interface SolarRepository {
     fun calculateSunData(latitude: Double, longitude: Double, dateEpochMs: Long = System.currentTimeMillis()): SunData
@@ -15,27 +14,27 @@ class AstronomicalSolarRepository : SolarRepository {
         longitude: Double,
         dateEpochMs: Long
     ): SunData {
-        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        // Evaluate the solar day based on the local time of the device/target location
+        val localCal = Calendar.getInstance().apply {
             timeInMillis = dateEpochMs
         }
 
-        val year = cal.get(Calendar.YEAR)
-        val month = cal.get(Calendar.MONTH) + 1
-        val day = cal.get(Calendar.DAY_OF_MONTH)
-        val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
+        val dayOfYear = localCal.get(Calendar.DAY_OF_YEAR)
 
-        val midnightCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-            set(Calendar.YEAR, year)
-            set(Calendar.MONTH, month - 1)
-            set(Calendar.DAY_OF_MONTH, day)
+        // Local midnight epoch (00:00:00.000 local time on the evaluation day)
+        val localMidnightCal = Calendar.getInstance().apply {
+            timeInMillis = dateEpochMs
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val midnightEpochMs = midnightCal.timeInMillis
+        val localMidnightEpochMs = localMidnightCal.timeInMillis
 
-        // Standard NOAA Equation of Time and Solar Noon Calculation
+        // Local timezone offset in minutes from UTC (including DST if active)
+        val tzOffsetMinutes = localCal.timeZone.getOffset(dateEpochMs) / (60 * 1000.0)
+
+        // Standard NOAA Equation of Time and Solar Declination
         val bDeg = (360.0 / 365.0) * (dayOfYear - 81)
         val bRad = Math.toRadians(bDeg)
 
@@ -47,23 +46,25 @@ class AstronomicalSolarRepository : SolarRepository {
         val declinationRad = Math.toRadians(declinationDeg)
         val latRad = Math.toRadians(latitude)
 
-        // Solar Noon in UTC minutes from UTC midnight
-        val solarNoonUtcMinutes = 720.0 - (4.0 * longitude) - eotMinutes
+        // Solar Noon in LOCAL minutes from local midnight
+        // Solar Noon in UTC minutes from UTC midnight: 720.0 - (4.0 * longitude) - eotMinutes
+        // Local Solar Noon = UTC Solar Noon + Local TimeZone Offset
+        val solarNoonLocalMinutes = 720.0 - (4.0 * longitude) - eotMinutes + tzOffsetMinutes
 
         // Official Sunrise/Sunset: zenith = 90.833 degrees
         val sunriseDeltaMin = calculateHourAngleMinutes(latRad, declinationRad, 90.833)
-        val sunriseUtcMin = solarNoonUtcMinutes - sunriseDeltaMin
-        val sunsetUtcMin = solarNoonUtcMinutes + sunriseDeltaMin
+        val sunriseLocalMin = solarNoonLocalMinutes - sunriseDeltaMin
+        val sunsetLocalMin = solarNoonLocalMinutes + sunriseDeltaMin
 
         // Civil Twilight: zenith = 96.0 degrees
         val civilDeltaMin = calculateHourAngleMinutes(latRad, declinationRad, 96.0)
-        val dawnUtcMin = solarNoonUtcMinutes - civilDeltaMin
-        val duskUtcMin = solarNoonUtcMinutes + civilDeltaMin
+        val dawnLocalMin = solarNoonLocalMinutes - civilDeltaMin
+        val duskLocalMin = solarNoonLocalMinutes + civilDeltaMin
 
-        val dawnEpochMs = midnightEpochMs + (dawnUtcMin * 60 * 1000).toLong()
-        val sunriseEpochMs = midnightEpochMs + (sunriseUtcMin * 60 * 1000).toLong()
-        val sunsetEpochMs = midnightEpochMs + (sunsetUtcMin * 60 * 1000).toLong()
-        val duskEpochMs = midnightEpochMs + (duskUtcMin * 60 * 1000).toLong()
+        val dawnEpochMs = localMidnightEpochMs + (dawnLocalMin * 60 * 1000).toLong()
+        val sunriseEpochMs = localMidnightEpochMs + (sunriseLocalMin * 60 * 1000).toLong()
+        val sunsetEpochMs = localMidnightEpochMs + (sunsetLocalMin * 60 * 1000).toLong()
+        val duskEpochMs = localMidnightEpochMs + (duskLocalMin * 60 * 1000).toLong()
 
         val isDaylight = dateEpochMs in sunriseEpochMs..sunsetEpochMs
         val isTwilight = (dateEpochMs in dawnEpochMs until sunriseEpochMs) || (dateEpochMs in sunsetEpochMs..duskEpochMs)
