@@ -31,7 +31,7 @@ class DomainModelsTest {
 
         val pilotCoa = Pilot(activeAuthority = PilotAuthorityType.PUBLIC_COA)
         assertEquals(PilotAuthorityType.PUBLIC_COA, pilotCoa.activeAuthority)
-        assertEquals("Non-licensed Pilot", pilotCoa.activeAuthority.displayName)
+        assertEquals("Non-licensed/Not permitted for night flight", pilotCoa.activeAuthority.displayName)
     }
 
     @Test
