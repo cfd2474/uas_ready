@@ -37,6 +37,23 @@ class DataLayerTest {
     }
 
     @Test
+    fun testCoronaLocal1707IsDaylight() {
+        val coronaLat = 33.8753
+        val coronaLon = -117.5664
+        // August 22 at 17:07 local time (5:07 PM)
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 17)
+            set(java.util.Calendar.MINUTE, 7)
+            set(java.util.Calendar.SECOND, 0)
+        }
+        val sunData = solarRepo.calculateSunData(coronaLat, coronaLon, cal.timeInMillis)
+
+        assertTrue("17:07 local time should be daylight", sunData.isDaylight)
+        assertTrue("Daylight remaining should be > 0", sunData.daylightRemainingMinutes > 0)
+        assertTrue("17:07 should not be darkness", !sunData.isDarknessAt(cal.timeInMillis))
+    }
+
+    @Test
     fun testAircraftRepositoryCustomFleetManagement() {
         val initialList = aircraftRepo.aircraftListState.value
         assertTrue(initialList.isNotEmpty())
