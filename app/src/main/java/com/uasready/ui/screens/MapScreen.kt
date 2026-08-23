@@ -122,6 +122,7 @@ fun MapScreen(
     var showLegend by remember { mutableStateOf(false) }
     var selectedBasemap by remember { mutableStateOf(BasemapType.STREET) }
     var inspectionResult by remember { mutableStateOf<AirspaceInspection?>(null) }
+    var shouldRecenterMap by remember { mutableStateOf(false) }
 
     var enabledZoneTypes by remember {
         mutableStateOf(
@@ -179,7 +180,10 @@ fun MapScreen(
                 }
 
                 val point = GeoPoint(loc.latitude, loc.longitude)
-                mapView.controller.setCenter(point)
+                if (shouldRecenterMap) {
+                    mapView.controller.animateTo(point)
+                    shouldRecenterMap = false
+                }
 
                 // Update or reposition User Marker
                 val userMarker = mapView.overlays.filterIsInstance<Marker>().firstOrNull { it.id == "USER_MARKER" }
@@ -577,7 +581,10 @@ fun MapScreen(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 IconButton(
-                    onClick = onRefreshGpsLocation,
+                    onClick = {
+                        onRefreshGpsLocation()
+                        shouldRecenterMap = true
+                    },
                     modifier = Modifier
                         .size(34.dp)
                         .clip(RoundedCornerShape(6.dp))
