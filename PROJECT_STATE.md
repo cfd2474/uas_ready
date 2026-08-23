@@ -6,7 +6,7 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.25` (Build 33)
+- **Current Version**: `v1.3.26` (Build 34)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `main`)
 
@@ -14,13 +14,17 @@
 
 ## What Has Been Completed
 
-### 1. 120-Minute (30-Min Interval) Forecast Breakdown Section on Detailed Report
-- In [AssessmentDetailScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/AssessmentDetailScreen.kt), implemented a dedicated **120-Minute Forecast** breakdown section displaying continuous 30-minute interval cards across the planned flight window (`T+0m Launch`, `T+30m`, `T+60m`, `T+90m`, `T+120m`).
-- Each card details the 3 primary breakout weather elements:
-  - **Wind**: Sustained wind speed, wind gust speed, and cardinal direction (e.g. `8 mph WSW • Gust 14 mph`).
-  - **Clouds**: Cloud ceiling in ft AGL or `Unlimited`, plus `% cloud cover`.
-  - **Precipitation**: Probability %, precipitation type, and hourly precipitation rate in in/hr.
-  - **Interval Safety Status**: `GO`, `CAUTION`, or `NO-GO` evaluated specifically against the active aircraft's limitations.
+### 1. Persistent Aircraft Selection Across App Sessions
+- Upgraded [AircraftRepository.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/data/repository/AircraftRepository.kt) to `PersistentAircraftRepository` using `SharedPreferences`.
+- Automatically persists the active `selected_aircraft_id` whenever an aircraft is selected in Fleet Management, Settings, or First-Time Setup, and restores it on next launch.
 
-### 2. Direct Navigation From Home Screen Forecast Card
-- In [HomeScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/HomeScreen.kt), [MainActivity.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/MainActivity.kt), and [MainViewModel.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/viewmodel/MainViewModel.kt), wired the **120 Minute Forecast** card on the Home Overview directly to the Detailed Report with automated scroll-to-focus on the Forecast section.
+### 2. First-Time Setup Flow (Fleet Picker Before Pilot Selection)
+- Implemented a two-step initial onboarding setup in [MainActivity.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/MainActivity.kt) and [MainViewModel.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/viewmodel/MainViewModel.kt):
+  - **Step 1**: On first launch, the **Fleet Management Setup** popup opens directly, allowing the user to filter by manufacturer, search airframe models, and view certified environmental envelopes.
+  - An **"ACCEPT SELECTION & PROCEED"** confirmation button saves the selected aircraft and advances to Step 2.
+  - **Step 2**: The **Pilot Certification Selection** popup opens (`Licensed Pilot` vs `Non-licensed/Not permitted for night flight`).
+  - Upon selecting certification, the app records initial setup as completed and launches the safety assessment dashboard.
+
+### 3. Add Checklist Item Dialog Checkbox Layout & Alignment
+- In [ReferenceScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/ReferenceScreen.kt), overhauled the "Critical Checklist Item" toggle with a structured `Surface` card, explicit label (`CRITICAL CHECKLIST ITEM`), descriptive subtext (`Mandatory safety verification before launch`), and properly aligned `Checkbox`.
+- Added vertical scroll constraints so dialog content is never clipped on 360dp landscape screens.

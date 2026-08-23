@@ -9,7 +9,9 @@ import com.uasready.data.repository.*
 import com.uasready.domain.engine.AssessmentContext
 import com.uasready.domain.engine.AssessmentEngine
 import com.uasready.domain.model.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 import com.uasready.data.repository.PersistentAircraftRepository
@@ -34,7 +36,8 @@ data class MainUiState(
     val airspaceInfo: AirspaceInfo? = null,
     val estimatedGnss: GnssEstimation? = null,
     val selectedCategoryFilter: AssessmentCategory? = null,
-    val scrollToForecastOnDetail: Boolean = false
+    val scrollToForecastOnDetail: Boolean = false,
+    val lastTelemetryUpdateEpochMs: Long = System.currentTimeMillis()
 )
 
 class MainViewModel @JvmOverloads constructor(
@@ -83,6 +86,21 @@ class MainViewModel @JvmOverloads constructor(
                 _uiState.update { it.copy(currentPilot = pilot) }
                 if (!_uiState.value.isPilotSelectionPending && !_uiState.value.showFirstTimeFleetSetup) {
                     reevaluateAssessment()
+                }
+            }
+        }
+
+        // Auto-refresh telemetry when age reaches >= 10 minutes
+        viewModelScope.launch {
+            while (isActive) {
+                delay(10_000L)
+                val state = _uiState.value
+                if (!state.isPilotSelectionPending && !state.showFirstTimeFleetSetup && !state.isLiveLoading) {
+                    val elapsed = System.currentTimeMillis() - state.lastTelemetryUpdateEpochMs
+                    if (elapsed >= 10 * 60 * 1000L) {
+                        Log.i(TAG, "Telemetry age exceeded 10m ($elapsed ms). Performing auto-refresh.")
+                        fetchLiveData()
+                    }
                 }
             }
         }
@@ -176,6 +194,7 @@ class MainViewModel @JvmOverloads constructor(
                     weatherForecast = weatherPair?.second,
                     airspaceInfo = airspace,
                     estimatedGnss = gnss,
+                    lastTelemetryUpdateEpochMs = System.currentTimeMillis(),
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
                 )
             }
