@@ -140,6 +140,13 @@ class MainViewModel @JvmOverloads constructor(
                 )
             }
 
+            val now = System.currentTimeMillis()
+            val activeFlightWindow = if (state.flightWindow.startEpochMs < now - 60_000L) {
+                FlightWindow.defaultTwoHours(now)
+            } else {
+                state.flightWindow
+            }
+
             val context = AssessmentContext(
                 aircraft = state.selectedAircraft,
                 pilot = state.currentPilot,
@@ -148,7 +155,7 @@ class MainViewModel @JvmOverloads constructor(
                 spaceWeather = spaceWeather,
                 airspace = airspace,
                 sunData = sunData,
-                flightWindow = state.flightWindow,
+                flightWindow = activeFlightWindow,
                 location = state.currentLocation,
                 gnss = gnss,
                 terrainProfile = terrainProfile,

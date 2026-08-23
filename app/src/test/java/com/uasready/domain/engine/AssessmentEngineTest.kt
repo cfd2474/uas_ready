@@ -357,6 +357,42 @@ class AssessmentEngineTest {
     }
 
     @Test
+    fun testNonLicensedPilotAtSunsetWithTwoHourWindowIsCautionNotNoGo() {
+        val coaPilot = Pilot(activeAuthority = PilotAuthorityType.PUBLIC_COA)
+        // 18:48 local time (1700000000000)
+        val now = 1700000000000L
+        val sunsetTime = now + 40 * 60 * 1000L      // 19:28 (40 min from now)
+        val civilDuskTime = now + 65 * 60 * 1000L   // 19:53 (65 min from now)
+        val sunData = SunData(
+            civilDawnEpochMs = now - 12 * 3600 * 1000L,
+            sunriseEpochMs = now - 11 * 3600 * 1000L,
+            sunsetEpochMs = sunsetTime,
+            civilDuskEpochMs = civilDuskTime,
+            isDaylight = true,
+            daylightRemainingMinutes = 40
+        )
+        // 2-hour window starting NOW (18:48 to 20:48)
+        val flightWindow = FlightWindow(startEpochMs = now, endEpochMs = now + 2 * 3600 * 1000L)
+
+        val context = AssessmentContext(
+            aircraft = defaultAircraft,
+            pilot = coaPilot,
+            weather = nominalWeather,
+            forecast = null,
+            spaceWeather = nominalSpaceWeather,
+            airspace = nominalAirspace,
+            sunData = sunData,
+            flightWindow = flightWindow,
+            location = defaultLocation
+        )
+
+        val result = engine.assess(context)
+        // Start time is in daylight! Should be CAUTION advising landing before 19:53, NOT a hard NO-GO.
+        assertNotEquals(AssessmentStatus.NO_GO, result.overallStatus)
+        assertTrue(result.cautionRules.any { it.ruleId == "PLT-NONLIC-NGT-003" })
+    }
+
+    @Test
     fun testGnssSatellitesRuleEvaluationThresholds() {
         // 1. 12+ Satellites -> GO
         val gnssGo = GnssEstimation(

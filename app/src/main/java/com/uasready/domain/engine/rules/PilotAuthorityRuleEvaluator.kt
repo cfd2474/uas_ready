@@ -81,26 +81,46 @@ class PilotAuthorityRuleEvaluator : CategoryRuleEvaluator {
                     )
                 )
 
-                // Daylight/Civil Twilight Window Enforcement for Non-Licensed Pilot (Hard NO-GO for night)
+                // Daylight/Civil Twilight Window Enforcement for Non-Licensed Pilot
                 if (sunData != null) {
                     val allowedStartMs = sunData.civilDawnEpochMs  // 30 min before sunrise
                     val allowedEndMs = sunData.civilDuskEpochMs    // 30 min after sunset
 
-                    val outsideDaylightWindow = flightWindow.startEpochMs < allowedStartMs || flightWindow.endEpochMs > allowedEndMs
+                    val startOutsideWindow = flightWindow.startEpochMs < allowedStartMs || flightWindow.startEpochMs > allowedEndMs
 
-                    if (outsideDaylightWindow) {
+                    if (startOutsideWindow) {
+                        val isPreDawn = flightWindow.startEpochMs < allowedStartMs
                         rules.add(
                             RuleResult(
                                 ruleId = "PLT-NONLIC-NGT-001",
                                 category = category,
                                 status = AssessmentStatus.NO_GO,
-                                title = "Night Flight Prohibited (Non-Licensed Pilot)",
+                                title = if (isPreDawn) "Pre-Dawn Flight Prohibited (Non-Licensed Pilot)" else "Night Flight Prohibited (Non-Licensed Pilot)",
                                 inputValueFormatted = "Outside Daylight Window",
                                 thresholdFormatted = String.format("30m Pre-Sunrise to 30m Post-Sunset (%s - %s)", formatEpochTime(allowedStartMs), formatEpochTime(allowedEndMs)),
+                                explanation = if (isPreDawn) {
+                                    String.format("Operations cannot begin until 30 minutes before sunrise (%s). Non-licensed Pilots are prohibited from night and pre-dawn flights.", formatEpochTime(allowedStartMs))
+                                } else {
+                                    String.format("Daylight operating window concluded at %s (30 minutes after sunset). Night flight operations are strictly prohibited for Non-licensed Pilots.", formatEpochTime(allowedEndMs))
+                                },
+                                applicableAuthority = "Non-Licensed Pilot"
+                            )
+                        )
+                    } else if (flightWindow.endEpochMs > allowedEndMs) {
+                        // Started in daylight, but planned window exceeds sunset/dusk
+                        val minRemaining = ((allowedEndMs - flightWindow.startEpochMs) / (60 * 1000)).coerceAtLeast(0)
+                        rules.add(
+                            RuleResult(
+                                ruleId = "PLT-NONLIC-NGT-003",
+                                category = category,
+                                status = AssessmentStatus.CAUTION,
+                                title = "Flight Window Exceeds Sunset",
+                                inputValueFormatted = String.format("%d min daylight remaining", minRemaining),
+                                thresholdFormatted = String.format("Conclude by %s", formatEpochTime(allowedEndMs)),
                                 explanation = String.format(
-                                    "Night flight operations are strictly prohibited for Non-licensed Pilots. Operations must remain within 30 minutes before sunrise (%s) and 30 minutes after sunset (%s).",
-                                    formatEpochTime(allowedStartMs),
-                                    formatEpochTime(allowedEndMs)
+                                    "Operations are permitted right now in daylight, but all flights must conclude before 30 minutes after sunset (%s). You have %d minutes of legal daylight remaining.",
+                                    formatEpochTime(allowedEndMs),
+                                    minRemaining
                                 ),
                                 applicableAuthority = "Non-Licensed Pilot"
                             )
