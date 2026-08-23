@@ -35,7 +35,7 @@ class DataFreshnessRuleEvaluator : CategoryRuleEvaluator {
         val weather = context.weather
         if (weather != null) {
             val ageMin = (System.currentTimeMillis() - weather.timestampEpochMs) / (60 * 1000)
-            if (weather.isStale || ageMin > 60) {
+            if (weather.isStale || ageMin > 10) {
                 rules.add(
                     RuleResult(
                         ruleId = "DAT-WX-001",
@@ -43,8 +43,8 @@ class DataFreshnessRuleEvaluator : CategoryRuleEvaluator {
                         status = AssessmentStatus.CAUTION,
                         title = "Stale Weather Telemetry",
                         inputValueFormatted = String.format("%d min old", ageMin),
-                        thresholdFormatted = "< 60 min",
-                        explanation = String.format("Weather observation data is %d minutes old. Local conditions may have changed.", ageMin)
+                        thresholdFormatted = "< 10 min",
+                        explanation = String.format("Weather observation data is %d minutes old (stale threshold > 10 min). Local conditions may have changed.", ageMin)
                     )
                 )
             } else {
@@ -55,7 +55,7 @@ class DataFreshnessRuleEvaluator : CategoryRuleEvaluator {
                         status = AssessmentStatus.GO,
                         title = "Weather Data Freshness",
                         inputValueFormatted = String.format("%d min ago (%s)", ageMin, weather.sourceName),
-                        thresholdFormatted = "< 60 min",
+                        thresholdFormatted = "< 10 min",
                         explanation = "Weather observation telemetry is fresh and authoritative."
                     )
                 )

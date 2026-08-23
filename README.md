@@ -50,7 +50,7 @@
 | 🟢 **GO** | All environmental, regulatory, and aircraft limits are fully met. | Proceed with standard preflight checklist & launch. |
 | 🟡 **CAUTION** | Marginal conditions (gusts near limit, elevated Kp index, civil twilight, flight window ending near dusk). | Heightened vigilance, review advisory notes, verify abort criteria. |
 | 🔴 **NO-GO** | Hard limitation breached (excessive winds, precipitation, airspace violation, night flight without Part 107 license). | **Flight prohibited.** Abort mission or relocate launch zone. |
-| ⚪ **DATA UNAVAILABLE** | Network lost or stale telemetry (>60 min). | Acquire connectivity or switch to verified offline scenario drill. |
+| ⚪ **DATA UNAVAILABLE** | Network lost or stale telemetry (>10 min). | Acquire connectivity or switch to verified offline scenario drill. |
 
 ---
 
