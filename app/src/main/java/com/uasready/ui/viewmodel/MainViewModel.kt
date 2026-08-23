@@ -19,7 +19,7 @@ data class MainUiState(
     val allAircraft: List<Aircraft> = Aircraft.PRESETS,
     val currentPilot: Pilot = Pilot.getDefault(),
     val isPilotSelectionPending: Boolean = true,
-    val themeMode: AppThemeMode = AppThemeMode.DARK,
+    val themeMode: AppThemeMode = AppThemeMode.AUTO,
     val currentLocation: LocationInfo = LocationInfo.defaultLocation(),
     val flightWindow: FlightWindow = FlightWindow.defaultTwoHours(),
     val plannedAltitudeAglFt: Double = 400.0,

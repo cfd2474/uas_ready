@@ -11,9 +11,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class AppThemeMode(val displayName: String, val description: String) {
+    AUTO("System Default (Auto)", "Automatically matches device day/night system setting"),
     DARK("Dark / Night Mode", "High-contrast dark palette for night and low-light operations"),
-    LIGHT("Light / Day Mode", "High-visibility bright palette for direct sunlight outdoor readability"),
-    AUTO("Auto / System Theme", "Automatically matches your device's system theme")
+    LIGHT("Light / Day Mode", "High-visibility bright palette for direct sunlight outdoor readability")
 }
 
 private val DarkMaterialColorScheme = darkColorScheme(
@@ -50,7 +50,7 @@ private val LightMaterialColorScheme = lightColorScheme(
 
 @Composable
 fun UASReadyTheme(
-    themeMode: AppThemeMode = AppThemeMode.DARK,
+    themeMode: AppThemeMode = AppThemeMode.AUTO,
     content: @Composable () -> Unit
 ) {
     val isDark = when (themeMode) {
