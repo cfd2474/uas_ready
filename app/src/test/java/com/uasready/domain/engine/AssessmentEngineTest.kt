@@ -353,7 +353,7 @@ class AssessmentEngineTest {
 
         val result = engine.assess(context)
         assertEquals(AssessmentStatus.NO_GO, result.overallStatus)
-        assertTrue(result.noGoRules.any { it.ruleId == "PLT-COA-NGT-001" })
+        assertTrue(result.noGoRules.any { it.ruleId == "PLT-NONLIC-NGT-001" })
     }
 
     @Test

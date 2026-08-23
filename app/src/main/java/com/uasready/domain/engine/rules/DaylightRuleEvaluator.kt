@@ -30,13 +30,36 @@ class DaylightRuleEvaluator : CategoryRuleEvaluator {
 
         val rules = mutableListOf<RuleResult>()
         val flightWindow = context.flightWindow
+        val pilot = context.pilot
 
         val startsInDaylight = sunData.isDaylightAt(flightWindow.startEpochMs)
         val endsInDaylight = sunData.isDaylightAt(flightWindow.endEpochMs)
         val endsInTwilight = sunData.isCivilTwilightAt(flightWindow.endEpochMs)
         val endsInDarkness = sunData.isDarknessAt(flightWindow.endEpochMs)
 
-        // 1. Daylight & Twilight Timing Evaluation
+        // 1. Reference Card for Non-Licensed Pilot: Display exact permitted daylight flight window
+        if (pilot.activeAuthority == PilotAuthorityType.PUBLIC_COA) {
+            rules.add(
+                RuleResult(
+                    ruleId = "SUN-NONLIC-REF-001",
+                    category = category,
+                    status = AssessmentStatus.GO,
+                    title = "Permitted Daylight Window (Non-Licensed Pilot)",
+                    inputValueFormatted = "${formatEpochTime(sunData.civilDawnEpochMs)} to ${formatEpochTime(sunData.civilDuskEpochMs)}",
+                    thresholdFormatted = "30m pre-sunrise to 30m post-sunset",
+                    explanation = String.format(
+                        "For Non-licensed Pilots, legal flight operations are permitted from 30 minutes before sunrise (%s) to 30 minutes after sunset (%s). Sunrise: %s, Sunset: %s.",
+                        formatEpochTime(sunData.civilDawnEpochMs),
+                        formatEpochTime(sunData.civilDuskEpochMs),
+                        formatEpochTime(sunData.sunriseEpochMs),
+                        formatEpochTime(sunData.sunsetEpochMs)
+                    ),
+                    applicableAuthority = "Non-Licensed Pilot"
+                )
+            )
+        }
+
+        // 2. Daylight & Twilight Timing Evaluation
         when {
             startsInDaylight && endsInDaylight -> {
                 val minUntilSunset = (sunData.sunsetEpochMs - flightWindow.endEpochMs) / (60 * 1000)
@@ -61,7 +84,7 @@ class DaylightRuleEvaluator : CategoryRuleEvaluator {
                             title = "Daylight Flight Window",
                             inputValueFormatted = "Full Daylight",
                             thresholdFormatted = "Sunrise to Sunset",
-                            explanation = String.format("Flight window is fully within daylight hours (Sunset: %s).", formatEpochTime(sunData.sunsetEpochMs))
+                            explanation = String.format("Flight window is fully within daylight hours (Sunrise: %s • Sunset: %s).", formatEpochTime(sunData.sunriseEpochMs), formatEpochTime(sunData.sunsetEpochMs))
                         )
                     )
                 }
@@ -100,7 +123,7 @@ class DaylightRuleEvaluator : CategoryRuleEvaluator {
         val summary = when (worstStatus) {
             AssessmentStatus.NO_GO -> "Solar / daylight criteria violated"
             AssessmentStatus.CAUTION -> "Flight operates near sunset, in civil twilight, or at night"
-            AssessmentStatus.GO -> "Flight window remains within daylight hours"
+            AssessmentStatus.GO -> "Flight window remains within permitted daylight hours"
             AssessmentStatus.DATA_UNAVAILABLE -> "Solar calculation unavailable"
         }
 

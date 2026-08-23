@@ -22,11 +22,11 @@ class PilotAuthorityRuleEvaluator : CategoryRuleEvaluator {
                         ruleId = "PLT-107-AUTH-001",
                         category = category,
                         status = AssessmentStatus.GO,
-                        title = "107 License Authority",
+                        title = "107 Licensed Pilot Authority",
                         inputValueFormatted = "107 License",
                         thresholdFormatted = "14 CFR Part 107",
                         explanation = "Operating under standard FAA 107 License. Cleared for daylight and nighttime operations.",
-                        applicableAuthority = "107 License"
+                        applicableAuthority = "Licensed Pilot"
                     )
                 )
 
@@ -43,9 +43,9 @@ class PilotAuthorityRuleEvaluator : CategoryRuleEvaluator {
                                     title = "Anti-Collision Lighting Required",
                                     inputValueFormatted = "No Anti-Collision Strobe",
                                     thresholdFormatted = "3 SM Strobe Required",
-                                    explanation = "107 License night operations require aircraft anti-collision lighting visible for at least 3 statute miles.",
+                                    explanation = "Licensed Pilot night operations require aircraft anti-collision lighting visible for at least 3 statute miles.",
                                     applicableAircraft = aircraft.displayName,
-                                    applicableAuthority = "107 License"
+                                    applicableAuthority = "Licensed Pilot"
                                 )
                             )
                         } else {
@@ -55,10 +55,10 @@ class PilotAuthorityRuleEvaluator : CategoryRuleEvaluator {
                                     category = category,
                                     status = AssessmentStatus.GO,
                                     title = "107 Night Flight Cleared",
-                                    inputValueFormatted = "107 Night Operations",
+                                    inputValueFormatted = "Night Operations",
                                     thresholdFormatted = "Aircraft Strobe Equipped",
-                                    explanation = "107 Pilot is cleared for night flight. Aircraft is equipped with anti-collision lighting.",
-                                    applicableAuthority = "107 License"
+                                    explanation = "Licensed Pilot is cleared for night flight. Aircraft is equipped with anti-collision lighting.",
+                                    applicableAuthority = "Licensed Pilot"
                                 )
                             )
                         }
@@ -67,20 +67,21 @@ class PilotAuthorityRuleEvaluator : CategoryRuleEvaluator {
             }
 
             PilotAuthorityType.PUBLIC_COA -> {
+                // Non-Licensed Pilot Base Authority
                 rules.add(
                     RuleResult(
-                        ruleId = "PLT-COA-AUTH-001",
+                        ruleId = "PLT-NONLIC-AUTH-001",
                         category = category,
                         status = AssessmentStatus.GO,
-                        title = "Public COA Authority",
-                        inputValueFormatted = "Public COA",
+                        title = "Non-Licensed Pilot Operating Criteria",
+                        inputValueFormatted = "Non-Licensed Pilot",
                         thresholdFormatted = "Daylight Window Only",
-                        explanation = "Operating under Public Agency COA. Flight permitted from 30 minutes before sunrise to 30 minutes after sunset.",
-                        applicableAuthority = "Public COA"
+                        explanation = "Operating as a Non-licensed Pilot. Flight operations are permitted from 30 minutes before sunrise to 30 minutes after sunset.",
+                        applicableAuthority = "Non-Licensed Pilot"
                     )
                 )
 
-                // Daylight/Civil Twilight Window Enforcement for Public COA (Hard NO-GO for night)
+                // Daylight/Civil Twilight Window Enforcement for Non-Licensed Pilot (Hard NO-GO for night)
                 if (sunData != null) {
                     val allowedStartMs = sunData.civilDawnEpochMs  // 30 min before sunrise
                     val allowedEndMs = sunData.civilDuskEpochMs    // 30 min after sunset
@@ -90,27 +91,35 @@ class PilotAuthorityRuleEvaluator : CategoryRuleEvaluator {
                     if (outsideDaylightWindow) {
                         rules.add(
                             RuleResult(
-                                ruleId = "PLT-COA-NGT-001",
+                                ruleId = "PLT-NONLIC-NGT-001",
                                 category = category,
                                 status = AssessmentStatus.NO_GO,
-                                title = "Night Flight Prohibited Under COA",
-                                inputValueFormatted = "Night / Outside Daylight Window",
-                                thresholdFormatted = "30m Pre-Sunrise to 30m Post-Sunset Only",
-                                explanation = "Public COA flight operations are strictly prohibited at night. Operations must remain within 30 minutes before civil sunrise and 30 minutes after civil sunset.",
-                                applicableAuthority = "Public COA"
+                                title = "Night Flight Prohibited (Non-Licensed Pilot)",
+                                inputValueFormatted = "Outside Daylight Window",
+                                thresholdFormatted = String.format("30m Pre-Sunrise to 30m Post-Sunset (%s - %s)", formatEpochTime(allowedStartMs), formatEpochTime(allowedEndMs)),
+                                explanation = String.format(
+                                    "Night flight operations are strictly prohibited for Non-licensed Pilots. Operations must remain within 30 minutes before sunrise (%s) and 30 minutes after sunset (%s).",
+                                    formatEpochTime(allowedStartMs),
+                                    formatEpochTime(allowedEndMs)
+                                ),
+                                applicableAuthority = "Non-Licensed Pilot"
                             )
                         )
                     } else {
                         rules.add(
                             RuleResult(
-                                ruleId = "PLT-COA-NGT-002",
+                                ruleId = "PLT-NONLIC-NGT-002",
                                 category = category,
                                 status = AssessmentStatus.GO,
-                                title = "COA Daylight Window Satisfied",
-                                inputValueFormatted = "Daylight Window",
-                                thresholdFormatted = "Civil Twilight to Civil Twilight",
-                                explanation = "Flight window is fully within the permitted COA daylight window (30 min before sunrise to 30 min after sunset).",
-                                applicableAuthority = "Public COA"
+                                title = "Daylight Operating Window Satisfied",
+                                inputValueFormatted = String.format("Within Window (%s - %s)", formatEpochTime(allowedStartMs), formatEpochTime(allowedEndMs)),
+                                thresholdFormatted = "30m Pre-Sunrise to 30m Post-Sunset",
+                                explanation = String.format(
+                                    "Flight window is fully within permitted daylight hours for Non-licensed Pilots (30 minutes before sunrise at %s to 30 minutes after sunset at %s).",
+                                    formatEpochTime(allowedStartMs),
+                                    formatEpochTime(allowedEndMs)
+                                ),
+                                applicableAuthority = "Non-Licensed Pilot"
                             )
                         )
                     }
@@ -132,5 +141,11 @@ class PilotAuthorityRuleEvaluator : CategoryRuleEvaluator {
             ruleResults = rules,
             summary = summary
         )
+    }
+
+    private fun formatEpochTime(epochMs: Long): String {
+        val date = java.util.Date(epochMs)
+        val format = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+        return format.format(date)
     }
 }
