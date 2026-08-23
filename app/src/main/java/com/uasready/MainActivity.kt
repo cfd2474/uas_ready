@@ -404,6 +404,7 @@ class MainActivity : ComponentActivity() {
                                 currentAircraftName = uiState.selectedAircraft.displayName,
                                 currentPilotName = if (uiState.isPilotSelectionPending) "Pending" else uiState.currentPilot.activeAuthority.displayName,
                                 isLiveLoading = uiState.isLiveLoading,
+                                lastTelemetryUpdateEpochMs = uiState.lastTelemetryUpdateEpochMs,
                                 onRefresh = { viewModel.fetchLiveData() },
                                 onOpenDrawer = { scope.launch { drawerState.open() } }
                             )
@@ -505,11 +506,68 @@ fun AviationTopStatusBar(
     currentAircraftName: String,
     currentPilotName: String,
     isLiveLoading: Boolean,
+    lastTelemetryUpdateEpochMs: Long,
     onRefresh: () -> Unit,
     onOpenDrawer: () -> Unit
 ) {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    var currentTickerMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(lastTelemetryUpdateEpochMs) {
+        while (true) {
+            currentTickerMs = System.currentTimeMillis()
+            kotlinx.coroutines.delay(5000L) // tick every 5s
+        }
+    }
+
+    val elapsedMs = (currentTickerMs - lastTelemetryUpdateEpochMs).coerceAtLeast(0L)
+    val elapsedMinutes = (elapsedMs / (60 * 1000L)).toInt()
+
+    // Status styling: Turns Yellow at >= 5 minutes, Green when < 5 minutes
+    val isStale = elapsedMinutes >= 5
+    val chipTextColor = if (isStale) SafetyCautionLight else SafetyGoLight
+    val chipBgColor = if (isStale) SafetyCautionBg else AviationDarkCard
+    val chipBorderColor = if (isStale) SafetyCautionLight.copy(alpha = 0.8f) else AviationDarkBorder
+
+    val timeSinceText = when {
+        elapsedMinutes == 0 -> "LIVE • 0m"
+        elapsedMinutes < 60 -> "LIVE • ${elapsedMinutes}m"
+        else -> "LIVE • ${elapsedMinutes / 60}h"
+    }
+
+    // Dynamic Live Status Chip Composable
+    val liveStatusChip = @Composable {
+        Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = chipBgColor,
+            border = androidx.compose.foundation.BorderStroke(1.dp, chipBorderColor),
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .clickable(enabled = !isLiveLoading) { onRefresh() }
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(chipTextColor)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = timeSinceText,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = chipTextColor,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+            }
+        }
+    }
 
     TopAppBar(
         title = {
@@ -528,22 +586,8 @@ fun AviationTopStatusBar(
                         )
                     )
 
-                    // Live status chip
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = AviationDarkCard,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
-                    ) {
-                        Text(
-                            text = "LIVE",
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = SafetyGoLight,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
+                    // Live status chip with elapsed time
+                    liveStatusChip()
 
                     // Active Aircraft Chip
                     Surface(
@@ -617,21 +661,7 @@ fun AviationTopStatusBar(
                             )
                         )
 
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = AviationDarkCard,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
-                        ) {
-                            Text(
-                                text = "LIVE",
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = SafetyGoLight,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            )
-                        }
+                        liveStatusChip()
 
                         Surface(
                             shape = RoundedCornerShape(4.dp),
