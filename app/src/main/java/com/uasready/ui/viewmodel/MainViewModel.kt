@@ -26,9 +26,12 @@ data class MainUiState(
     val isLiveLoading: Boolean = false,
     val liveErrorMessage: String? = null,
     val assessmentResult: AssessmentResult? = null,
+    val weatherObservation: WeatherObservation? = null,
+    val weatherForecast: WeatherForecast? = null,
     val airspaceInfo: AirspaceInfo? = null,
     val estimatedGnss: GnssEstimation? = null,
-    val selectedCategoryFilter: AssessmentCategory? = null
+    val selectedCategoryFilter: AssessmentCategory? = null,
+    val scrollToForecastOnDetail: Boolean = false
 )
 
 class MainViewModel @JvmOverloads constructor(
@@ -168,6 +171,8 @@ class MainViewModel @JvmOverloads constructor(
                 it.copy(
                     isLiveLoading = false,
                     assessmentResult = assessment,
+                    weatherObservation = weatherPair?.first,
+                    weatherForecast = weatherPair?.second,
                     airspaceInfo = airspace,
                     estimatedGnss = gnss,
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
@@ -178,6 +183,21 @@ class MainViewModel @JvmOverloads constructor(
 
     fun reevaluateAssessment() {
         fetchLiveData()
+    }
+
+    fun navigateToForecastDetail() {
+        _uiState.update {
+            it.copy(
+                selectedCategoryFilter = null,
+                scrollToForecastOnDetail = true
+            )
+        }
+    }
+
+    fun clearScrollToForecast() {
+        _uiState.update {
+            it.copy(scrollToForecastOnDetail = false)
+        }
     }
 
     fun selectAircraft(aircraftId: String) {

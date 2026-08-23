@@ -33,6 +33,7 @@ import com.uasready.ui.viewmodel.MainUiState
 fun HomeScreen(
     uiState: MainUiState,
     onNavigateToAssessment: (AssessmentCategory?) -> Unit,
+    onNavigateToForecast: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToMap: () -> Unit,
     modifier: Modifier = Modifier
@@ -225,7 +226,7 @@ fun HomeScreen(
                 secondaryValue = "0–60m Launch • 60–120m Watch",
                 status = forecastStatus,
                 icon = Icons.Default.Schedule,
-                onClick = { onNavigateToAssessment(null) }
+                onClick = onNavigateToForecast
             )
         }
 
