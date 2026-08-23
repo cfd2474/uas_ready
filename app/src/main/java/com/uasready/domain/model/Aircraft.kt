@@ -42,117 +42,22 @@ data class Aircraft(
         val PRESETS: List<Aircraft> = listOf(
             // ==================== DJI ENTERPRISE ====================
             Aircraft(
-                id = "dji_m3t",
-                manufacturer = "DJI",
-                model = "Mavic 3 Thermal",
-                displayName = "DJI Mavic 3 Thermal (M3T)",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0, // 12 m/s
-                    maxGustSpeedMph = 34.0, // 15 m/s
-                    minOperatingTempF = 14.0, // -10°C
-                    maxOperatingTempF = 104.0, // 40°C
-                    maxTakeoffAltitudeMslFt = 19685.0, // 6000 m
-                    precipitationAllowed = false,
-                    ipRating = "None",
-                    nightOperationCapable = true,
-                    minSatellitesRequired = 10,
-                    maxKpIndexTolerance = 5,
-                    notes = "Compact radiometric thermal imaging sUAS for public safety"
-                )
-            ),
-            Aircraft(
-                id = "dji_m3e",
-                manufacturer = "DJI",
-                model = "Mavic 3 Enterprise",
-                displayName = "DJI Mavic 3 Enterprise (M3E)",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 34.0,
-                    minOperatingTempF = 14.0,
-                    maxOperatingTempF = 104.0,
-                    maxTakeoffAltitudeMslFt = 19685.0,
-                    precipitationAllowed = false,
-                    ipRating = "None",
-                    nightOperationCapable = true,
-                    minSatellitesRequired = 10,
-                    maxKpIndexTolerance = 5,
-                    notes = "Mechanical shutter photogrammetry and mapping UAS"
-                )
-            ),
-            Aircraft(
-                id = "dji_m3m",
-                manufacturer = "DJI",
-                model = "Mavic 3 Multispectral",
-                displayName = "DJI Mavic 3 Multispectral (M3M)",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 34.0,
-                    minOperatingTempF = 14.0,
-                    maxOperatingTempF = 104.0,
-                    maxTakeoffAltitudeMslFt = 19685.0,
-                    precipitationAllowed = false,
-                    ipRating = "None",
-                    nightOperationCapable = true,
-                    minSatellitesRequired = 10,
-                    maxKpIndexTolerance = 5,
-                    notes = "Multispectral crop and environmental assessment UAS"
-                )
-            ),
-            Aircraft(
-                id = "dji_m30t",
-                manufacturer = "DJI",
-                model = "Matrice 30T",
-                displayName = "DJI Matrice 30T",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 33.5, // 15 m/s
-                    minOperatingTempF = -4.0, // -20°C
-                    maxOperatingTempF = 122.0, // 50°C
-                    maxTakeoffAltitudeMslFt = 23000.0, // 7000 m
-                    precipitationAllowed = true, // IP55 weather resistance
-                    ipRating = "IP55",
-                    nightOperationCapable = true,
-                    minSatellitesRequired = 12,
-                    maxKpIndexTolerance = 6,
-                    notes = "Rugged all-weather public safety platform with thermal & laser rangefinder"
-                )
-            ),
-            Aircraft(
-                id = "dji_m30",
-                manufacturer = "DJI",
-                model = "Matrice 30",
-                displayName = "DJI Matrice 30",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 33.5,
-                    minOperatingTempF = -4.0,
-                    maxOperatingTempF = 122.0,
-                    maxTakeoffAltitudeMslFt = 23000.0,
-                    precipitationAllowed = true,
-                    ipRating = "IP55",
-                    nightOperationCapable = true,
-                    minSatellitesRequired = 12,
-                    maxKpIndexTolerance = 6,
-                    notes = "Rugged all-weather zoom inspection platform"
-                )
-            ),
-            Aircraft(
                 id = "dji_m350_rtk",
                 manufacturer = "DJI",
                 model = "Matrice 350 RTK",
                 displayName = "DJI Matrice 350 RTK",
                 limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 34.0,
-                    minOperatingTempF = -4.0,
-                    maxOperatingTempF = 122.0,
-                    maxTakeoffAltitudeMslFt = 23000.0,
-                    precipitationAllowed = true,
+                    maxSustainedWindSpeedMph = 26.8, // 12 m/s
+                    maxGustSpeedMph = 26.8, // Not published separately by DJI
+                    minOperatingTempF = -4.0, // -20°C
+                    maxOperatingTempF = 122.0, // 50°C
+                    maxTakeoffAltitudeMslFt = 22966.0, // 5000 m (2110 props) / 7000 m (2112 high-alt props)
+                    precipitationAllowed = true, // IP55
                     ipRating = "IP55",
                     nightOperationCapable = true,
-                    minSatellitesRequired = 12,
-                    maxKpIndexTolerance = 6,
-                    notes = "Heavy enterprise flagship with multi-payload and night-vision FPV"
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "Takeoff Alt MSL: 16,404 ft (2110 props) / 22,966 ft (2112 high-alt props). Source: enterprise.dji.com/matrice-350-rtk/specs"
                 )
             ),
             Aircraft(
@@ -161,150 +66,207 @@ data class Aircraft(
                 model = "Matrice 300 RTK",
                 displayName = "DJI Matrice 300 RTK",
                 limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 34.0,
-                    minOperatingTempF = -4.0,
-                    maxOperatingTempF = 122.0,
-                    maxTakeoffAltitudeMslFt = 23000.0,
-                    precipitationAllowed = true,
+                    maxSustainedWindSpeedMph = 33.6, // 15 m/s
+                    maxGustSpeedMph = 33.6, // Not published separately by DJI
+                    minOperatingTempF = -4.0, // -20°C
+                    maxOperatingTempF = 122.0, // 50°C
+                    maxTakeoffAltitudeMslFt = 22966.0, // 5000 m (2110 props) / 7000 m (2195 high-alt props)
+                    precipitationAllowed = true, // IP45
                     ipRating = "IP45",
                     nightOperationCapable = true,
-                    minSatellitesRequired = 12,
-                    maxKpIndexTolerance = 6,
-                    notes = "Industrial heavy-lift multi-sensor inspection UAS"
-                )
-            ),
-            Aircraft(
-                id = "dji_m210_v2",
-                manufacturer = "DJI",
-                model = "Matrice 210 V2",
-                displayName = "DJI Matrice 210 RTK V2",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 33.5,
-                    minOperatingTempF = -4.0,
-                    maxOperatingTempF = 122.0,
-                    maxTakeoffAltitudeMslFt = 9842.0,
-                    precipitationAllowed = true,
-                    ipRating = "IP43",
-                    nightOperationCapable = true,
                     minSatellitesRequired = 10,
                     maxKpIndexTolerance = 5,
-                    notes = "Dual-gimbal enterprise inspection platform"
+                    notes = "12 m/s (26.8 mph) limit during takeoff/landing. Takeoff Alt MSL: 16,404 ft (2110 props) / 22,966 ft (2195 props). Source: dji.com/matrice-300/specs"
                 )
             ),
             Aircraft(
-                id = "dji_m3td",
+                id = "dji_m400",
                 manufacturer = "DJI",
-                model = "Matrice 3TD (Dock 2)",
-                displayName = "DJI Matrice 3TD (Dock 2 Thermal)",
+                model = "Matrice 400",
+                displayName = "DJI Matrice 400",
                 limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 34.0,
-                    minOperatingTempF = -4.0,
-                    maxOperatingTempF = 113.0,
-                    maxTakeoffAltitudeMslFt = 13123.0,
-                    precipitationAllowed = true,
-                    ipRating = "IP54",
-                    nightOperationCapable = true,
-                    minSatellitesRequired = 12,
-                    maxKpIndexTolerance = 6,
-                    notes = "Automated Drone-in-a-Box remote operations thermal UAS"
-                )
-            ),
-            Aircraft(
-                id = "dji_m3d",
-                manufacturer = "DJI",
-                model = "Matrice 3D (Dock 2)",
-                displayName = "DJI Matrice 3D (Dock 2 Visual)",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 34.0,
-                    minOperatingTempF = -4.0,
-                    maxOperatingTempF = 113.0,
-                    maxTakeoffAltitudeMslFt = 13123.0,
-                    precipitationAllowed = true,
-                    ipRating = "IP54",
-                    nightOperationCapable = true,
-                    minSatellitesRequired = 12,
-                    maxKpIndexTolerance = 6,
-                    notes = "Automated Drone-in-a-Box remote operations mapping UAS"
-                )
-            ),
-            Aircraft(
-                id = "dji_inspire_3",
-                manufacturer = "DJI",
-                model = "Inspire 3",
-                displayName = "DJI Inspire 3 (Cinema / Inspection)",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 31.0,
-                    minOperatingTempF = -4.0,
-                    maxOperatingTempF = 104.0,
-                    maxTakeoffAltitudeMslFt = 23000.0,
-                    precipitationAllowed = false,
-                    ipRating = "None",
-                    nightOperationCapable = true,
-                    minSatellitesRequired = 12,
-                    maxKpIndexTolerance = 5,
-                    notes = "Full-frame 8K RTK aerial cinematography & inspection UAS"
-                )
-            ),
-            Aircraft(
-                id = "dji_flycart_30",
-                manufacturer = "DJI",
-                model = "FlyCart 30",
-                displayName = "DJI FlyCart 30 Delivery",
-                limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 34.0,
-                    minOperatingTempF = -4.0,
-                    maxOperatingTempF = 113.0,
-                    maxTakeoffAltitudeMslFt = 19685.0,
-                    precipitationAllowed = true,
+                    maxSustainedWindSpeedMph = 26.8, // 12 m/s
+                    maxGustSpeedMph = 26.8,
+                    minOperatingTempF = -4.0, // -20°C
+                    maxOperatingTempF = 122.0, // 50°C
+                    maxTakeoffAltitudeMslFt = 22966.0, // 7000 m (standard 2510F props)
+                    precipitationAllowed = true, // IP55
                     ipRating = "IP55",
                     nightOperationCapable = true,
-                    minSatellitesRequired = 12,
-                    maxKpIndexTolerance = 6,
-                    notes = "Heavy cargo logistics delivery UAS (30kg payload capacity)"
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "Standard 2510F props. Rain limit 100 mm/24 h. Source: enterprise.dji.com/matrice-400/specs"
                 )
             ),
             Aircraft(
-                id = "dji_air_3",
+                id = "dji_m30_30t",
                 manufacturer = "DJI",
-                model = "Air 3",
-                displayName = "DJI Air 3 Enterprise Scout",
+                model = "Matrice 30 / 30T",
+                displayName = "DJI Matrice 30 / 30T",
                 limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 27.0,
-                    maxGustSpeedMph = 31.0,
-                    minOperatingTempF = 14.0,
-                    maxOperatingTempF = 104.0,
-                    maxTakeoffAltitudeMslFt = 19685.0,
+                    maxSustainedWindSpeedMph = 33.6, // 15 m/s
+                    maxGustSpeedMph = 33.6,
+                    minOperatingTempF = -4.0, // -20°C
+                    maxOperatingTempF = 122.0, // 50°C
+                    maxTakeoffAltitudeMslFt = 22966.0, // 7000 m
+                    precipitationAllowed = true, // IP55
+                    ipRating = "IP55",
+                    nightOperationCapable = true,
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "12 m/s (26.8 mph) limit during takeoff/landing. Source: enterprise.dji.com/matrice-30/specs"
+                )
+            ),
+            Aircraft(
+                id = "dji_m4e_4t",
+                manufacturer = "DJI",
+                model = "Matrice 4E / 4T",
+                displayName = "DJI Matrice 4E / 4T",
+                limitations = AircraftLimitations(
+                    maxSustainedWindSpeedMph = 26.8, // 12 m/s
+                    maxGustSpeedMph = 26.8,
+                    minOperatingTempF = 14.0, // -10°C
+                    maxOperatingTempF = 104.0, // 40°C
+                    maxTakeoffAltitudeMslFt = 19685.0, // 6000 m (4000 m / 13,123 ft with payload/accessories)
                     precipitationAllowed = false,
                     ipRating = "None",
                     nightOperationCapable = true,
                     minSatellitesRequired = 10,
                     maxKpIndexTolerance = 5,
-                    notes = "Dual-primary medium telephoto aerial tactical scout"
+                    notes = "Gimbal/camera: no IP rating. Takeoff Alt MSL: 19,685 ft (bare) / 13,123 ft (with payload). Source: enterprise.dji.com/matrice-4-series/specs"
+                )
+            ),
+            Aircraft(
+                id = "dji_m4d_4td",
+                manufacturer = "DJI",
+                model = "Matrice 4D / 4TD",
+                displayName = "DJI Matrice 4D / 4TD (Dock 3)",
+                limitations = AircraftLimitations(
+                    maxSustainedWindSpeedMph = 26.8, // 12 m/s
+                    maxGustSpeedMph = 26.8,
+                    minOperatingTempF = -4.0, // -20°C
+                    maxOperatingTempF = 122.0, // 50°C
+                    maxTakeoffAltitudeMslFt = 13123.0, // 4000 m
+                    precipitationAllowed = true, // IP55
+                    ipRating = "IP55",
+                    nightOperationCapable = true,
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "12 m/s in-flight and takeoff/landing; anti-ice props standard. Source: enterprise.dji.com/dock-3"
+                )
+            ),
+            Aircraft(
+                id = "dji_m3e_3t",
+                manufacturer = "DJI",
+                model = "Mavic 3E / 3T",
+                displayName = "DJI Mavic 3E / 3T (Enterprise Series)",
+                limitations = AircraftLimitations(
+                    maxSustainedWindSpeedMph = 26.8, // 12 m/s
+                    maxGustSpeedMph = 26.8,
+                    minOperatingTempF = 14.0, // -10°C
+                    maxOperatingTempF = 104.0, // 40°C
+                    maxTakeoffAltitudeMslFt = 19685.0, // 6000 m
+                    precipitationAllowed = false,
+                    ipRating = "None",
+                    nightOperationCapable = true,
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "Compact enterprise survey & thermal platform. Source: enterprise.dji.com/mavic-3-enterprise/specs"
+                )
+            ),
+            Aircraft(
+                id = "dji_m3ta",
+                manufacturer = "DJI",
+                model = "Mavic 3TA",
+                displayName = "DJI Mavic 3TA",
+                limitations = AircraftLimitations(
+                    maxSustainedWindSpeedMph = 26.8, // 12 m/s
+                    maxGustSpeedMph = 26.8,
+                    minOperatingTempF = 14.0, // -10°C
+                    maxOperatingTempF = 104.0, // 40°C
+                    maxTakeoffAltitudeMslFt = 19685.0, // 6000 m
+                    precipitationAllowed = false,
+                    ipRating = "None",
+                    nightOperationCapable = true,
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "Same airframe as Mavic 3E/3T. Source: enterprise.dji.com/mavic-3-enterprise/specs"
+                )
+            ),
+            Aircraft(
+                id = "dji_m3m",
+                manufacturer = "DJI",
+                model = "Mavic 3M",
+                displayName = "DJI Mavic 3M (Multispectral)",
+                limitations = AircraftLimitations(
+                    maxSustainedWindSpeedMph = 26.8, // 12 m/s
+                    maxGustSpeedMph = 26.8,
+                    minOperatingTempF = 14.0, // -10°C
+                    maxOperatingTempF = 104.0, // 40°C
+                    maxTakeoffAltitudeMslFt = 19685.0, // 6000 m
+                    precipitationAllowed = false,
+                    ipRating = "None",
+                    nightOperationCapable = true,
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "Multispectral crop & environmental assessment. Source: enterprise.dji.com/mavic-3-m/specs"
                 )
             ),
             Aircraft(
                 id = "dji_mini_4_pro",
                 manufacturer = "DJI",
                 model = "Mini 4 Pro",
-                displayName = "DJI Mini 4 Pro (Sub-250g Scout)",
+                displayName = "DJI Mini 4 Pro",
                 limitations = AircraftLimitations(
-                    maxSustainedWindSpeedMph = 24.0,
-                    maxGustSpeedMph = 27.0,
-                    minOperatingTempF = 14.0,
-                    maxOperatingTempF = 104.0,
-                    maxTakeoffAltitudeMslFt = 13123.0,
+                    maxSustainedWindSpeedMph = 23.9, // 10.7 m/s (Beaufort Level 5)
+                    maxGustSpeedMph = 23.9,
+                    minOperatingTempF = 14.0, // -10°C
+                    maxOperatingTempF = 104.0, // 40°C
+                    maxTakeoffAltitudeMslFt = 13123.0, // 4000 m
                     precipitationAllowed = false,
                     ipRating = "None",
                     nightOperationCapable = true,
                     minSatellitesRequired = 10,
                     maxKpIndexTolerance = 5,
-                    notes = "Ultra-lightweight omnidirectional obstacle avoidance scout"
+                    notes = "10.7 m/s = Beaufort Level 5. Source: dji.com/mini-4-pro/specs"
+                )
+            ),
+            Aircraft(
+                id = "dji_mini_3_pro",
+                manufacturer = "DJI",
+                model = "Mini 3 Pro",
+                displayName = "DJI Mini 3 Pro",
+                limitations = AircraftLimitations(
+                    maxSustainedWindSpeedMph = 23.9, // 10.7 m/s (Beaufort Level 5)
+                    maxGustSpeedMph = 23.9,
+                    minOperatingTempF = 14.0, // -10°C
+                    maxOperatingTempF = 104.0, // 40°C
+                    maxTakeoffAltitudeMslFt = 13123.0, // 4000 m
+                    precipitationAllowed = false,
+                    ipRating = "None",
+                    nightOperationCapable = true,
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "10.7 m/s = Beaufort Level 5. Source: dji.com/mini-3-pro/specs"
+                )
+            ),
+            Aircraft(
+                id = "dji_mini_3",
+                manufacturer = "DJI",
+                model = "Mini 3",
+                displayName = "DJI Mini 3",
+                limitations = AircraftLimitations(
+                    maxSustainedWindSpeedMph = 23.9, // 10.7 m/s (Beaufort Level 5)
+                    maxGustSpeedMph = 23.9,
+                    minOperatingTempF = 14.0, // -10°C
+                    maxOperatingTempF = 104.0, // 40°C
+                    maxTakeoffAltitudeMslFt = 13123.0, // 4000 m
+                    precipitationAllowed = false,
+                    ipRating = "None",
+                    nightOperationCapable = true,
+                    minSatellitesRequired = 10,
+                    maxKpIndexTolerance = 5,
+                    notes = "10.7 m/s = Beaufort Level 5. Source: dji.com/mini-3/specs"
                 )
             ),
 
