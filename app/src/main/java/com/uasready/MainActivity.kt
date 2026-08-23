@@ -531,9 +531,9 @@ fun AviationTopStatusBar(
     val chipBorderColor = if (isStale) SafetyCautionLight.copy(alpha = 0.8f) else AviationDarkBorder
 
     val timeSinceText = when {
-        elapsedMinutes == 0 -> "LIVE • 0m"
-        elapsedMinutes < 60 -> "LIVE • ${elapsedMinutes}m"
-        else -> "LIVE • ${elapsedMinutes / 60}h"
+        elapsedMinutes == 0 -> "Last update • 0m"
+        elapsedMinutes < 60 -> "Last update • ${elapsedMinutes}m"
+        else -> "Last update • ${elapsedMinutes / 60}h"
     }
 
     // Dynamic Live Status Chip Composable
