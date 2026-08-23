@@ -408,6 +408,10 @@ class MainActivity : ComponentActivity() {
                                         viewModel.setCategoryFilter(category)
                                         navController.navigate(Screen.Assessment.route)
                                     },
+                                    onNavigateToForecast = {
+                                        viewModel.navigateToForecastDetail()
+                                        navController.navigate(Screen.Assessment.route)
+                                    },
                                     onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                                     onNavigateToMap = { navController.navigate(Screen.Map.route) }
                                 )
@@ -417,6 +421,7 @@ class MainActivity : ComponentActivity() {
                                 AssessmentDetailScreen(
                                     uiState = uiState,
                                     onCategoryFilterSelected = { viewModel.setCategoryFilter(it) },
+                                    onClearScrollToForecast = { viewModel.clearScrollToForecast() },
                                     onNavigateBack = { navController.popBackStack() }
                                 )
                             }
