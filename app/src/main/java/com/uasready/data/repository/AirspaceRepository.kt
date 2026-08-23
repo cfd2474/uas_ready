@@ -28,7 +28,89 @@ class LiveAirspaceRepository : AirspaceRepository {
             var authRequired: Boolean = false
             var uasfmCeiling: Double? = 400.0
 
-            // 1. Try querying openAIP Airspaces API
+            // 1. Query Official FAA Live UAS Facility Map V5 ArcGIS FeatureServer
+            try {
+                val uasfmUrl = "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query?where=1%3D1&geometry=$longitude,$latitude&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=35000&units=esriSRUnit_Meter&outFields=OBJECTID,CEILING,APT1_ICAO,APT1_NAME,AIRSPACE_1&returnGeometry=true&f=geojson"
+                val conn = (URL(uasfmUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 6000
+                    readTimeout = 6000
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", "UASReady-App/1.0")
+                }
+
+                if (conn.responseCode == 200) {
+                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                    val geoJson = JSONObject(responseText)
+                    val features = geoJson.optJSONArray("features") ?: JSONArray()
+
+                    for (i in 0 until features.length()) {
+                        val feature = features.optJSONObject(i) ?: continue
+                        val props = feature.optJSONObject("properties") ?: JSONObject()
+                        val ceiling = props.optDouble("CEILING", 400.0)
+                        val icao = props.optString("APT1_ICAO", "UASFM")
+                        val aptName = props.optString("APT1_NAME", "Airport")
+                        val airClass = props.optString("AIRSPACE_1", "")
+
+                        val geom = feature.optJSONObject("geometry")
+                        val coords = geom?.optJSONArray("coordinates")
+                        val polyPoints = mutableListOf<Pair<Double, Double>>()
+
+                        if (coords != null && coords.length() > 0) {
+                            val ring = coords.optJSONArray(0)
+                            if (ring != null) {
+                                for (p in 0 until ring.length()) {
+                                    val pt = ring.optJSONArray(p)
+                                    if (pt != null && pt.length() >= 2) {
+                                        polyPoints.add(Pair(pt.optDouble(1), pt.optDouble(0)))
+                                    }
+                                }
+                            }
+                        }
+
+                        if (polyPoints.isNotEmpty()) {
+                            val cellId = props.optInt("OBJECTID", i)
+                            val isLaunchInCell = isPointInsidePolygon(latitude, longitude, polyPoints)
+                            if (isLaunchInCell) {
+                                uasfmCeiling = ceiling
+                                if (airClass.isNotBlank()) {
+                                    authRequired = true
+                                    primaryClass = when (airClass.uppercase()) {
+                                        "B" -> AirspaceClass.CLASS_B
+                                        "C" -> AirspaceClass.CLASS_C
+                                        "D" -> AirspaceClass.CLASS_D
+                                        "E" -> AirspaceClass.CLASS_E_SURFACE
+                                        else -> AirspaceClass.CLASS_D
+                                    }
+                                }
+                            }
+
+                            zones.add(
+                                AirspaceZone(
+                                    id = "FAA-UASFM-$cellId",
+                                    name = "$icao UAS Facility Grid (${ceiling.toInt()} ft AGL)",
+                                    type = AirspaceZoneType.ALTITUDE_ZONE,
+                                    centerLat = polyPoints.map { it.first }.average(),
+                                    centerLon = polyPoints.map { it.second }.average(),
+                                    radiusMeters = 500.0,
+                                    floorFt = 0.0,
+                                    ceilingFt = ceiling,
+                                    description = "$aptName ($icao) Class $airClass: Max auto-approved LAANC ceiling is ${ceiling.toInt()} ft AGL.",
+                                    polygonCoordinates = polyPoints
+                                )
+                            )
+                        }
+                    }
+                    if (zones.any { it.type == AirspaceZoneType.ALTITUDE_ZONE }) {
+                        sourceName = "FAA Live UAS Facility Map Service"
+                        Log.i("AirspaceRepo", "Loaded ${zones.count { it.type == AirspaceZoneType.ALTITUDE_ZONE }} official FAA UASFM grid cells")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d("AirspaceRepo", "FAA UASFM API query skipped: ${e.message}")
+            }
+
+            // 2. Query openAIP Airspaces API for controlled and restricted airspace
             try {
                 val distMeters = 40000
                 val openAipUrl = "https://api.core.openaip.net/api/airspaces?page=1&limit=100&pos=$longitude,$latitude&dist=$distMeters"
@@ -59,7 +141,7 @@ class LiveAirspaceRepository : AirspaceRepository {
                             typeInt in listOf(0, 1, 2) -> AirspaceZoneType.RESTRICTED_ZONE
                             icaoClassInt in listOf(1, 2, 3) || typeInt in listOf(3, 4) -> AirspaceZoneType.AUTHORIZATION_ZONE
                             icaoClassInt == 4 -> AirspaceZoneType.WARNING_ZONE
-                            else -> AirspaceZoneType.ALTITUDE_ZONE
+                            else -> AirspaceZoneType.AUTHORIZATION_ZONE
                         }
 
                         var centerLat = latitude
@@ -100,9 +182,6 @@ class LiveAirspaceRepository : AirspaceRepository {
                                 polygonCoordinates = polyPoints
                             )
                         )
-                    }
-                    if (zones.isNotEmpty()) {
-                        sourceName = "openAIP Live Aeronautical API"
                     }
                 }
             } catch (e: Exception) {
