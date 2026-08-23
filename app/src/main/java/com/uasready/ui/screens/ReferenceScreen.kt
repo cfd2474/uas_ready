@@ -1,13 +1,16 @@
 package com.uasready.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -383,7 +386,13 @@ fun ReferenceScreen(
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Text(
                         text = "Add a custom verification item to an existing checklist category:",
                         style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 11.sp)
@@ -444,24 +453,47 @@ fun ReferenceScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // Critical Item Toggle
-                    Row(
+                    // Critical Item Toggle (Structured Card with Aligned Checkbox & High Contrast)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = AviationDarkSurface,
+                        border = BorderStroke(1.dp, if (isCriticalItem) SafetyCautionLight else AviationDarkBorder),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { isCriticalItem = !isCriticalItem }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(
-                            checked = isCriticalItem,
-                            onCheckedChange = { isCriticalItem = it },
-                            colors = CheckboxDefaults.colors(checkedColor = AviationAccent)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Mark as Critical Checklist Item",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary, fontSize = 12.sp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isCriticalItem,
+                                onCheckedChange = { isCriticalItem = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = SafetyCautionLight,
+                                    uncheckedColor = TextSecondary,
+                                    checkmarkColor = AviationDarkBackground
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "CRITICAL CHECKLIST ITEM",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (isCriticalItem) SafetyCautionLight else TextPrimary,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                                Text(
+                                    text = "Mandatory safety verification before launch",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 10.sp)
+                                )
+                            }
+                        }
                     }
                 }
             },

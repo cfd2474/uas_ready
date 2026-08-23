@@ -12,6 +12,8 @@ import com.uasready.domain.model.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+import com.uasready.data.repository.PersistentAircraftRepository
+import com.uasready.domain.model.PilotAuthorityType
 import com.uasready.ui.theme.AppThemeMode
 
 data class MainUiState(
@@ -19,6 +21,7 @@ data class MainUiState(
     val allAircraft: List<Aircraft> = Aircraft.PRESETS,
     val currentPilot: Pilot = Pilot.getDefault(),
     val isPilotSelectionPending: Boolean = true,
+    val showFirstTimeFleetSetup: Boolean = false,
     val themeMode: AppThemeMode = AppThemeMode.AUTO,
     val currentLocation: LocationInfo = LocationInfo.defaultLocation(),
     val flightWindow: FlightWindow = FlightWindow.defaultTwoHours(),
@@ -41,13 +44,19 @@ class MainViewModel @JvmOverloads constructor(
     private val solarRepo: SolarRepository = AstronomicalSolarRepository(),
     private val airspaceRepo: AirspaceRepository = LiveAirspaceRepository(),
     private val terrainRepo: TerrainRepository = LiveTerrainRepository(),
-    private val aircraftRepo: AircraftRepository = InMemoryAircraftRepository(),
+    private val aircraftRepo: AircraftRepository = PersistentAircraftRepository(application),
     private val pilotRepo: PilotRepository = InMemoryPilotRepository(),
     private val assessmentEngine: AssessmentEngine = AssessmentEngine(),
     private val locationManager: DeviceLocationManager = DeviceLocationManager(application)
 ) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(MainUiState())
+    private val setupPrefs = application.getSharedPreferences("uas_ready_setup_prefs", android.content.Context.MODE_PRIVATE)
+
+    private val _uiState = MutableStateFlow(
+        MainUiState(
+            showFirstTimeFleetSetup = !setupPrefs.getBoolean("has_completed_initial_setup", false)
+        )
+    )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     companion object {
@@ -64,7 +73,7 @@ class MainViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             aircraftRepo.selectedAircraftState.collect { selected ->
                 _uiState.update { it.copy(selectedAircraft = selected) }
-                if (!_uiState.value.isPilotSelectionPending) {
+                if (!_uiState.value.isPilotSelectionPending && !_uiState.value.showFirstTimeFleetSetup) {
                     reevaluateAssessment()
                 }
             }
@@ -72,7 +81,7 @@ class MainViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             pilotRepo.pilotState.collect { pilot ->
                 _uiState.update { it.copy(currentPilot = pilot) }
-                if (!_uiState.value.isPilotSelectionPending) {
+                if (!_uiState.value.isPilotSelectionPending && !_uiState.value.showFirstTimeFleetSetup) {
                     reevaluateAssessment()
                 }
             }
@@ -98,14 +107,6 @@ class MainViewModel @JvmOverloads constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error acquiring GPS location: ${e.message}", e)
             }
-        }
-    }
-
-    fun setPilotAuthority(type: PilotAuthorityType) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isPilotSelectionPending = false) }
-            pilotRepo.setAuthority(type)
-            fetchLiveData()
         }
     }
 
@@ -224,6 +225,23 @@ class MainViewModel @JvmOverloads constructor(
         if (!_uiState.value.isPilotSelectionPending) {
             fetchLiveData()
         }
+    }
+
+    fun completeFirstTimeFleetSetup() {
+        _uiState.update { it.copy(showFirstTimeFleetSetup = false) }
+    }
+
+    fun setPilotAuthority(authority: PilotAuthorityType) {
+        pilotRepo.setAuthority(authority)
+        setupPrefs.edit().putBoolean("has_completed_initial_setup", true).apply()
+        _uiState.update {
+            it.copy(
+                currentPilot = Pilot(activeAuthority = authority),
+                isPilotSelectionPending = false,
+                showFirstTimeFleetSetup = false
+            )
+        }
+        fetchLiveData()
     }
 
     fun setCategoryFilter(category: AssessmentCategory?) {
