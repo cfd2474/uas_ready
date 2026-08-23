@@ -483,4 +483,29 @@ class AssessmentEngineTest {
         assertEquals(AssessmentStatus.GO, satsRuleModerate.status)
         assertTrue(satsRuleModerate.explanation.contains("occluded by"))
     }
+
+    @Test
+    fun testNonClassGAirspaceProducesControlledAirspaceWarningAndLaancAdvisory() {
+        val classCAirspace = nominalAirspace.copy(
+            primaryClass = AirspaceClass.CLASS_C,
+            controlledAirspaceAuthorizationRequired = true
+        )
+        val context = AssessmentContext(
+            aircraft = defaultAircraft,
+            pilot = defaultPilot,
+            weather = nominalWeather,
+            forecast = null,
+            spaceWeather = nominalSpaceWeather,
+            airspace = classCAirspace,
+            sunData = nominalSunData,
+            flightWindow = defaultFlightWindow,
+            location = defaultLocation
+        )
+        val result = engine.assess(context)
+        val ctrlRule = result.allRuleResults.first { it.ruleId == "AIR-CTRL-001" }
+        assertEquals(AssessmentStatus.CAUTION, ctrlRule.status)
+        assertTrue(ctrlRule.title.contains("Controlled Airspace Warning"))
+        assertTrue(ctrlRule.explanation.contains("LAANC"))
+    }
 }
+

@@ -64,24 +64,28 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
             )
         }
 
-        // 2. Controlled Airspace Classification & Authorization
-        val isControlled = airspace.primaryClass in listOf(
-            AirspaceClass.CLASS_B,
-            AirspaceClass.CLASS_C,
-            AirspaceClass.CLASS_D,
-            AirspaceClass.CLASS_E_SURFACE
-        )
+        // 2. Controlled Airspace Classification & Authorization (Warning for any Non-Class G)
+        val isNonClassG = airspace.primaryClass != AirspaceClass.CLASS_G
+        val formattedClassName = when (airspace.primaryClass) {
+            AirspaceClass.CLASS_B -> "Class B"
+            AirspaceClass.CLASS_C -> "Class C"
+            AirspaceClass.CLASS_D -> "Class D"
+            AirspaceClass.CLASS_E_SURFACE -> "Class E Surface"
+            AirspaceClass.CLASS_E -> "Class E"
+            AirspaceClass.CLASS_G -> "Class G"
+            AirspaceClass.SPECIAL_USE -> "Special Use Airspace"
+        }
 
-        if (isControlled && airspace.controlledAirspaceAuthorizationRequired) {
+        if (isNonClassG) {
             rules.add(
                 RuleResult(
                     ruleId = "AIR-CTRL-001",
                     category = category,
-                    status = AssessmentStatus.NO_GO,
-                    title = "Controlled Airspace Authorization Required",
-                    inputValueFormatted = airspace.primaryClass.name.replace("_", " "),
-                    thresholdFormatted = "LAANC or FAA Part 107.41 Authorization Required",
-                    explanation = String.format("Flight location is inside %s controlled airspace. Operations require active LAANC authorization or FAA waiver prior to launch.", airspace.primaryClass.name.replace("_", " "))
+                    status = AssessmentStatus.CAUTION,
+                    title = "Controlled Airspace Warning ($formattedClassName)",
+                    inputValueFormatted = formattedClassName,
+                    thresholdFormatted = "LAANC Approval Required",
+                    explanation = String.format("Flight location is within %s controlled airspace. Non-Class G airspace requires FAA authorization. Please check official LAANC applications (e.g. Aloft/AirControl, AutoPylot, AirMap) for approval to fly in controlled airspace.", formattedClassName)
                 )
             )
         } else {
@@ -91,9 +95,9 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
                     category = category,
                     status = AssessmentStatus.GO,
                     title = "Airspace Authorization",
-                    inputValueFormatted = airspace.primaryClass.name.replace("_", " "),
-                    thresholdFormatted = "Uncontrolled / Authorized",
-                    explanation = if (isControlled) "Controlled airspace authorization confirmed." else "Uncontrolled Class G airspace. No prior FAA ATC authorization required."
+                    inputValueFormatted = "Class G (Uncontrolled)",
+                    thresholdFormatted = "Uncontrolled Class G",
+                    explanation = "Flight location is inside uncontrolled Class G airspace. No prior FAA LAANC or ATC authorization required for operations up to 400 ft AGL."
                 )
             )
         }
