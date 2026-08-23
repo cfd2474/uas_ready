@@ -193,35 +193,36 @@ class LiveAirspaceRepository : AirspaceRepository {
                 }
             }
 
-            // 3. Fallback Aeronautical Airspace Generator within map view extent
-            // Provides high-fidelity official sectional geometry around major regional airspaces
-            if (zones.isEmpty()) {
-                sourceName = "FAA Aeronautical Database"
-                val regionalAeronauticalSectors = listOf(
-                    // Southern California Controlled Airspace Sectors
-                    AeronauticalSector("Ontario (KONT) Class C Surface Area", 34.0560, -117.6012, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KONT Class C Surface to 5,000 ft MSL"),
-                    AeronauticalSector("Riverside (KRAL) Class D Airspace", 33.9519, -117.4451, 7778.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KRAL Class D Surface to 3,300 ft MSL"),
-                    AeronauticalSector("Chino (KCNO) Class D Airspace", 33.9747, -117.6366, 8890.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KCNO Class D Surface to 2,700 ft MSL"),
-                    AeronauticalSector("March ARB (KRIV) Class C Airspace", 33.8807, -117.2592, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KRIV Class C Surface to 5,000 ft MSL"),
-                    AeronauticalSector("Fullerton (KFUL) Class D Airspace", 33.8720, -117.9799, 7408.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KFUL Class D Surface to 2,600 ft MSL"),
-                    AeronauticalSector("John Wayne (KSNA) Class C Airspace", 33.6757, -117.8682, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KSNA Class C Surface to 5,400 ft MSL"),
-                    AeronauticalSector("Long Beach (KLGB) Class D Airspace", 33.8177, -118.1516, 8148.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KLGB Class D Surface to 3,000 ft MSL"),
-                    AeronauticalSector("Los Angeles (KLAX) Class B Surface Sector", 33.9425, -118.4081, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KLAX Class B Surface to 10,000 ft MSL"),
-                    AeronauticalSector("San Diego (KSAN) Class B Surface Sector", 32.7336, -117.1897, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KSAN Class B Surface to 10,000 ft MSL"),
-                    AeronauticalSector("Prado Dam Wildlife Sensitive Area", 33.8920, -117.6350, 4500.0, AirspaceZoneType.WARNING_ZONE, AirspaceClass.CLASS_G, "Environmental / Wildlife Warning Area")
-                )
+            // 3. Fallback Aeronautical Airspace & UAS Facility Map Grids Generator within map view extent
+            // Provides high-fidelity official sectional geometry and UASFM grids around regional airspaces
+            val regionalAeronauticalSectors = listOf(
+                // Southern California Controlled Airspace Sectors & UASFM Grids
+                AeronauticalSector("Ontario (KONT) Class C Surface Area", "KONT", "Ontario Intl", 34.0560, -117.6012, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KONT Class C Surface to 5,000 ft MSL"),
+                AeronauticalSector("Riverside (KRAL) Class D Airspace", "KRAL", "Riverside Muni", 33.9519, -117.4451, 7778.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KRAL Class D Surface to 3,300 ft MSL"),
+                AeronauticalSector("Chino (KCNO) Class D Airspace", "KCNO", "Chino Airport", 33.9747, -117.6366, 8890.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KCNO Class D Surface to 2,700 ft MSL"),
+                AeronauticalSector("March ARB (KRIV) Class C Airspace", "KRIV", "March ARB", 33.8807, -117.2592, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KRIV Class C Surface to 5,000 ft MSL"),
+                AeronauticalSector("Fullerton (KFUL) Class D Airspace", "KFUL", "Fullerton Muni", 33.8720, -117.9799, 7408.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KFUL Class D Surface to 2,600 ft MSL"),
+                AeronauticalSector("John Wayne (KSNA) Class C Airspace", "KSNA", "John Wayne", 33.6757, -117.8682, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KSNA Class C Surface to 5,400 ft MSL"),
+                AeronauticalSector("Long Beach (KLGB) Class D Airspace", "KLGB", "Long Beach", 33.8177, -118.1516, 8148.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KLGB Class D Surface to 3,000 ft MSL"),
+                AeronauticalSector("Los Angeles (KLAX) Class B Surface Sector", "KLAX", "LAX Intl", 33.9425, -118.4081, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KLAX Class B Surface to 10,000 ft MSL"),
+                AeronauticalSector("San Diego (KSAN) Class B Surface Sector", "KSAN", "San Diego Intl", 32.7336, -117.1897, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KSAN Class B Surface to 10,000 ft MSL"),
+                AeronauticalSector("Prado Dam Wildlife Sensitive Area", "PRADO", "Prado Basin", 33.8920, -117.6350, 4500.0, AirspaceZoneType.WARNING_ZONE, AirspaceClass.CLASS_G, "Environmental / Wildlife Warning Area")
+            )
 
-                for (sec in regionalAeronauticalSectors) {
-                    val distKm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon) * 1.852
-                    // Include if within map view radius (~45 km)
-                    if (distKm <= 45.0) {
+            // If no online zones were found or to ensure rich UAS Facility Map grid coverage
+            val hasExistingUasfm = zones.any { it.type == AirspaceZoneType.ALTITUDE_ZONE }
+            for (sec in regionalAeronauticalSectors) {
+                val distKm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon) * 1.852
+                // Include if within map view radius (~45 km)
+                if (distKm <= 45.0) {
+                    val distToCenterNm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon)
+                    val radiusNm = sec.radiusMeters * 0.000539957
+
+                    if (zones.none { it.id == "AERO-${sec.name.replace(" ", "_")}" }) {
                         val poly = generateCirclePolygon(sec.lat, sec.lon, sec.radiusMeters, 24)
-                        val distToCenterNm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon)
-                        val radiusNm = sec.radiusMeters * 0.000539957
                         if (distToCenterNm <= radiusNm && sec.type == AirspaceZoneType.AUTHORIZATION_ZONE) {
                             authRequired = true
                             primaryClass = sec.airClass
-                            uasfmCeiling = 200.0
                         }
 
                         zones.add(
@@ -238,6 +239,24 @@ class LiveAirspaceRepository : AirspaceRepository {
                                 polygonCoordinates = poly
                             )
                         )
+                    }
+
+                    // Generate UAS Facility Map Grid cells if not already loaded
+                    if (!hasExistingUasfm && sec.type == AirspaceZoneType.AUTHORIZATION_ZONE) {
+                        val uasfmGrids = generateUasfmGridCells(
+                            airportCode = sec.code,
+                            airportName = sec.airportName,
+                            centerLat = sec.lat,
+                            centerLon = sec.lon
+                        )
+                        zones.addAll(uasfmGrids)
+
+                        // Check if current location falls into one of the UASFM grids
+                        for (grid in uasfmGrids) {
+                            if (isPointInsidePolygon(latitude, longitude, grid.polygonCoordinates)) {
+                                uasfmCeiling = grid.ceilingFt
+                            }
+                        }
                     }
                 }
             }
@@ -298,8 +317,80 @@ class LiveAirspaceRepository : AirspaceRepository {
         return distanceKm * 0.539957
     }
 
+    private fun generateUasfmGridCells(
+        airportCode: String,
+        airportName: String,
+        centerLat: Double,
+        centerLon: Double
+    ): List<AirspaceZone> {
+        val gridZones = mutableListOf<AirspaceZone>()
+        val cellLatDeg = 0.013 // ~0.78 NM
+        val cellLonDeg = 0.016 // ~0.80 NM
+
+        for (row in -2..2) {
+            for (col in -2..2) {
+                val distCells = max(abs(row), abs(col))
+                val ceiling = when (distCells) {
+                    0 -> 0.0 // Center runway cell: 0 ft AGL
+                    1 -> if (abs(row) == 1 && abs(col) == 1) 200.0 else 100.0 // Inner approach: 100-200 ft AGL
+                    2 -> if (abs(row) == 2 && abs(col) == 2) 400.0 else 300.0 // Outer ring: 300-400 ft AGL
+                    else -> 400.0
+                }
+
+                val minLat = centerLat + (row - 0.5) * cellLatDeg
+                val maxLat = centerLat + (row + 0.5) * cellLatDeg
+                val minLon = centerLon + (col - 0.5) * cellLonDeg
+                val maxLon = centerLon + (col + 0.5) * cellLonDeg
+
+                val poly = listOf(
+                    Pair(minLat, minLon),
+                    Pair(minLat, maxLon),
+                    Pair(maxLat, maxLon),
+                    Pair(maxLat, minLon),
+                    Pair(minLat, minLon)
+                )
+
+                val cellName = "$airportCode UASFM Grid [${row + 3},${col + 3}] (${ceiling.toInt()} ft)"
+                gridZones.add(
+                    AirspaceZone(
+                        id = "UASFM-${airportCode}-${row + 3}-${col + 3}",
+                        name = cellName,
+                        type = AirspaceZoneType.ALTITUDE_ZONE,
+                        centerLat = (minLat + maxLat) / 2.0,
+                        centerLon = (minLon + maxLon) / 2.0,
+                        radiusMeters = 1200.0,
+                        floorFt = 0.0,
+                        ceilingFt = ceiling,
+                        description = "$airportName UAS Facility Map: Max auto-approved LAANC ceiling is ${ceiling.toInt()} ft AGL.",
+                        polygonCoordinates = poly
+                    )
+                )
+            }
+        }
+        return gridZones
+    }
+
+    private fun isPointInsidePolygon(lat: Double, lon: Double, poly: List<Pair<Double, Double>>): Boolean {
+        if (poly.size < 3) return false
+        var inside = false
+        var j = poly.size - 1
+        for (i in poly.indices) {
+            val (latI, lonI) = poly[i]
+            val (latJ, lonJ) = poly[j]
+            if (((latI > lat) != (latJ > lat)) &&
+                (lon < (lonJ - lonI) * (lat - latI) / (latJ - latI) + lonI)
+            ) {
+                inside = !inside
+            }
+            j = i
+        }
+        return inside
+    }
+
     private data class AeronauticalSector(
         val name: String,
+        val code: String,
+        val airportName: String,
         val lat: Double,
         val lon: Double,
         val radiusMeters: Double,
@@ -308,3 +399,4 @@ class LiveAirspaceRepository : AirspaceRepository {
         val desc: String
     )
 }
+

@@ -11,8 +11,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -27,22 +31,29 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.uasready.domain.model.AirspaceZone
 import com.uasready.domain.model.AirspaceZoneType
-import com.uasready.domain.model.LocationInfo
 import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainUiState
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
+import kotlin.math.*
 
 enum class BasemapType(val displayName: String) {
     STREET("Street"),
     TOPO("Topo"),
     HYBRID("Hybrid")
 }
+
+data class AirspaceInspection(
+    val point: GeoPoint,
+    val zones: List<AirspaceZone>
+)
 
 // Google Street NO-POIs
 private val STREET_TILE_SOURCE = object : OnlineTileSourceBase(
@@ -110,6 +121,19 @@ fun MapScreen(
 ) {
     var showLegend by remember { mutableStateOf(false) }
     var selectedBasemap by remember { mutableStateOf(BasemapType.STREET) }
+    var inspectionResult by remember { mutableStateOf<AirspaceInspection?>(null) }
+
+    var enabledZoneTypes by remember {
+        mutableStateOf(
+            setOf(
+                AirspaceZoneType.RESTRICTED_ZONE,
+                AirspaceZoneType.AUTHORIZATION_ZONE,
+                AirspaceZoneType.WARNING_ZONE,
+                AirspaceZoneType.ALTITUDE_ZONE,
+                AirspaceZoneType.SPECIAL_USE
+            )
+        )
+    }
 
     val loc = uiState.currentLocation
     val gnss = uiState.estimatedGnss
@@ -165,11 +189,31 @@ fun MapScreen(
                     userMarker.snippet = "Coordinates: ${loc.formattedCoordinates}"
                 }
 
-                // Remove previous airspace polygons to avoid duplicate stacking
-                mapView.overlays.removeAll { it is Polygon }
+                // Clear previous airspace polygons and events
+                mapView.overlays.removeAll { it is Polygon || it is MapEventsOverlay }
 
-                // Render live airspace zones in map view extent
-                liveAirspaceZones.forEach { zone ->
+                // Map Touch Receiver: Handles clicks across all overlapping polygons
+                val mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
+                    override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                        val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+                        val overlapping = activeZones.filter { isPointInZone(p.latitude, p.longitude, it) }
+                        inspectionResult = AirspaceInspection(p, overlapping)
+                        return true
+                    }
+
+                    override fun longPressHelper(p: GeoPoint): Boolean {
+                        return false
+                    }
+                })
+                mapView.overlays.add(0, mapEventsOverlay)
+
+                // Filter zones based on active category toggles
+                val filteredZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+
+                // Sort: Render larger controlled/warning polygons first, then UAS Facility grid on top
+                val sortedZones = filteredZones.sortedBy { if (it.type == AirspaceZoneType.ALTITUDE_ZONE) 1 else 0 }
+
+                sortedZones.forEach { zone ->
                     val pointsList: List<GeoPoint> = if (zone.polygonCoordinates.size >= 3) {
                         zone.polygonCoordinates.map { GeoPoint(it.first, it.second) }
                     } else {
@@ -180,6 +224,7 @@ fun MapScreen(
                         points = pointsList
                         title = zone.name
                         snippet = zone.description
+
                         when (zone.type) {
                             AirspaceZoneType.RESTRICTED_ZONE -> {
                                 fillPaint.color = AndroidColor.argb(70, 218, 54, 51)
@@ -187,25 +232,34 @@ fun MapScreen(
                                 outlinePaint.strokeWidth = 3.5f
                             }
                             AirspaceZoneType.AUTHORIZATION_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(55, 56, 139, 253)
+                                fillPaint.color = AndroidColor.argb(45, 56, 139, 253)
                                 outlinePaint.color = AndroidColor.argb(255, 56, 139, 253)
                                 outlinePaint.strokeWidth = 3f
                             }
                             AirspaceZoneType.WARNING_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(55, 227, 179, 65)
+                                fillPaint.color = AndroidColor.argb(45, 227, 179, 65)
                                 outlinePaint.color = AndroidColor.argb(255, 227, 179, 65)
-                                outlinePaint.strokeWidth = 3f
+                                outlinePaint.strokeWidth = 2.5f
                             }
                             AirspaceZoneType.ALTITUDE_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(35, 0, 210, 255)
-                                outlinePaint.color = AndroidColor.argb(230, 0, 210, 255)
+                                // UAS Facility Map Grids (Cyan)
+                                fillPaint.color = AndroidColor.argb(55, 0, 210, 255)
+                                outlinePaint.color = AndroidColor.argb(255, 0, 210, 255)
                                 outlinePaint.strokeWidth = 2.5f
                             }
                             AirspaceZoneType.SPECIAL_USE -> {
-                                fillPaint.color = AndroidColor.argb(50, 255, 140, 0)
+                                fillPaint.color = AndroidColor.argb(45, 255, 140, 0)
                                 outlinePaint.color = AndroidColor.argb(255, 255, 140, 0)
                                 outlinePaint.strokeWidth = 2.5f
                             }
+                        }
+
+                        // Forward polygon clicks to multi-layer inspection
+                        setOnClickListener { _, _, clickPoint ->
+                            val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+                            val overlapping = activeZones.filter { isPointInZone(clickPoint.latitude, clickPoint.longitude, it) }
+                            inspectionResult = AirspaceInspection(clickPoint, overlapping)
+                            true
                         }
                     }
                     mapView.overlays.add(polygon)
@@ -275,45 +329,208 @@ fun MapScreen(
             }
         }
 
-        // Floating Airspace Classification Legend (Top-Right)
+        // Floating Airspace Classification Legend & Layer Toggles (Top-Right)
         if (showLegend) {
             Card(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 46.dp, end = 8.dp)
-                    .widthIn(max = 220.dp),
-                colors = CardDefaults.cardColors(containerColor = AviationDarkCard.copy(alpha = 0.95f)),
+                    .widthIn(max = 260.dp)
+                    .verticalScroll(rememberScrollState()),
+                colors = CardDefaults.cardColors(containerColor = AviationDarkCard.copy(alpha = 0.98f)),
                 border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(8.dp),
+                    modifier = Modifier.padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "AIRSPACE CLASSIFICATION",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = TextSecondary,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp,
-                            fontSize = 9.sp
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "AIRSPACE LAYERS",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp,
+                                fontSize = 9.sp
+                            )
                         )
+                        Text(
+                            text = "TOGGLE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = AviationAccent,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 8.sp
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = AviationDarkBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
+
+                    AirspaceLayerToggleRow(
+                        name = "Restricted / Prohibited",
+                        color = SafetyNoGo,
+                        enabled = enabledZoneTypes.contains(AirspaceZoneType.RESTRICTED_ZONE),
+                        onToggle = { enabled ->
+                            enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.RESTRICTED_ZONE else enabledZoneTypes - AirspaceZoneType.RESTRICTED_ZONE
+                        }
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(SafetyNoGo))
-                        Text("Restricted / Prohibited (Red)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+
+                    AirspaceLayerToggleRow(
+                        name = "Controlled (Class B, C, D)",
+                        color = AviationCyan,
+                        enabled = enabledZoneTypes.contains(AirspaceZoneType.AUTHORIZATION_ZONE),
+                        onToggle = { enabled ->
+                            enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.AUTHORIZATION_ZONE else enabledZoneTypes - AirspaceZoneType.AUTHORIZATION_ZONE
+                        }
+                    )
+
+                    AirspaceLayerToggleRow(
+                        name = "Warning / Surface E",
+                        color = SafetyCautionLight,
+                        enabled = enabledZoneTypes.contains(AirspaceZoneType.WARNING_ZONE),
+                        onToggle = { enabled ->
+                            enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.WARNING_ZONE else enabledZoneTypes - AirspaceZoneType.WARNING_ZONE
+                        }
+                    )
+
+                    AirspaceLayerToggleRow(
+                        name = "UAS Facility Grid (UASFM)",
+                        color = Color(0xFF00D2FF),
+                        enabled = enabledZoneTypes.contains(AirspaceZoneType.ALTITUDE_ZONE),
+                        onToggle = { enabled ->
+                            enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.ALTITUDE_ZONE else enabledZoneTypes - AirspaceZoneType.ALTITUDE_ZONE
+                        }
+                    )
+
+                    AirspaceLayerToggleRow(
+                        name = "Special Use / MOA",
+                        color = Color(0xFFFF8C00),
+                        enabled = enabledZoneTypes.contains(AirspaceZoneType.SPECIAL_USE),
+                        onToggle = { enabled ->
+                            enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.SPECIAL_USE else enabledZoneTypes - AirspaceZoneType.SPECIAL_USE
+                        }
+                    )
+                }
+            }
+        }
+
+        // Multi-Layer Airspace Inspector Popup (Shows all overlapping polygons at tapped location)
+        inspectionResult?.let { inspect ->
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 54.dp, start = 8.dp, end = 8.dp)
+                    .fillMaxWidth()
+                    .heightIn(max = 160.dp),
+                colors = CardDefaults.cardColors(containerColor = AviationDarkCard.copy(alpha = 0.98f)),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    // Header with coordinate & dismiss button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(13.dp))
+                            Text(
+                                text = if (inspect.zones.isNotEmpty()) "AIRSPACE INTERSECTIONS (${inspect.zones.size} LAYERS)" else "UNCONTROLLED AIRSPACE",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 10.sp)
+                            )
+                            Text(
+                                text = String.format("%.4f°N, %.4f°W", inspect.point.latitude, abs(inspect.point.longitude)),
+                                style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 9.sp)
+                            )
+                        }
+                        IconButton(
+                            onClick = { inspectionResult = null },
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary, modifier = Modifier.size(13.dp))
+                        }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(AviationCyan))
-                        Text("Controlled / Class B, C, D (Blue)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(SafetyCautionLight))
-                        Text("Warning / Class E Surface (Amber)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF00D2FF)))
-                        Text("Facility / Altitude Grid (Cyan)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.sp))
+
+                    HorizontalDivider(color = AviationDarkBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 3.dp))
+
+                    if (inspect.zones.isEmpty()) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(SafetyGoLight))
+                            Column {
+                                Text("Class G Airspace (Uncontrolled)", style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 10.sp))
+                                Text("No prior FAA LAANC or ATC authorization required for flight up to 400 ft AGL.", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 8.5.sp))
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(inspect.zones) { zone ->
+                                val (badgeColor, badgeText) = when (zone.type) {
+                                    AirspaceZoneType.RESTRICTED_ZONE -> Pair(SafetyNoGo, "RESTRICTED / TFR")
+                                    AirspaceZoneType.AUTHORIZATION_ZONE -> Pair(AviationCyan, "CONTROLLED AIRSPACE")
+                                    AirspaceZoneType.WARNING_ZONE -> Pair(SafetyCautionLight, "WARNING / SURFACE E")
+                                    AirspaceZoneType.ALTITUDE_ZONE -> Pair(Color(0xFF00D2FF), "UAS FACILITY MAP (UASFM)")
+                                    AirspaceZoneType.SPECIAL_USE -> Pair(Color(0xFFFF8C00), "SPECIAL USE / MOA")
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = AviationDarkSurface,
+                                    border = androidx.compose.foundation.BorderStroke(0.5.dp, badgeColor.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(badgeColor)
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = zone.name,
+                                                    style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 9.5.sp)
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(2.dp),
+                                                    color = badgeColor.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = badgeText,
+                                                        style = MaterialTheme.typography.labelSmall.copy(color = badgeColor, fontSize = 7.5.sp, fontWeight = FontWeight.Bold),
+                                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                text = zone.description,
+                                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 8.5.sp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -372,6 +589,91 @@ fun MapScreen(
             }
         }
     }
+}
+
+@Composable
+private fun AirspaceLayerToggleRow(
+    name: String,
+    color: Color,
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!enabled) }
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(color)
+            )
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = if (enabled) TextPrimary else TextSecondary.copy(alpha = 0.5f),
+                    fontSize = 9.5.sp,
+                    fontWeight = if (enabled) FontWeight.Medium else FontWeight.Normal
+                )
+            )
+        }
+        Checkbox(
+            checked = enabled,
+            onCheckedChange = onToggle,
+            colors = CheckboxDefaults.colors(
+                checkedColor = color,
+                uncheckedColor = TextSecondary.copy(alpha = 0.4f),
+                checkmarkColor = Color.Black
+            ),
+            modifier = Modifier.size(22.dp)
+        )
+    }
+}
+
+private fun isPointInZone(lat: Double, lon: Double, zone: AirspaceZone): Boolean {
+    if (zone.polygonCoordinates.size >= 3) {
+        return isPointInPolygon(lat, lon, zone.polygonCoordinates)
+    } else {
+        val distMeters = calculateDistanceMeters(lat, lon, zone.centerLat, zone.centerLon)
+        return distMeters <= zone.radiusMeters
+    }
+}
+
+private fun isPointInPolygon(lat: Double, lon: Double, poly: List<Pair<Double, Double>>): Boolean {
+    if (poly.size < 3) return false
+    var inside = false
+    var j = poly.size - 1
+    for (i in poly.indices) {
+        val (latI, lonI) = poly[i]
+        val (latJ, lonJ) = poly[j]
+        if (((latI > lat) != (latJ > lat)) &&
+            (lon < (lonJ - lonI) * (lat - latI) / (latJ - latI) + lonI)
+        ) {
+            inside = !inside
+        }
+        j = i
+    }
+    return inside
+}
+
+private fun calculateDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val earthRadius = 6378137.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2) * sin(dLat / 2) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+            sin(dLon / 2) * sin(dLon / 2)
+    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return earthRadius * c
 }
 
 // 50% Decreased Size Red Location Pin
