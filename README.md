@@ -3,29 +3,43 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026%2B)-brightgreen.svg)](https://developer.android.com)
+[![Device Target](https://img.shields.io/badge/Target-DJI%20RC%20Pro%20Enterprise-blue.svg)]()
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-blue.svg)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-blueviolet.svg)](https://developer.android.com/jetpack/compose)
 [![Deterministic](https://img.shields.io/badge/Rules%20Engine-100%25%20Deterministic-orange.svg)]()
 
-**UASReady** is a purpose-built tactical and commercial preflight flight-readiness assessment application for small Unmanned Aircraft Systems (sUAS). Built for public safety agencies, Part 107 remote pilots, and critical infrastructure inspectors, UASReady evaluates live weather, NOAA space weather telemetry, FAA/COA airspace rules, exact solar ephemeris, and aircraft limitations to produce an immediate, explainable **GO / CAUTION / NO-GO** flight safety verdict.
+**UASReady** is a purpose-built tactical and commercial preflight flight-readiness assessment application for small Unmanned Aircraft Systems (sUAS), optimized specifically for the **DJI RC Pro Enterprise** controller (5.5" IPS 1920×1080 fixed landscape canvas). Engineered for public safety agencies, Part 107 remote pilots, and critical infrastructure inspectors, UASReady evaluates live weather, NOAA space weather telemetry, FAA airspace rules, exact solar ephemeris, and aircraft limitations to produce an immediate, explainable **GO / CAUTION / NO-GO** flight safety verdict.
 
 ---
 
-## ⚡ Key Highlights
+## ⚡ Key Capabilities & Features
 
 - **100% Deterministic Safety Engine**: Zero opaque AI hallucinations. Every flight determination is backed by transparent rule evaluations with human-readable rationales and explicit parameter thresholds.
-- **Connectivity Gating**: If critical live data cannot be retrieved or verified, the system automatically gates the assessment with a `DATA UNAVAILABLE` verdict, preventing false GO determinations in degraded operational environments.
-- **FAA Part 107 vs Public-Safety COA/COW Switching**: Instant toggling between standard Part 107 limitations (400 ft AGL, 3 SM visibility, daylight/civil twilight) and Agency COA/COW authorizations (elevated altitude ceilings, waived cloud clearances, emergency night operations).
-- **Public-Safety Dark-First Design**: Tactical, high-contrast Material 3 UI engineered for rapid outdoor scanning under intense sunlight or night-vision conditions.
+- **Pilot Operating Authority Mode**:
+  - **Licensed Pilot (14 CFR Part 107)**: Full day and nighttime operational clearance (with 3 SM anti-collision lighting).
+  - **Non-licensed / Not Permitted for Night Flight**: Strict daylight operating window enforcement (30 minutes before sunrise to 30 minutes after sunset). Provides real-time daylight minutes remaining and sunset advisory notices.
+- **Dedicated Emergency Procedures SOP**: Complete 10-step emergency protocol covering Return-to-Home (RTH), emergency descent, critical battery procedures, signal loss, obstacle collision, unexpected weather, water avoidance, firmware glitches, emergency evasive regulatory exemptions, and post-incident coordinator inspection.
+- **Operational Checklists & Custom Item Modal**: Aviation-standard read-only checklists for Preflight Inspection, Launch Readiness, and Postflight Secure, plus an interactive "+ Add Checklist Item" modal for department-specific SOP additions.
+- **Verified DJI Enterprise Fleet Limits**: Built-in manufacturer environmental specifications sourced directly from official technical limits (`Reference/DJI_Fleet_Environmental_Limits.xlsx`), covering:
+  - Matrice 350 RTK, Matrice 300 RTK, Matrice 400
+  - Matrice 30 / 30T, Matrice 4E / 4T, Matrice 4D / 4TD (Dock 3)
+  - Mavic 3E / 3T Enterprise Series, Mavic 3TA, Mavic 3M Multispectral
+  - DJI Mini 4 Pro, Mini 3 Pro, Mini 3
+  - Plus Autel Robotics, Skydio, and Parrot airframes with custom aircraft configuration support.
+- **Fleet Management Filtering**: Manufacturer dropdown filter and real-time search filtering across commercial fleet presets.
+- **Multi-Source Basemap & Tactical Map Overlay**:
+  - Google Street (No-POIs)
+  - Google Terrain / Topographic (No-POIs)
+  - Google Hybrid / Satellite (No-POIs)
+  - Standard OpenStreetMap and OpenTopoMap
+  - Interactive radius range rings (500ft, 1000ft, 0.5 SM, 1.0 SM, 3.0 SM), live coordinate readouts, and terrain elevation profiling.
 - **Live Environmental Telemetry**:
   - **Live Weather**: Open-Meteo & NOAA NWS hourly forecasts, sustained wind & gust limits, precipitation, and cloud base ceiling calculations.
   - **Space Weather & Geomagnetic Storms**: NOAA Space Weather Prediction Center (SWPC) live planetary Kp index and G-scale alerts for GPS/GNSS multi-rotor stability.
-  - **Astronomical Solar Ephemeris**: Exact NOAA solar noon, equation of time, civil twilight, and daylight tracking for night waiver enforcement.
-  - **Live Airspace Buffer Evaluation**: Class B/C/D/E surface areas and airport distance buffers.
-- **Fleet & Limitation Profiles**: Predefined commercial sUAS specifications (DJI Matrice 350 RTK, M30T, Mavic 3 Enterprise/Thermal, Autel EVO Max 4T, Skydio X10/X2D, Parrot ANAFI USA) plus custom aircraft profile builder.
-- **Flight Window Timeline**: 30-minute interval predictive safety assessment across scheduled mission windows.
-- **OpenStreetMap Tactical Tactical Viewer**: Launch site coordinate readouts, elevation calculation, radius range rings, and map overlay layers.
-- **Tactical Checklists & CSV Importer**: Preflight, Launch, and Postflight safety checklists with custom CSV upload support.
+  - **Astronomical Solar Ephemeris**: Local-device timezone aware ephemeris calculating exact civil dawn, sunrise, sunset, and civil dusk.
+  - **Airspace Buffer Evaluation**: Class B/C/D/E surface areas and airport distance buffers.
+- **DJI RC Pro Enterprise Landscape Optimization**: Hardcoded for 640 × 360 dp landscape canvas with high-contrast sunlight readability (≥ 7:1 ratio), 56 dp thumb-zone touch targets, and zero gesture conflicts with live mapping surfaces.
+- **Day / Night Appearance**: Seamless Dark, Light, and System (Auto) theme support.
 
 ---
 
@@ -34,45 +48,33 @@
 | Safety Status | Condition | Operator Action |
 | :--- | :--- | :--- |
 | 🟢 **GO** | All environmental, regulatory, and aircraft limits are fully met. | Proceed with standard preflight checklist & launch. |
-| 🟡 **CAUTION** | Marginal conditions (gusts near limit, elevated Kp index, civil twilight). | Heightened vigilance, review advisory notes, verify abort criteria. |
-| 🔴 **NO-GO** | Hard limitation breached (excessive winds, precipitation, airspace violation, night without waiver). | **Flight prohibited.** Abort mission or relocate launch zone. |
+| 🟡 **CAUTION** | Marginal conditions (gusts near limit, elevated Kp index, civil twilight, flight window ending near dusk). | Heightened vigilance, review advisory notes, verify abort criteria. |
+| 🔴 **NO-GO** | Hard limitation breached (excessive winds, precipitation, airspace violation, night flight without Part 107 license). | **Flight prohibited.** Abort mission or relocate launch zone. |
 | ⚪ **DATA UNAVAILABLE** | Network lost or stale telemetry (>60 min). | Acquire connectivity or switch to verified offline scenario drill. |
 
 ---
 
-## 📱 App Footer & Dynamic Versioning
-
-The application features a pinned status line in the footer across all navigation screens showing the build index and version:
-
-```
-UAS READY // FLIGHT READINESS                v1.0.0 (Build 1)
-```
-
-Each new release automatically increments the build index and version number, keeping field operators informed of their exact client build.
-
----
-
-## 📦 Releases
+## 📦 Releases & Versioning
 
 All signed production APKs are organized in the `releases/` directory:
 
 ```
 releases/
 ├── current/
-│   └── UASReady-v1.0.0.apk       # Current active signed release APK
+│   └── UASReady-v1.3.24.apk       # Current active signed release APK
 └── archive/
-    └── UASReady-v0.9.0.apk       # Historical release APKs labeled by version
+    └── UASReady-v1.3.23.apk       # Historical release APKs labeled by version
 ```
 
 ### Automated Release Workflow
 Use the automated PowerShell release engine in `scripts/`:
 
 ```powershell
-# Bump patch version (1.0.0 -> 1.0.1) and generate signed release APK
+# Bump patch version (e.g. 1.3.23 -> 1.3.24) and generate signed release APK
 .\scripts\bump_and_release.ps1 -BumpType patch
 
-# Bump minor version (1.0.0 -> 1.1.0) and push directly to GitHub
-.\scripts\bump_and_release.ps1 -BumpType minor -GitPush
+# Bump minor version and push directly to GitHub
+.\scripts\bump_and_release.ps1 -BumpType minor -GitPush -CommitMessage "Release summary"
 ```
 
 ---
@@ -82,15 +84,15 @@ Use the automated PowerShell release engine in `scripts/`:
 ```
 com.uasready/
 ├── domain/                      # Pure Kotlin Core
-│   ├── model/                   # Aircraft, Pilot, Weather, SpaceWeather, Airspace, Assessment
+│   ├── model/                   # Aircraft, Pilot, Weather, SpaceWeather, Airspace, Assessment, Checklist
 │   └── engine/                  # Deterministic Rules Engine & Category Evaluators
 │       └── rules/               # Weather, Airspace, SpaceWeather, Daylight, Aircraft, Pilot
 ├── data/                        # Repository Layer & Telemetry Feed Handlers
 │   ├── repository/              # LiveWeather, LiveSpaceWeather, Solar, Airspace, Fleet
-│   └── scenario/                # 10 Scenario Field Drills (Simulators)
+│   └── sim/                     # Scenario Field Drills (Simulators)
 └── ui/                          # Presentation Layer (Jetpack Compose & Material 3)
     ├── components/              # StatusBanners, MetricCards, AuditCards
-    ├── screens/                 # Home, Assessment, Map, Timeline, Fleet, Pilot, Checklists, Settings
+    ├── screens/                 # Home, Assessment, Map, Timeline, Fleet, Pilot, Reference, Settings
     ├── navigation/              # Navigation Host & Route Destinations
     └── theme/                   # High-Contrast Public-Safety Color Palette & Typography
 ```
@@ -99,7 +101,7 @@ com.uasready/
 - **Language**: Kotlin 1.9.24
 - **UI Toolkit**: Jetpack Compose & Material 3 (100% Declarative)
 - **Networking**: OkHttp 4.12 & Kotlinx Serialization
-- **GIS / Mapping**: OSMDroid 6.1.18 (OpenStreetMap)
+- **GIS / Mapping**: OSMDroid 6.1.18 (OpenStreetMap + Google Tile Overlays)
 - **Ephemeris Algorithms**: NOAA Solar Calculator Ephemeris (Exact Sunrise, Sunset, Civil Twilight)
 - **Unit Testing**: JUnit 4 & Coroutines Test Harness (100% deterministic test coverage)
 

@@ -202,12 +202,12 @@ class MainActivity : ComponentActivity() {
                                             Icon(Icons.Default.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(22.dp))
                                             Spacer(modifier = Modifier.height(6.dp))
                                             Text(
-                                                text = "Non-licensed Pilot",
+                                                text = "Non-licensed/Not permitted for night flight",
                                                 textAlign = TextAlign.Center,
                                                 style = MaterialTheme.typography.labelMedium.copy(
                                                     color = TextPrimary,
                                                     fontWeight = FontWeight.Bold,
-                                                    fontSize = 12.sp
+                                                    fontSize = 11.sp
                                                 )
                                             )
                                             Text(
