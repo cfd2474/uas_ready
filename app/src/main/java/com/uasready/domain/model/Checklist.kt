@@ -7,7 +7,7 @@ enum class ChecklistCategory(val title: String) {
     PREFLIGHT("Aircraft Preflight"),
     LAUNCH("Launch Readiness"),
     POSTFLIGHT("Postflight Inspection"),
-    CUSTOM("Custom Organization Reference")
+    CUSTOM("Custom Reference")
 }
 
 @Serializable
@@ -28,7 +28,7 @@ data class ChecklistGroup(
 ) {
     companion object {
         /**
-         * Default aviation and public-safety read-only checklists as specified in guidance.md.
+         * Default aviation and public-safety read-only checklists.
          */
         val DEFAULT_CHECKLISTS: List<ChecklistGroup> = listOf(
             ChecklistGroup(
@@ -73,66 +73,70 @@ data class ChecklistGroup(
                 )
             )
         )
+    }
+}
 
-        /**
-         * Parses a CSV string into a ChecklistGroup.
-         * Expected CSV format:
-         * Title, Description, IsCritical
-         */
-        fun parseFromCsv(title: String, csvContent: String): ChecklistGroup {
-            val items = mutableListOf<ChecklistItem>()
-            val lines = csvContent.lines().filter { it.isNotBlank() }
-            
-            lines.forEachIndexed { index, rawLine ->
-                // Skip header if present
-                val line = rawLine.trim()
-                if (index == 0 && (line.startsWith("Title", ignoreCase = true) || line.startsWith("Item", ignoreCase = true))) {
-                    return@forEachIndexed
-                }
-                val parts = parseCsvLine(line)
-                if (parts.isNotEmpty()) {
-                    val itemTitle = parts[0].trim()
-                    val desc = parts.getOrNull(1)?.trim() ?: ""
-                    val isCritical = parts.getOrNull(2)?.trim()?.equals("true", ignoreCase = true) ?: false
-                    items.add(
-                        ChecklistItem(
-                            id = "csv_item_${index + 1}",
-                            title = itemTitle,
-                            description = desc,
-                            isCritical = isCritical
-                        )
-                    )
-                }
-            }
-
-            return ChecklistGroup(
-                id = "custom_${System.currentTimeMillis()}",
-                category = ChecklistCategory.CUSTOM,
-                title = title,
-                items = items
+@Serializable
+data class EmergencyProcedure(
+    val stepNumber: Int,
+    val title: String,
+    val description: String,
+    val isCriticalWarning: Boolean = false
+) {
+    companion object {
+        val DEFAULT_PROCEDURES: List<EmergencyProcedure> = listOf(
+            EmergencyProcedure(
+                1,
+                "Return to Home (RTH)",
+                "In case of signal loss, low battery, or other emergencies, use the Return to Home function. The drone will automatically return to its takeoff point. This function should be pre-set before flight."
+            ),
+            EmergencyProcedure(
+                2,
+                "Emergency Landing",
+                "If you encounter an issue that requires immediate landing, slowly descend to a safe location. Be mindful of people, animals, and obstacles in the landing area."
+            ),
+            EmergencyProcedure(
+                3,
+                "Battery Issues",
+                "If the battery level becomes critically low during flight, land as soon as safely possible. Avoid depleting the battery completely, as it may lead to a loss of control.",
+                isCriticalWarning = true
+            ),
+            EmergencyProcedure(
+                4,
+                "Signal Loss",
+                "If you lose the control signal, stay calm. The drone should automatically initiate the Return to Home process if it can't re-establish a connection within a set time."
+            ),
+            EmergencyProcedure(
+                5,
+                "Obstacle Collision",
+                "If your drone collides with an obstacle, assess the situation. If the drone is still operational, carefully navigate it back and land. If control is lost, use the RTH feature if possible."
+            ),
+            EmergencyProcedure(
+                6,
+                "Weather Changes",
+                "If you encounter unexpected bad weather, such as high winds or rain, return and land the drone immediately to avoid loss of control or damage."
+            ),
+            EmergencyProcedure(
+                7,
+                "Avoid Water",
+                "If flying near water and facing an emergency, do everything possible to avoid landing in water, as this can severely damage the drone."
+            ),
+            EmergencyProcedure(
+                8,
+                "Firmware/Software Glitches",
+                "If you experience technical issues related to firmware or software, try to safely land the drone. Avoid complex maneuvers until you can troubleshoot the issue on the ground."
+            ),
+            EmergencyProcedure(
+                9,
+                "Emergency Evasive Action",
+                "Established flight regulations can be violated in an emergency situation if doing so will prevent an inflight emergency.",
+                isCriticalWarning = true
+            ),
+            EmergencyProcedure(
+                10,
+                "Post-Incident Inspection",
+                "After any emergency or hard landing, thoroughly inspect your drone for damage before the next flight. Any drone that has experienced a \"crash\" should be sent to the UAS coordinator for inspection."
             )
-        }
-
-        private fun parseCsvLine(line: String): List<String> {
-            val result = mutableListOf<String>()
-            val sb = java.lang.StringBuilder()
-            var inQuotes = false
-            for (ch in line.toCharArray()) {
-                when (ch) {
-                    '"' -> inQuotes = !inQuotes
-                    ',' -> {
-                        if (inQuotes) {
-                            sb.append(ch)
-                        } else {
-                            result.add(sb.toString())
-                            sb.setLength(0)
-                        }
-                    }
-                    else -> sb.append(ch)
-                }
-            }
-            result.add(sb.toString())
-            return result
-        }
+        )
     }
 }

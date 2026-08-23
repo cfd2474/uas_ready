@@ -50,20 +50,29 @@ class DomainModelsTest {
     }
 
     @Test
-    fun testCsvChecklistParsing() {
-        val csv = """
-            Item Title, Description, IsCritical
-            Check Propellers, Inspect leading edges for fractures, true
-            Calibrate Compass, Away from ferrous metals, false
-            Confirm Home Point, Verify RTH coordinates on map, true
-        """.trimIndent()
+    fun testEmergencyProceduresLoaded() {
+        val procs = EmergencyProcedure.DEFAULT_PROCEDURES
+        assertEquals(10, procs.size)
+        assertEquals("Return to Home (RTH)", procs[0].title)
+        assertEquals(1, procs[0].stepNumber)
+        assertEquals("Emergency Landing", procs[1].title)
+        assertEquals("Post-Incident Inspection", procs[9].title)
+        assertEquals(10, procs[9].stepNumber)
+    }
 
-        val checklist = ChecklistGroup.parseFromCsv("Pre-Launch Quick Check", csv)
-        assertEquals("Pre-Launch Quick Check", checklist.title)
-        assertEquals(3, checklist.items.size)
-        assertEquals("Check Propellers", checklist.items[0].title)
-        assertTrue(checklist.items[0].isCritical)
-        assertEquals("Calibrate Compass", checklist.items[1].title)
-        assertFalse(checklist.items[1].isCritical)
+    @Test
+    fun testChecklistGroupItemAddition() {
+        val preflight = ChecklistGroup.DEFAULT_CHECKLISTS.first { it.category == ChecklistCategory.PREFLIGHT }
+        val initialSize = preflight.items.size
+        val customItem = ChecklistItem(
+            id = "custom_thermal_1",
+            title = "FLIR Thermal Calibration",
+            description = "Perform flat-field calibration before flight",
+            isCritical = true
+        )
+        val updated = preflight.copy(items = preflight.items + customItem)
+        assertEquals(initialSize + 1, updated.items.size)
+        assertTrue(updated.items.last().isCritical)
+        assertEquals("FLIR Thermal Calibration", updated.items.last().title)
     }
 }
