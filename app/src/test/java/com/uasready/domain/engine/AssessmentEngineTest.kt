@@ -20,7 +20,7 @@ class AssessmentEngineTest {
     @Before
     fun setup() {
         engine = AssessmentEngine()
-        defaultAircraft = Aircraft.PRESETS.first { it.id == "dji_m3t" } // Max gust 34 MPH, temp 14F-104F
+        defaultAircraft = Aircraft.PRESETS.first { it.id == "dji_m350_rtk" } // Max wind 26.8 MPH, temp -4F to 122F
         defaultPilot = Pilot.getDefault()
         defaultLocation = LocationInfo.defaultLocation()
 
@@ -97,8 +97,8 @@ class AssessmentEngineTest {
 
     @Test
     fun testHighWindGustsApproachingLimitProducesCAUTION() {
-        // M3T limit is 34 MPH gust. 30 MPH gust is within 5 MPH margin -> CAUTION
-        val cautionWeather = nominalWeather.copy(windGustMph = 30.0)
+        // M350 limit is 26.8 MPH. 23.5 MPH gust is within 5 MPH margin -> CAUTION
+        val cautionWeather = nominalWeather.copy(windGustMph = 23.5)
         val context = AssessmentContext(
             aircraft = defaultAircraft,
             pilot = defaultPilot,
@@ -118,8 +118,8 @@ class AssessmentEngineTest {
 
     @Test
     fun testWindGustsExceedingLimitProducesNOGO() {
-        // M3T limit is 34 MPH gust. 38 MPH gust -> NO-GO
-        val noGoWeather = nominalWeather.copy(windGustMph = 38.0)
+        // M350 limit is 26.8 MPH. 32.0 MPH gust -> NO-GO
+        val noGoWeather = nominalWeather.copy(windGustMph = 32.0)
         val context = AssessmentContext(
             aircraft = defaultAircraft,
             pilot = defaultPilot,

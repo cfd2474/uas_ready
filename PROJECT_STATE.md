@@ -6,7 +6,7 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.21` (Build 29)
+- **Current Version**: `v1.3.22` (Build 30)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `main`)
 
@@ -14,20 +14,13 @@
 
 ## What Has Been Completed
 
-### 1. Dedicated Emergency Procedures Section (10-Step SOP)
-- In [Checklist.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/domain/model/Checklist.kt) and [ReferenceScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/ReferenceScreen.kt), added a dedicated **Emergency Procedures (SOP)** section containing all 10 emergency response protocols:
-  1. Return to Home (RTH)
-  2. Emergency Landing
-  3. Battery Issues
-  4. Signal Loss
-  5. Obstacle Collision
-  6. Weather Changes
-  7. Avoid Water
-  8. Firmware/Software Glitches
-  9. Emergency Evasive Action
-  10. Post-Incident Inspection
-- Includes the safety footer principle: *"Always have an emergency plan in place and stay familiar with your drone's capabilities and limitations. In all emergency situations, prioritizing safety over the drone itself is essential."*
+### 1. Late-Afternoon Daylight Flight Assessment Fix for Non-Licensed Pilots
+- In [PilotAuthorityRuleEvaluator.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/domain/engine/rules/PilotAuthorityRuleEvaluator.kt), refined daylight evaluation to distinguish between **taking off at night / pre-dawn** (`startEpochMs` outside permitted daylight window → **NO-GO**) vs. **taking off in daylight where the nominal 2-hour window extends past sunset/dusk** (e.g. at 18:48 with civil dusk at 19:53 → **CAUTION** advisory stating the remaining minutes and requiring landing before dusk).
+- In [MainViewModel.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/viewmodel/MainViewModel.kt), ensured active flight window timestamps are rolling and synchronized to the exact current millisecond.
+- Added comprehensive regression test `testNonLicensedPilotAtSunsetWithTwoHourWindowIsCautionNotNoGo` in [AssessmentEngineTest.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/test/java/com/uasready/domain/engine/AssessmentEngineTest.kt).
 
-### 2. Interactive "+ Add Checklist Item" Modal
-- Replaced CSV import with a dedicated `+ Add Checklist Item` button and modal dialog in [ReferenceScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/ReferenceScreen.kt).
-- Operators can select any checklist category from a dropdown (`Aircraft Preflight`, `Launch Readiness`, `Postflight Inspection`), enter the custom item title, add optional description/action steps, and mark critical items with immediate addition to the checklist state.
+### 2. Dedicated Emergency Procedures SOP Section
+- Integrated 10-step SOP in [ReferenceScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/ReferenceScreen.kt).
+
+### 3. Interactive "+ Add Checklist Item" Modal
+- Direct category dropdown and text inputs in [ReferenceScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/ReferenceScreen.kt).

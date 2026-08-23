@@ -9,11 +9,18 @@ class DomainModelsTest {
     fun testAircraftPresetsLoaded() {
         val presets = Aircraft.PRESETS
         assertTrue(presets.isNotEmpty())
-        val m3t = presets.firstOrNull { it.id == "dji_m3t" }
-        assertNotNull(m3t)
-        assertEquals(34.0, m3t!!.limitations.maxGustSpeedMph, 0.01)
-        assertEquals(14.0, m3t.limitations.minOperatingTempF, 0.01)
-        assertEquals(104.0, m3t.limitations.maxOperatingTempF, 0.01)
+        val m350 = presets.firstOrNull { it.id == "dji_m350_rtk" }
+        assertNotNull(m350)
+        assertEquals(26.8, m350!!.limitations.maxSustainedWindSpeedMph, 0.01)
+        assertEquals(-4.0, m350.limitations.minOperatingTempF, 0.01)
+        assertEquals(122.0, m350.limitations.maxOperatingTempF, 0.01)
+        assertEquals("IP55", m350.limitations.ipRating)
+
+        val m3e3t = presets.firstOrNull { it.id == "dji_m3e_3t" }
+        assertNotNull(m3e3t)
+        assertEquals(26.8, m3e3t!!.limitations.maxSustainedWindSpeedMph, 0.01)
+        assertEquals(14.0, m3e3t.limitations.minOperatingTempF, 0.01)
+        assertEquals(104.0, m3e3t.limitations.maxOperatingTempF, 0.01)
     }
 
     @Test

@@ -99,8 +99,8 @@ object ScenarioSimulator {
 
             SimulationScenario.HIGH_WIND_CAUTION -> {
                 val weather = defaultWeather.copy(
-                    windSpeedMph = 24.0,
-                    windGustMph = 30.0, // Approaching 34 MPH M3T limit
+                    windSpeedMph = 18.0,
+                    windGustMph = 23.5, // Approaching 26.8 MPH operating limit
                     conditionsDescription = "High Gusty Winds"
                 )
                 AssessmentContext(
@@ -119,8 +119,8 @@ object ScenarioSimulator {
 
             SimulationScenario.WIND_EXCEEDED_NOGO -> {
                 val weather = defaultWeather.copy(
-                    windSpeedMph = 29.0,
-                    windGustMph = 38.0, // Exceeds 34 MPH M3T limit
+                    windSpeedMph = 28.0,
+                    windGustMph = 32.0, // Exceeds 26.8 MPH maximum operating limit
                     conditionsDescription = "Dangerous High Wind Gusts"
                 )
                 AssessmentContext(
