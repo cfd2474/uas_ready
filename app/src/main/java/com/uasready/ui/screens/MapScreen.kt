@@ -283,10 +283,18 @@ fun MapScreen(
                                 outlinePaint.strokeWidth = 2.5f
                             }
                             AirspaceZoneType.ALTITUDE_ZONE -> {
-                                // UAS Facility Map Grids (Cyan)
-                                fillPaint.color = AndroidColor.argb(55, 0, 210, 255)
-                                outlinePaint.color = AndroidColor.argb(255, 0, 210, 255)
-                                outlinePaint.strokeWidth = 2.5f
+                                // UAS Facility Map Grids with altitude-tiered coloring
+                                val ceiling = zone.ceilingFt ?: 400.0
+                                val (fillA, outlineA) = when {
+                                    ceiling <= 0.0 -> Pair(AndroidColor.argb(75, 235, 65, 65), AndroidColor.argb(255, 235, 65, 65)) // 0 ft Red
+                                    ceiling <= 100.0 -> Pair(AndroidColor.argb(65, 255, 140, 0), AndroidColor.argb(255, 255, 140, 0)) // 50-100 ft Orange
+                                    ceiling <= 200.0 -> Pair(AndroidColor.argb(55, 240, 195, 35), AndroidColor.argb(255, 240, 195, 35)) // 200 ft Yellow
+                                    ceiling <= 300.0 -> Pair(AndroidColor.argb(50, 145, 215, 60), AndroidColor.argb(255, 145, 215, 60)) // 300 ft Chartreuse
+                                    else -> Pair(AndroidColor.argb(45, 0, 210, 255), AndroidColor.argb(255, 0, 210, 255)) // 400 ft Cyan
+                                }
+                                fillPaint.color = fillA
+                                outlinePaint.color = outlineA
+                                outlinePaint.strokeWidth = 2.0f
                             }
                             AirspaceZoneType.SPECIAL_USE -> {
                                 fillPaint.color = AndroidColor.argb(45, 255, 140, 0)
@@ -558,7 +566,11 @@ fun MapScreen(
                                     AirspaceZoneType.RESTRICTED_ZONE -> Pair(SafetyNoGo, "RESTRICTED / TFR")
                                     AirspaceZoneType.AUTHORIZATION_ZONE -> Pair(AviationCyan, "CONTROLLED AIRSPACE")
                                     AirspaceZoneType.WARNING_ZONE -> Pair(SafetyCautionLight, "WARNING / SURFACE E")
-                                    AirspaceZoneType.ALTITUDE_ZONE -> Pair(Color(0xFF00D2FF), "UAS FACILITY MAP (UASFM)")
+                                    AirspaceZoneType.ALTITUDE_ZONE -> {
+                                        val ceil = (zone.ceilingFt ?: 400.0).toInt()
+                                        if (ceil == 0) Pair(SafetyNoGo, "UASFM 0 FT (NO LAANC)")
+                                        else Pair(Color(0xFF00D2FF), "UASFM $ceil FT CEILING")
+                                    }
                                     AirspaceZoneType.SPECIAL_USE -> Pair(Color(0xFFFF8C00), "SPECIAL USE / MOA")
                                 }
 

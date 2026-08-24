@@ -7,6 +7,11 @@ import com.uasready.domain.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
 class NasrAirspaceRepository(
     private val context: Context,
     private val dbHelper: NasrDatabaseHelper = NasrDatabaseHelper(context),
@@ -33,6 +38,66 @@ class NasrAirspaceRepository(
             // 1. Check DB initialization
             if (!dbHelper.hasAirportData()) {
                 NasrSeedData.populateDatabaseIfEmpty(dbHelper)
+            }
+
+            // 1b. Live FAA UAS Facility Map V5 sync from ArcGIS FeatureServer
+            try {
+                val uasfmUrl = "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query?where=1%3D1&geometry=$longitude,$latitude&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=40000&units=esriSRUnit_Meter&outFields=OBJECTID,CEILING,APT1_ICAO,APT1_NAME,AIRSPACE_1&returnGeometry=true&f=geojson"
+                val conn = (URL(uasfmUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 3500
+                    readTimeout = 3500
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", "UASReady-App/1.0")
+                }
+
+                if (conn.responseCode == 200) {
+                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                    val geoJson = JSONObject(responseText)
+                    val features = geoJson.optJSONArray("features") ?: JSONArray()
+                    val liveGrids = mutableListOf<NasrUasfmGrid>()
+
+                    for (i in 0 until features.length()) {
+                        val feature = features.optJSONObject(i) ?: continue
+                        val props = feature.optJSONObject("properties") ?: JSONObject()
+                        val ceiling = props.optDouble("CEILING", 400.0)
+                        val icao = props.optString("APT1_ICAO", "UASFM")
+                        val objId = props.optInt("OBJECTID", i)
+
+                        val geom = feature.optJSONObject("geometry")
+                        val coords = geom?.optJSONArray("coordinates")
+                        val polyPoints = mutableListOf<Pair<Double, Double>>()
+
+                        if (coords != null && coords.length() > 0) {
+                            val ring = coords.optJSONArray(0)
+                            if (ring != null) {
+                                for (p in 0 until ring.length()) {
+                                    val pt = ring.optJSONArray(p)
+                                    if (pt != null && pt.length() >= 2) {
+                                        polyPoints.add(Pair(pt.optDouble(1), pt.optDouble(0)))
+                                    }
+                                }
+                            }
+                        }
+
+                        if (polyPoints.size >= 3) {
+                            liveGrids.add(
+                                NasrUasfmGrid(
+                                    id = "$icao-LIVE-$objId",
+                                    icaoId = icao,
+                                    ceilingFt = ceiling,
+                                    polygonCoordinates = polyPoints
+                                )
+                            )
+                        }
+                    }
+
+                    if (liveGrids.isNotEmpty()) {
+                        dbHelper.insertUasfmGrids(liveGrids)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Live FAA UASFM query skipped / offline: ${e.message}")
             }
 
             // 2. Query nearby Airspace boundaries, UASFM grids, SUA, TFRs, and Airports
@@ -72,7 +137,7 @@ class NasrAirspaceRepository(
             // 3. Point-in-polygon resolution for exact aircraft location
             var primaryClass = AirspaceClass.CLASS_G
             var authRequired = false
-            var uasfmCeiling: Double? = 400.0
+            var uasfmCeiling: Double? = null
             var suaActive = false
             var suaName: String? = null
 
@@ -92,10 +157,18 @@ class NasrAirspaceRepository(
             }
 
             // Evaluate UASFM grid cell containment
+            var matchedUasfmGrid: AirspaceZone? = null
             for (grid in nearbyUasfm) {
                 if (grid.polygonCoordinates.isNotEmpty() && GeometryUtils.isPointInsidePolygon(latitude, longitude, grid.polygonCoordinates)) {
+                    matchedUasfmGrid = grid
                     uasfmCeiling = grid.ceilingFt
+                    break
                 }
+            }
+
+            // If in controlled airspace without a matched UASFM grid, default ceiling to 0 ft (LAANC auto-approval not available)
+            if (authRequired && uasfmCeiling == null) {
+                uasfmCeiling = 0.0
             }
 
             // Evaluate SUA containment
