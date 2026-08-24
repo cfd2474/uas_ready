@@ -27,17 +27,20 @@
   - DJI Mini 4 Pro, Mini 3 Pro, Mini 3
   - Plus Autel Robotics, Skydio, and Parrot airframes with custom aircraft configuration support.
 - **Fleet Management Filtering**: Manufacturer dropdown filter and real-time search filtering across commercial fleet presets.
-- **Multi-Source Basemap & Tactical Map Overlay**:
+- **Offline Spatial Airport CTAF & Tower Frequency Engine**: Instant nearest-airport spatial lookup across 3,916 US airports, displaying live CTAF, UNICOM, or TOWER frequencies and distance readouts on both the Flight Readiness dashboard and the tactical map.
+- **Multi-Source Basemap & Tactical Aeronautical Airspace Map**:
   - Google Street (No-POIs)
   - Google Terrain / Topographic (No-POIs)
   - Google Hybrid / Satellite (No-POIs)
-  - Standard OpenStreetMap and OpenTopoMap
-  - Interactive radius range rings (500ft, 1000ft, 0.5 SM, 1.0 SM, 3.0 SM), live coordinate readouts, and terrain elevation profiling.
+  - Pure Aeronautical Airspace Sectors: Class B, Class C, Class D, Surface Class E, Restricted/Prohibited, and Special Use Airspace (MOAs) within a 30 NM radius of launch point.
+  - Multi-layer tap-to-inspect airspace intersection drawer.
+  - Glove-friendly left-center vertical Zoom In (`+`) / Zoom Out (`-`) controls optimized for the DJI RC Pro Enterprise.
+  - Dynamic GNSS fix, visible satellite count, and HDOP readouts.
 - **Live Environmental Telemetry**:
-  - **Live Weather**: Open-Meteo & NOAA NWS hourly forecasts, sustained wind & gust limits, precipitation, and cloud base ceiling calculations.
+  - **Live Weather**: Open-Meteo & NOAA NWS hourly forecasts, sustained wind, gust limits, temperature thresholds, precipitation, and cloud base ceiling calculations.
   - **Space Weather & Geomagnetic Storms**: NOAA Space Weather Prediction Center (SWPC) live planetary Kp index and G-scale alerts for GPS/GNSS multi-rotor stability.
   - **Astronomical Solar Ephemeris**: Local-device timezone aware ephemeris calculating exact civil dawn, sunrise, sunset, and civil dusk.
-  - **Airspace Buffer Evaluation**: Class B/C/D/E surface areas and airport distance buffers.
+  - **Airspace & TFR Evaluation**: Live FAA TFR checking combined with controlled airspace classification rules.
 - **DJI RC Pro Enterprise Landscape Optimization**: Hardcoded for 640 × 360 dp landscape canvas with high-contrast sunlight readability (≥ 7:1 ratio), 56 dp thumb-zone touch targets, and zero gesture conflicts with live mapping surfaces.
 - **Day / Night Appearance**: Seamless Dark, Light, and System (Auto) theme support.
 
@@ -48,8 +51,8 @@
 | Safety Status | Condition | Operator Action |
 | :--- | :--- | :--- |
 | 🟢 **GO** | All environmental, regulatory, and aircraft limits are fully met. | Proceed with standard preflight checklist & launch. |
-| 🟡 **CAUTION** | Marginal conditions (gusts near limit, elevated Kp index, civil twilight, flight window ending near dusk). | Heightened vigilance, review advisory notes, verify abort criteria. |
-| 🔴 **NO-GO** | Hard limitation breached (excessive winds, precipitation, airspace violation, night flight without Part 107 license). | **Flight prohibited.** Abort mission or relocate launch zone. |
+| 🟡 **CAUTION** | Marginal conditions (gusts/temp near limit, elevated Kp index, civil twilight, non-Class G airspace requiring LAANC). | Heightened vigilance, review advisory notes, verify abort criteria. |
+| 🔴 **NO-GO** | Hard limitation breached (excessive winds, active TFR, precipitation, night flight without Part 107 license). | **Flight prohibited.** Abort mission or relocate launch zone. |
 | ⚪ **DATA UNAVAILABLE** | Network lost or stale telemetry (>10 min). | Acquire connectivity or switch to verified offline scenario drill. |
 
 ---
@@ -61,16 +64,16 @@ All signed production APKs are organized in the `releases/` directory:
 ```
 releases/
 ├── current/
-│   └── UASReady-v1.3.24.apk       # Current active signed release APK
+│   └── UASReady-v1.3.37.apk       # Current active signed release APK (Build 45)
 └── archive/
-    └── UASReady-v1.3.23.apk       # Historical release APKs labeled by version
+    └── UASReady-v1.3.36.apk       # Historical release APKs labeled by version
 ```
 
 ### Automated Release Workflow
 Use the automated PowerShell release engine in `scripts/`:
 
 ```powershell
-# Bump patch version (e.g. 1.3.23 -> 1.3.24) and generate signed release APK
+# Bump patch version (e.g. 1.3.36 -> 1.3.37) and generate signed release APK
 .\scripts\bump_and_release.ps1 -BumpType patch
 
 # Bump minor version and push directly to GitHub
@@ -84,11 +87,12 @@ Use the automated PowerShell release engine in `scripts/`:
 ```
 com.uasready/
 ├── domain/                      # Pure Kotlin Core
-│   ├── model/                   # Aircraft, Pilot, Weather, SpaceWeather, Airspace, Assessment, Checklist
+│   ├── model/                   # Aircraft, Pilot, Weather, SpaceWeather, Airspace, LocationInfo, Assessment, Checklist
 │   └── engine/                  # Deterministic Rules Engine & Category Evaluators
 │       └── rules/               # Weather, Airspace, SpaceWeather, Daylight, Aircraft, Pilot
 ├── data/                        # Repository Layer & Telemetry Feed Handlers
-│   ├── repository/              # LiveWeather, LiveSpaceWeather, Solar, Airspace, Fleet
+│   ├── location/                # Device GPS & Location Manager
+│   ├── repository/              # CtafLookupHelper, LiveWeather, LiveSpaceWeather, Solar, Airspace, Fleet
 │   └── sim/                     # Scenario Field Drills (Simulators)
 └── ui/                          # Presentation Layer (Jetpack Compose & Material 3)
     ├── components/              # StatusBanners, MetricCards, AuditCards
@@ -103,6 +107,7 @@ com.uasready/
 - **Networking**: OkHttp 4.12 & Kotlinx Serialization
 - **GIS / Mapping**: OSMDroid 6.1.18 (OpenStreetMap + Google Tile Overlays)
 - **Ephemeris Algorithms**: NOAA Solar Calculator Ephemeris (Exact Sunrise, Sunset, Civil Twilight)
+- **Aviation Spatial Datasets**: Offline 3,916 US Airport CTAF/TWR spatial resolution
 - **Unit Testing**: JUnit 4 & Coroutines Test Harness (100% deterministic test coverage)
 
 ---
@@ -138,3 +143,4 @@ com.uasready/
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 Developed with precision for unmanned aviation safety by **Michael Leckliter**.
+
