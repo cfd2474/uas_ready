@@ -14,7 +14,8 @@ import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 
-class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpenHelper(context, dbName, null, DB_VERSION) {
+class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME) : SQLiteOpenHelper(context.applicationContext, dbName, null, DB_VERSION) {
+    private val appContext = context.applicationContext
 
     companion object {
         const val DB_NAME = "nasr_airspace.db"
@@ -567,12 +568,22 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
      * Queries airports in an arbitrary geographic bounding box across CONUS without distance clamping.
      */
     fun queryAirportsInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 1000): List<NasrAirport> {
-        val db = readableDatabase
+        var db = readableDatabase
         val list = mutableListOf<NasrAirport>()
         val sLat = minOf(minLat, maxLat)
         val nLat = maxOf(minLat, maxLat)
         val wLon = minOf(minLon, maxLon)
         val eLon = maxOf(minLon, maxLon)
+
+        val count = try {
+            db.rawQuery("SELECT COUNT(*) FROM airports", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        } catch (_: Exception) { 0 }
+
+        if (count < 15000) {
+            Log.w(TAG, "airports count ($count) below master threshold. Auto-extracting master database...")
+            ensureMasterDatabaseExtracted(appContext, forceExtract = true)
+            db = readableDatabase
+        }
 
         val query = String.format(
             java.util.Locale.US,
@@ -580,26 +591,30 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
             sLat, nLat, wLon, eLon, limit
         )
 
-        db.rawQuery(query, null).use { cursor ->
-            while (cursor.moveToNext()) {
-                list.add(
-                    NasrAirport(
-                        facilityId = cursor.getString(0) ?: "",
-                        icaoId = cursor.getString(1) ?: "",
-                        name = cursor.getString(2) ?: "",
-                        city = cursor.getString(3) ?: "",
-                        state = cursor.getString(4) ?: "",
-                        latitude = cursor.getDouble(5),
-                        longitude = cursor.getDouble(6),
-                        elevationFt = cursor.getDouble(7),
-                        useType = cursor.getString(8) ?: "PU",
-                        ctafFreq = cursor.getString(9),
-                        unicomFreq = cursor.getString(10),
-                        towerFreq = cursor.getString(11),
-                        atisFreq = cursor.getString(12)
+        try {
+            db.rawQuery(query, null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    list.add(
+                        NasrAirport(
+                            facilityId = cursor.getString(0) ?: "",
+                            icaoId = cursor.getString(1) ?: "",
+                            name = cursor.getString(2) ?: "",
+                            city = cursor.getString(3) ?: "",
+                            state = cursor.getString(4) ?: "",
+                            latitude = cursor.getDouble(5),
+                            longitude = cursor.getDouble(6),
+                            elevationFt = cursor.getDouble(7),
+                            useType = cursor.getString(8) ?: "PU",
+                            ctafFreq = cursor.getString(9),
+                            unicomFreq = cursor.getString(10),
+                            towerFreq = cursor.getString(11),
+                            atisFreq = cursor.getString(12)
+                        )
                     )
-                )
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error querying airports: ${e.message}", e)
         }
         return list
     }
@@ -734,12 +749,22 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
      * Queries UASFM grid squares in an arbitrary geographic bounding box across CONUS without distance clamping.
      */
     fun queryUasfmInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 6000): List<AirspaceZone> {
-        val db = readableDatabase
+        var db = readableDatabase
         val list = mutableListOf<AirspaceZone>()
         val sLat = minOf(minLat, maxLat)
         val nLat = maxOf(minLat, maxLat)
         val wLon = minOf(minLon, maxLon)
         val eLon = maxOf(minLon, maxLon)
+
+        val totalUasfm = try {
+            db.rawQuery("SELECT COUNT(*) FROM uasfm_grid", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        } catch (_: Exception) { 0 }
+
+        if (totalUasfm < 300000) {
+            Log.w(TAG, "uasfm_grid count ($totalUasfm) below master threshold. Auto-extracting master database...")
+            ensureMasterDatabaseExtracted(appContext, forceExtract = true)
+            db = readableDatabase
+        }
 
         val query = String.format(
             java.util.Locale.US,
@@ -747,47 +772,51 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
             nLat, sLat, eLon, wLon, limit
         )
 
-        db.rawQuery(query, null).use { cursor ->
-            while (cursor.moveToNext()) {
-                val id = cursor.getString(0)
-                val icao = cursor.getString(1)
-                val ceiling = cursor.getDouble(2)
-                val wkb = cursor.getBlob(3)
-                val cMinLat = cursor.getDouble(4)
-                val cMaxLat = cursor.getDouble(5)
-                val cMinLon = cursor.getDouble(6)
-                val cMaxLon = cursor.getDouble(7)
+        try {
+            db.rawQuery(query, null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getString(0)
+                    val icao = cursor.getString(1)
+                    val ceiling = cursor.getDouble(2)
+                    val wkb = cursor.getBlob(3)
+                    val cMinLat = cursor.getDouble(4)
+                    val cMaxLat = cursor.getDouble(5)
+                    val cMinLon = cursor.getDouble(6)
+                    val cMaxLon = cursor.getDouble(7)
 
-                val polygon = if (wkb != null) {
-                    GeometryUtils.decodeWkbToPolygon(wkb)
-                } else {
-                    listOf(
-                        Pair(cMinLat, cMinLon),
-                        Pair(cMinLat, cMaxLon),
-                        Pair(cMaxLat, cMaxLon),
-                        Pair(cMaxLat, cMinLon),
-                        Pair(cMinLat, cMinLon)
+                    val polygon = if (wkb != null) {
+                        GeometryUtils.decodeWkbToPolygon(wkb)
+                    } else {
+                        listOf(
+                            Pair(cMinLat, cMinLon),
+                            Pair(cMinLat, cMaxLon),
+                            Pair(cMaxLat, cMaxLon),
+                            Pair(cMaxLat, cMinLon),
+                            Pair(cMinLat, cMinLon)
+                        )
+                    }
+
+                    val cLat = (cMinLat + cMaxLat) / 2.0
+                    val cLon = (cMinLon + cMaxLon) / 2.0
+
+                    list.add(
+                        AirspaceZone(
+                            id = "NASR-UASFM-$id",
+                            name = "$icao UAS Facility Grid (${ceiling.toInt()} ft AGL)",
+                            type = AirspaceZoneType.ALTITUDE_ZONE,
+                            centerLat = cLat,
+                            centerLon = cLon,
+                            radiusMeters = 800.0,
+                            floorFt = 0.0,
+                            ceilingFt = ceiling,
+                            description = "$icao UAS Facility Map: Max auto-approved LAANC ceiling is ${ceiling.toInt()} ft AGL.",
+                            polygonCoordinates = polygon
+                        )
                     )
                 }
-
-                val cLat = (cMinLat + cMaxLat) / 2.0
-                val cLon = (cMinLon + cMaxLon) / 2.0
-
-                list.add(
-                    AirspaceZone(
-                        id = "NASR-UASFM-$id",
-                        name = "$icao UAS Facility Grid (${ceiling.toInt()} ft AGL)",
-                        type = AirspaceZoneType.ALTITUDE_ZONE,
-                        centerLat = cLat,
-                        centerLon = cLon,
-                        radiusMeters = 800.0,
-                        floorFt = 0.0,
-                        ceilingFt = ceiling,
-                        description = "$icao UAS Facility Map: Max auto-approved LAANC ceiling is ${ceiling.toInt()} ft AGL.",
-                        polygonCoordinates = polygon
-                    )
-                )
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error querying uasfm_grid: ${e.message}", e)
         }
         return list
     }
