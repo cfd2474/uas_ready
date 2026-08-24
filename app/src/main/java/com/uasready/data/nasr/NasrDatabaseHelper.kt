@@ -305,10 +305,22 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     override fun onOpen(db: SQLiteDatabase) {
         super.onOpen(db)
         try {
-            val count = db.rawQuery("SELECT COUNT(*) FROM airports", null).use { cursor ->
+            val aptCount = db.rawQuery("SELECT COUNT(*) FROM airports", null).use { cursor ->
                 if (cursor.moveToFirst()) cursor.getInt(0) else 0
             }
-            Log.i(TAG, "NasrDatabaseHelper onOpen: $count airports present.")
+            val uasfmCount = db.rawQuery("SELECT COUNT(*) FROM uasfm_grid", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+            val airspaceCount = db.rawQuery("SELECT COUNT(*) FROM airspace", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+            val suaCount = db.rawQuery("SELECT COUNT(*) FROM sua", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+            val nsCount = db.rawQuery("SELECT COUNT(*) FROM national_security_restrictions", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+            Log.i(TAG, "NasrDatabaseHelper onOpen: $aptCount airports, $uasfmCount UASFM cells, $airspaceCount airspace boundaries, $suaCount SUAs, $nsCount NS restrictions.")
         } catch (e: Exception) {
             Log.e(TAG, "Error checking DB status on open: ${e.message}")
         }
@@ -562,14 +574,13 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         val wLon = minOf(minLon, maxLon)
         val eLon = maxOf(minLon, maxLon)
 
-        val query = """
-            SELECT facility_id, icao_id, name, city, state, lat, lon, elevation_ft, use_type, ctaf_freq, unicom_freq, tower_freq, atis_freq
-            FROM airports
-            WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
-            LIMIT ?
-        """.trimIndent()
+        val query = String.format(
+            java.util.Locale.US,
+            "SELECT facility_id, icao_id, name, city, state, lat, lon, elevation_ft, use_type, ctaf_freq, unicom_freq, tower_freq, atis_freq FROM airports WHERE lat >= %f AND lat <= %f AND lon >= %f AND lon <= %f LIMIT %d",
+            sLat, nLat, wLon, eLon, limit
+        )
 
-        db.rawQuery(query, arrayOf(sLat.toString(), nLat.toString(), wLon.toString(), eLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, null).use { cursor ->
             while (cursor.moveToNext()) {
                 list.add(
                     NasrAirport(
@@ -663,14 +674,13 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         val wLon = minOf(minLon, maxLon)
         val eLon = maxOf(minLon, maxLon)
 
-        val query = """
-            SELECT id, name, class, type, floor_ft, ceiling_ft, geom_wkb
-            FROM airspace
-            WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
-            LIMIT ?
-        """.trimIndent()
+        val query = String.format(
+            java.util.Locale.US,
+            "SELECT id, name, class, type, floor_ft, ceiling_ft, geom_wkb FROM airspace WHERE min_lat <= %f AND max_lat >= %f AND min_lon <= %f AND max_lon >= %f LIMIT %d",
+            nLat, sLat, eLon, wLon, limit
+        )
 
-        db.rawQuery(query, arrayOf(nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, null).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val name = cursor.getString(1)
@@ -731,14 +741,13 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         val wLon = minOf(minLon, maxLon)
         val eLon = maxOf(minLon, maxLon)
 
-        val query = """
-            SELECT id, icao_id, ceiling_ft, geom_wkb, min_lat, max_lat, min_lon, max_lon
-            FROM uasfm_grid
-            WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
-            LIMIT ?
-        """.trimIndent()
+        val query = String.format(
+            java.util.Locale.US,
+            "SELECT id, icao_id, ceiling_ft, geom_wkb, min_lat, max_lat, min_lon, max_lon FROM uasfm_grid WHERE min_lat <= %f AND max_lat >= %f AND min_lon <= %f AND max_lon >= %f LIMIT %d",
+            nLat, sLat, eLon, wLon, limit
+        )
 
-        db.rawQuery(query, arrayOf(nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, null).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val icao = cursor.getString(1)
@@ -794,15 +803,14 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         val wLon = minOf(minLon, maxLon)
         val eLon = maxOf(minLon, maxLon)
 
-        val query = """
-            SELECT id, proponent, branch, base, facility, airspace_class, reason, poc, floor_ft, ceiling_ft, geom_wkb, min_lat, max_lat, min_lon, max_lon
-            FROM national_security_restrictions
-            WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
-            LIMIT ?
-        """.trimIndent()
+        val query = String.format(
+            java.util.Locale.US,
+            "SELECT id, proponent, branch, base, facility, airspace_class, reason, poc, floor_ft, ceiling_ft, geom_wkb, min_lat, max_lat, min_lon, max_lon FROM national_security_restrictions WHERE min_lat <= %f AND max_lat >= %f AND min_lon <= %f AND max_lon >= %f LIMIT %d",
+            nLat, sLat, eLon, wLon, limit
+        )
 
         try {
-            db.rawQuery(query, arrayOf(nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
+            db.rawQuery(query, null).use { cursor ->
                 while (cursor.moveToNext()) {
                     val id = cursor.getString(0)
                     val proponent = cursor.getString(1) ?: ""
@@ -875,14 +883,13 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         val wLon = minOf(minLon, maxLon)
         val eLon = maxOf(minLon, maxLon)
 
-        val query = """
-            SELECT id, name, type, floor_ft, ceiling_ft, schedule_desc, geom_wkb
-            FROM sua
-            WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
-            LIMIT ?
-        """.trimIndent()
+        val query = String.format(
+            java.util.Locale.US,
+            "SELECT id, name, type, floor_ft, ceiling_ft, schedule_desc, geom_wkb FROM sua WHERE min_lat <= %f AND max_lat >= %f AND min_lon <= %f AND max_lon >= %f LIMIT %d",
+            nLat, sLat, eLon, wLon, limit
+        )
 
-        db.rawQuery(query, arrayOf(nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, null).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val name = cursor.getString(1)
@@ -947,14 +954,13 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         val wLon = minOf(minLon, maxLon)
         val eLon = maxOf(minLon, maxLon)
 
-        val query = """
-            SELECT notam_id, issue_date, type, description, floor_ft, ceiling_ft, start_epoch, end_epoch, min_lat, max_lat, min_lon, max_lon, geom_wkb
-            FROM tfr_active
-            WHERE end_epoch >= ? AND min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
-            LIMIT ?
-        """.trimIndent()
+        val query = String.format(
+            java.util.Locale.US,
+            "SELECT notam_id, issue_date, type, description, floor_ft, ceiling_ft, start_epoch, end_epoch, min_lat, max_lat, min_lon, max_lon, geom_wkb FROM tfr_active WHERE end_epoch >= %d AND min_lat <= %f AND max_lat >= %f AND min_lon <= %f AND max_lon >= %f LIMIT %d",
+            nowMs, nLat, sLat, eLon, wLon, limit
+        )
 
-        db.rawQuery(query, arrayOf(nowMs.toString(), nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, null).use { cursor ->
             while (cursor.moveToNext()) {
                 val notamId = cursor.getString(0)
                 val issueDate = cursor.getString(1)

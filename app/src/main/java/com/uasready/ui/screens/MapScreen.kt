@@ -275,7 +275,7 @@ fun MapScreen(
                     helper.queryActiveTfrsInBoundingBox(minLat, maxLat, minLon, maxLon, nowMs = nowMs, limit = 100)
                 }
                 val uasfmInExtent = withContext(Dispatchers.IO) {
-                    if (zoom >= 13.0) {
+                    if (zoom >= 10.0) {
                         helper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 6000)
                     } else {
                         emptyList()
