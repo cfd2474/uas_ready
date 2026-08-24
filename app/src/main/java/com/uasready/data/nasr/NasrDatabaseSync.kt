@@ -25,11 +25,9 @@ object NasrDatabaseSync {
 
         if (needsForceExtract) {
             Log.i(TAG, "New app version detected (Build $lastVersion -> Build $currentVersion). Resetting database...")
-            NasrDatabaseHelper.resetInstance()
-            context.deleteDatabase(NasrDatabaseHelper.DB_NAME)
         }
 
-        val success = NasrDatabaseHelper.ensureMasterDatabaseExtracted(context)
+        val success = NasrDatabaseHelper.ensureMasterDatabaseExtracted(context, forceExtract = needsForceExtract)
         if (success) {
             prefs.edit().putInt(KEY_LAST_APP_VERSION, currentVersion).apply()
             val helper = NasrDatabaseHelper.getInstance(context)

@@ -45,15 +45,15 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
 
         /**
          * Verifies that the on-device database exists and contains the authoritative master dataset
-         * (at least 300,000 UASFM grid cells and 15,000 airports). If missing or incomplete,
-         * it synchronously extracts the master pre-compiled asset.
+         * (at least 350,000 UASFM grid cells and 18,000 airports). If missing or incomplete,
+         * it synchronously extracts the master pre-compiled asset directly to disk.
          */
         @Synchronized
-        fun ensureMasterDatabaseExtracted(context: Context): Boolean {
+        fun ensureMasterDatabaseExtracted(context: Context, forceExtract: Boolean = false): Boolean {
             val dbFile = context.getDatabasePath(DB_NAME)
 
-            // Check if existing DB file is valid with full data
-            if (dbFile.exists() && dbFile.length() > 30_000_000L) {
+            // Check if existing DB file is valid with full nationwide CONUS data
+            if (!forceExtract && dbFile.exists() && dbFile.length() > 50_000_000L) {
                 var isValid = false
                 try {
                     SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
@@ -67,12 +67,12 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                             if (c.moveToFirst()) c.getInt(0) else 0
                         }
                         Log.i(TAG, "Database health check on disk: $uasfmCount UASFM cells ($uasfmWithIcao with ICAO), $airportCount airports")
-                        if (uasfmCount >= 300_000 && uasfmWithIcao >= 300_000 && airportCount >= 15_000) {
+                        if (uasfmCount >= 350_000 && uasfmWithIcao >= 350_000 && airportCount >= 18_000) {
                             isValid = true
                         }
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Existing database file invalid: ${e.message}")
+                    Log.w(TAG, "Existing database check failed: ${e.message}")
                     isValid = false
                 }
                 if (isValid) {
@@ -80,34 +80,34 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 }
             }
 
-            Log.i(TAG, "Extracting authoritative master database from $MASTER_ASSET_PATH...")
+            Log.i(TAG, "Extracting authoritative master database from $MASTER_ASSET_PATH directly to $dbFile...")
+            resetInstance()
             return try {
-                resetInstance()
                 context.deleteDatabase(DB_NAME)
+                try {
+                    File(dbFile.path + "-wal").delete()
+                    File(dbFile.path + "-shm").delete()
+                    File(dbFile.path + "-journal").delete()
+                    if (dbFile.exists()) dbFile.delete()
+                } catch (_: Exception) {}
                 dbFile.parentFile?.mkdirs()
 
-                val tempFile = File(dbFile.parentFile, "$DB_NAME.tmp")
-                if (tempFile.exists()) tempFile.delete()
-
+                val buffer = ByteArray(65536)
                 context.assets.open(MASTER_ASSET_PATH).use { rawIn ->
-                    java.util.zip.GZIPInputStream(rawIn).use { gzIn ->
-                        java.io.FileOutputStream(tempFile).use { out ->
-                            gzIn.copyTo(out)
+                    java.util.zip.GZIPInputStream(rawIn, 65536).use { gzIn ->
+                        java.io.FileOutputStream(dbFile).use { out ->
+                            var bytesRead: Int
+                            while (gzIn.read(buffer).also { bytesRead = it } != -1) {
+                                out.write(buffer, 0, bytesRead)
+                            }
+                            out.flush()
+                            out.fd.sync()
                         }
                     }
                 }
 
-                if (tempFile.renameTo(dbFile) || run {
-                    tempFile.copyTo(dbFile, overwrite = true)
-                    tempFile.delete()
-                    true
-                }) {
-                    Log.i(TAG, "Master FAA database asset extracted successfully (${dbFile.length()} bytes)")
-                    true
-                } else {
-                    Log.e(TAG, "Failed to rename temp database file to $dbFile")
-                    false
-                }
+                Log.i(TAG, "Master FAA database asset extracted successfully (${dbFile.length()} bytes)")
+                true
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to extract master FAA database asset: ${e.message}", e)
                 false
