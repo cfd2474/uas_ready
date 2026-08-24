@@ -108,8 +108,7 @@ fun HomeScreen(
             SquareMetricCard(
                 title = "Location",
                 primaryValue = uiState.currentLocation.displayName,
-                secondaryValue = uiState.currentLocation.formattedCoordinates,
-                tertiaryValue = uiState.currentLocation.ctafDisplay,
+                secondaryValue = uiState.currentLocation.ctafDisplay,
                 icon = Icons.Default.LocationOn,
                 onClick = onNavigateToMap
             )
