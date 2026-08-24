@@ -195,29 +195,40 @@ object NasrSeedData {
     private fun getSeedUasfmGrids(airports: List<NasrAirport>): List<NasrUasfmGrid> {
         val controlledCodes = setOf("KONT", "KRAL", "KCNO", "KRIV", "KSNA", "KFUL", "KLGB", "KLAX", "KSAN", "KSBD", "KBUR", "KVNY")
         val grids = mutableListOf<NasrUasfmGrid>()
-        val cellLatDeg = 0.008333 // ~0.50 NM (~926m)
-        val cellLonDeg = 0.010000 // ~0.50 NM (~926m at 34°N)
+        val gridKeys = mutableSetOf<String>()
 
         for (apt in airports.filter { it.icaoId in controlledCodes }) {
             val icao = apt.icaoId
-            val maxGridRadiusCells = when (icao) {
-                "KLAX" -> 8 // ~4.0 NM radius
-                "KONT", "KRIV", "KSNA", "KLGB", "KSAN" -> 7 // ~3.5 NM radius
-                else -> 6 // ~3.0 NM radius (Class D 4.1 NM circle)
+            val maxArcMinutes = when (icao) {
+                "KLAX" -> 6 // ~5.0 NM radius (6 arc-minutes)
+                "KONT", "KRIV", "KSNA", "KLGB", "KSAN" -> 5 // ~4.2 NM radius (5 arc-minutes)
+                else -> 4 // ~3.5 NM radius (4 arc-minutes)
             }
 
-            for (row in -maxGridRadiusCells..maxGridRadiusCells) {
-                for (col in -maxGridRadiusCells..maxGridRadiusCells) {
-                    val distCells = sqrt((row * row + col * col).toDouble())
-                    if (distCells > maxGridRadiusCells) continue // Bound to controlled airspace surface footprint
+            // Snap airport center to integer arc-minutes (1/60th of a degree)
+            val centerLatMin = Math.floor(apt.latitude * 60.0).toInt()
+            val centerLonMin = Math.floor(apt.longitude * 60.0).toInt()
+
+            for (dLat in -maxArcMinutes..maxArcMinutes) {
+                for (dLon in -maxArcMinutes..maxArcMinutes) {
+                    val distArcMin = sqrt((dLat * dLat + dLon * dLon).toDouble())
+                    if (distArcMin > maxArcMinutes + 0.3) continue // Bound to controlled airspace surface footprint
+
+                    val minLatMin = centerLatMin + dLat
+                    val minLonMin = centerLonMin + dLon
+
+                    // Snap precisely to standard 1 arc-minute boundaries
+                    val minLat = minLatMin / 60.0
+                    val maxLat = (minLatMin + 1) / 60.0
+                    val minLon = minLonMin / 60.0
+                    val maxLon = (minLonMin + 1) / 60.0
+
+                    val cellKey = "$minLatMin,$minLonMin"
+                    if (gridKeys.contains(cellKey)) continue
+                    gridKeys.add(cellKey)
 
                     // Calculate authentic ceiling based on airport runway alignment
-                    val ceiling = calculateUasfmGridCeiling(icao, row, col, distCells)
-
-                    val minLat = apt.latitude + (row - 0.5) * cellLatDeg
-                    val maxLat = apt.latitude + (row + 0.5) * cellLatDeg
-                    val minLon = apt.longitude + (col - 0.5) * cellLonDeg
-                    val maxLon = apt.longitude + (col + 0.5) * cellLonDeg
+                    val ceiling = calculateUasfmGridCeiling(icao, dLat, dLon, distArcMin)
 
                     val poly = listOf(
                         Pair(minLat, minLon),
@@ -229,7 +240,7 @@ object NasrSeedData {
 
                     grids.add(
                         NasrUasfmGrid(
-                            id = "$icao-${row + maxGridRadiusCells + 1}-${col + maxGridRadiusCells + 1}",
+                            id = "$icao-$minLatMin-$minLonMin",
                             icaoId = icao,
                             ceilingFt = ceiling,
                             polygonCoordinates = poly
@@ -241,112 +252,111 @@ object NasrSeedData {
         return grids
     }
 
-    private fun calculateUasfmGridCeiling(icao: String, row: Int, col: Int, distCells: Double): Double {
+    private fun calculateUasfmGridCeiling(icao: String, dLat: Int, dLon: Int, distArcMin: Double): Double {
         return when (icao) {
             "KONT" -> {
-                // KONT: Runways 08L/26R & 08R/26L (East-West corridor along row ~0)
+                // KONT: Runways 08L/26R & 08R/26L (East-West corridor along dLat ~0)
                 when {
-                    abs(row) <= 1 && abs(col) <= 3 -> 0.0
-                    abs(row) <= 1 && abs(col) <= 5 -> 100.0
-                    abs(row) <= 2 && abs(col) <= 4 -> 100.0
-                    distCells <= 4.5 -> 200.0
-                    distCells <= 6.0 -> 300.0
+                    abs(dLat) == 0 && abs(dLon) <= 2 -> 0.0
+                    abs(dLat) <= 1 && abs(dLon) <= 3 -> 100.0
+                    distArcMin <= 2.8 -> 100.0
+                    distArcMin <= 3.8 -> 200.0
+                    distArcMin <= 4.6 -> 300.0
                     else -> 400.0
                 }
             }
             "KRAL" -> {
                 // KRAL: Runways 09/27 (East-West) & 16/34 (North-South)
                 when {
-                    (abs(row) == 0 && abs(col) <= 3) || (abs(col) == 0 && abs(row) <= 2) -> 0.0
-                    abs(row) <= 1 && abs(col) <= 3 -> 100.0
-                    distCells <= 3.5 -> 200.0
-                    distCells <= 5.0 -> 300.0
+                    (abs(dLat) == 0 && abs(dLon) <= 1) || (abs(dLon) == 0 && abs(dLat) <= 1) -> 0.0
+                    abs(dLat) <= 1 && abs(dLon) <= 2 -> 100.0
+                    distArcMin <= 2.5 -> 200.0
+                    distArcMin <= 3.5 -> 300.0
                     else -> 400.0
                 }
             }
             "KCNO" -> {
                 // KCNO: Runways 26R/08L & 26L/08R (East-West)
                 when {
-                    abs(row) <= 1 && abs(col) <= 3 -> 0.0
-                    abs(row) <= 1 && abs(col) <= 4 -> 100.0
-                    distCells <= 3.5 -> 200.0
-                    distCells <= 5.0 -> 300.0
+                    abs(dLat) == 0 && abs(dLon) <= 2 -> 0.0
+                    abs(dLat) <= 1 && abs(dLon) <= 2 -> 100.0
+                    distArcMin <= 2.5 -> 200.0
+                    distArcMin <= 3.5 -> 300.0
                     else -> 400.0
                 }
             }
             "KRIV" -> {
-                // KRIV: March ARB Runway 14/32 (Northwest-Southeast diagonal row + col ~ 0)
-                val diagDist = abs(row + col)
+                // KRIV: March ARB Runway 14/32 (Northwest-Southeast diagonal dLat + dLon ~ 0)
+                val diagDist = abs(dLat + dLon)
                 when {
-                    diagDist <= 1 && distCells <= 3.5 -> 0.0
-                    diagDist <= 1 && distCells <= 5.0 -> 100.0
-                    distCells <= 3.5 -> 100.0
-                    distCells <= 5.0 -> 200.0
-                    distCells <= 6.0 -> 300.0
+                    diagDist == 0 && distArcMin <= 2.2 -> 0.0
+                    diagDist <= 1 && distArcMin <= 3.2 -> 100.0
+                    distArcMin <= 2.5 -> 100.0
+                    distArcMin <= 3.5 -> 200.0
+                    distArcMin <= 4.5 -> 300.0
                     else -> 400.0
                 }
             }
             "KSNA" -> {
-                // KSNA: John Wayne Runway 20R/02L (North-South along col ~0)
+                // KSNA: John Wayne Runway 20R/02L (North-South along dLon ~0)
                 when {
-                    abs(col) <= 1 && abs(row) <= 3 -> 0.0
-                    abs(col) <= 1 && abs(row) <= 5 -> 100.0
-                    distCells <= 3.5 -> 100.0
-                    distCells <= 5.0 -> 200.0
-                    distCells <= 6.0 -> 300.0
+                    abs(dLon) == 0 && abs(dLat) <= 2 -> 0.0
+                    abs(dLon) <= 1 && abs(dLat) <= 3 -> 100.0
+                    distArcMin <= 2.5 -> 100.0
+                    distArcMin <= 3.5 -> 200.0
+                    distArcMin <= 4.5 -> 300.0
                     else -> 400.0
                 }
             }
             "KFUL" -> {
-                // KFUL: Fullerton Runway 24/06 (Southwest-Northeast diagonal row - col ~ 0)
-                val diagDist = abs(row - col)
+                // KFUL: Fullerton Runway 24/06 (Southwest-Northeast diagonal dLat - dLon ~ 0)
+                val diagDist = abs(dLat - dLon)
                 when {
-                    diagDist <= 1 && distCells <= 2.5 -> 0.0
-                    diagDist <= 1 && distCells <= 4.0 -> 100.0
-                    distCells <= 3.0 -> 100.0
-                    distCells <= 4.5 -> 200.0
+                    diagDist == 0 && distArcMin <= 1.5 -> 0.0
+                    diagDist <= 1 && distArcMin <= 2.5 -> 100.0
+                    distArcMin <= 2.5 -> 200.0
                     else -> 400.0
                 }
             }
             "KLGB" -> {
                 // KLGB: Long Beach Runway 30/12 (Northwest-Southeast diagonal)
-                val diagDist = abs(row + col)
+                val diagDist = abs(dLat + dLon)
                 when {
-                    diagDist <= 1 && distCells <= 3.0 -> 0.0
-                    diagDist <= 1 && distCells <= 4.5 -> 100.0
-                    distCells <= 3.5 -> 100.0
-                    distCells <= 5.0 -> 200.0
+                    diagDist == 0 && distArcMin <= 2.0 -> 0.0
+                    diagDist <= 1 && distArcMin <= 3.0 -> 100.0
+                    distArcMin <= 2.5 -> 100.0
+                    distArcMin <= 3.8 -> 200.0
                     else -> 400.0
                 }
             }
             "KLAX" -> {
                 // KLAX: Class B Surface, Runways 24L/R & 25L/R (East-West corridor)
                 when {
-                    abs(row) <= 1 && abs(col) <= 5 -> 0.0
-                    abs(row) <= 2 && abs(col) <= 6 -> 50.0
-                    distCells <= 4.5 -> 100.0
-                    distCells <= 6.0 -> 200.0
-                    distCells <= 7.0 -> 300.0
+                    abs(dLat) == 0 && abs(dLon) <= 3 -> 0.0
+                    abs(dLat) <= 1 && abs(dLon) <= 4 -> 50.0
+                    distArcMin <= 3.2 -> 100.0
+                    distArcMin <= 4.2 -> 200.0
+                    distArcMin <= 5.2 -> 300.0
                     else -> 400.0
                 }
             }
             "KSAN" -> {
                 // KSAN: Runway 27/09 (East-West over downtown and bay)
                 when {
-                    abs(row) <= 1 && abs(col) <= 4 -> 0.0
-                    abs(row) <= 1 && abs(col) <= 5 -> 100.0
-                    distCells <= 3.5 -> 100.0
-                    distCells <= 5.0 -> 200.0
+                    abs(dLat) == 0 && abs(dLon) <= 2 -> 0.0
+                    abs(dLat) <= 1 && abs(dLon) <= 3 -> 100.0
+                    distArcMin <= 2.5 -> 100.0
+                    distArcMin <= 3.8 -> 200.0
                     else -> 400.0
                 }
             }
             else -> {
-                // Default controlled airport pattern (KCNO, KSBD, KBUR, KVNY)
+                // Default controlled airport pattern (KSBD, KBUR, KVNY)
                 when {
-                    distCells <= 1.5 -> 0.0
-                    distCells <= 2.5 -> 100.0
-                    distCells <= 4.0 -> 200.0
-                    distCells <= 5.0 -> 300.0
+                    distArcMin <= 1.0 -> 0.0
+                    distArcMin <= 2.0 -> 100.0
+                    distArcMin <= 3.0 -> 200.0
+                    distArcMin <= 4.0 -> 300.0
                     else -> 400.0
                 }
             }
