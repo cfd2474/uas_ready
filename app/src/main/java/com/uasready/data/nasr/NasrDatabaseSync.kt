@@ -20,7 +20,7 @@ object NasrDatabaseSync {
     private const val KEY_LAST_APP_VERSION = "last_installed_version_code"
     private const val MASTER_ASSET_PATH = "databases/nasr_airspace.db.gz"
 
-    fun syncOnAppLaunch(context: Context, helper: NasrDatabaseHelper = NasrDatabaseHelper(context)) {
+    fun syncOnAppLaunch(context: Context, helper: NasrDatabaseHelper = NasrDatabaseHelper.getInstance(context)) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val lastVersion = prefs.getInt(KEY_LAST_APP_VERSION, -1)
         val currentVersion = BuildConfig.VERSION_CODE
@@ -53,6 +53,7 @@ object NasrDatabaseSync {
      */
     fun unpackMasterDatabaseFromAssets(context: Context): Boolean {
         return try {
+            NasrDatabaseHelper.resetInstance()
             val dbFile = context.getDatabasePath(NasrDatabaseHelper.DB_NAME)
             dbFile.parentFile?.mkdirs()
 

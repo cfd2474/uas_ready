@@ -20,7 +20,7 @@ sealed class AiracUpdateStatus {
 
 class NasrUpdateManager(
     private val context: Context,
-    private val dbHelper: NasrDatabaseHelper = NasrDatabaseHelper(context)
+    private val dbHelper: NasrDatabaseHelper = NasrDatabaseHelper.getInstance(context)
 ) {
     companion object {
         private const val TAG = "NasrUpdateManager"

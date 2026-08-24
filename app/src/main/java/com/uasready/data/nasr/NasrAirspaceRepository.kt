@@ -14,7 +14,7 @@ import java.net.URL
 
 class NasrAirspaceRepository(
     private val context: Context,
-    private val dbHelper: NasrDatabaseHelper = NasrDatabaseHelper(context),
+    private val dbHelper: NasrDatabaseHelper = NasrDatabaseHelper.getInstance(context),
     private val tfrPoller: TfrPollingService = TfrPollingService(dbHelper)
 ) : AirspaceRepository {
 

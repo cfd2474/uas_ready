@@ -20,6 +20,24 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         const val DB_NAME = "nasr_airspace.db"
         const val DB_VERSION = 7
         private const val TAG = "NasrDbHelper"
+
+        @Volatile
+        private var instance: NasrDatabaseHelper? = null
+
+        fun getInstance(context: Context): NasrDatabaseHelper {
+            return instance ?: synchronized(this) {
+                instance ?: NasrDatabaseHelper(context.applicationContext).also { instance = it }
+            }
+        }
+
+        fun resetInstance() {
+            synchronized(this) {
+                try {
+                    instance?.close()
+                } catch (_: Exception) {}
+                instance = null
+            }
+        }
     }
 
     override fun onCreate(db: SQLiteDatabase) {

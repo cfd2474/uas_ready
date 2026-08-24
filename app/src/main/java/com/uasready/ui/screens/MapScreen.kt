@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -140,6 +141,9 @@ fun MapScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val helper = remember { NasrDatabaseHelper.getInstance(context) }
+
     var showLegend by remember { mutableStateOf(false) }
     var selectedBasemap by remember { mutableStateOf(BasemapType.STREET) }
     var inspectionResult by remember { mutableStateOf<AirspaceInspection?>(null) }
@@ -394,7 +398,6 @@ fun MapScreen(
     // Reactive listener to immediately re-render overlays when layer toggles change
     LaunchedEffect(enabledZoneTypes) {
         mapViewRef?.let { map ->
-            val helper = NasrDatabaseHelper(map.context)
             renderExtentOverlays(map, helper, enabledZoneTypes)
         }
     }
@@ -406,11 +409,9 @@ fun MapScreen(
     ) {
         // Interactive Map View with Live Aeronautical Overlays & Selectable NO-POI Basemaps
         AndroidView(
-            factory = { context ->
-                val helper = NasrDatabaseHelper(context)
-                NasrSeedData.populateDatabaseIfEmpty(helper)
+            factory = { ctx ->
                 Configuration.getInstance().userAgentValue = "UASReady-Android-App/1.0"
-                MapView(context).apply {
+                MapView(ctx).apply {
                     mapViewRef = this
                     setTileSource(STREET_TILE_SOURCE)
                     setMultiTouchControls(true)
@@ -440,8 +441,6 @@ fun MapScreen(
             },
             update = { mapView ->
                 mapViewRef = mapView
-                val helper = NasrDatabaseHelper(mapView.context)
-                NasrSeedData.populateDatabaseIfEmpty(helper)
 
                 // Apply Selected NO-POI Basemap Tile Source
                 val targetTileSource = when (selectedBasemap) {
@@ -458,8 +457,6 @@ fun MapScreen(
                     mapView.controller.animateTo(point)
                     shouldRecenterMap = false
                 }
-
-                renderExtentOverlays(mapView, helper, enabledZoneTypes)
             },
             modifier = Modifier.fillMaxSize()
         )
