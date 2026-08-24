@@ -285,16 +285,17 @@ fun MapScreen(
                     AirspaceZoneType.ALTITUDE_ZONE -> {
                         // 1 Arc-Minute UAS Facility Map Grids with altitude-tiered coloring
                         val ceiling = zone.ceilingFt ?: 400.0
-                        val (fillA, outlineA) = when {
-                            ceiling <= 0.0 -> Pair(AndroidColor.argb(75, 235, 65, 65), AndroidColor.argb(255, 235, 65, 65)) // 0 ft Red
-                            ceiling <= 100.0 -> Pair(AndroidColor.argb(65, 255, 140, 0), AndroidColor.argb(255, 255, 140, 0)) // 50-100 ft Orange
-                            ceiling <= 200.0 -> Pair(AndroidColor.argb(55, 240, 195, 35), AndroidColor.argb(255, 240, 195, 35)) // 200 ft Yellow
-                            ceiling <= 300.0 -> Pair(AndroidColor.argb(50, 145, 215, 60), AndroidColor.argb(255, 145, 215, 60)) // 300 ft Chartreuse
-                            else -> Pair(AndroidColor.argb(45, 0, 210, 255), AndroidColor.argb(255, 0, 210, 255)) // 400 ft Cyan
+                        val fillA = when {
+                            ceiling <= 0.0 -> AndroidColor.argb(80, 235, 65, 65) // 0 ft Red
+                            ceiling <= 100.0 -> AndroidColor.argb(70, 255, 140, 0) // 50-100 ft Orange
+                            ceiling <= 200.0 -> AndroidColor.argb(60, 240, 195, 35) // 200 ft Yellow
+                            ceiling <= 300.0 -> AndroidColor.argb(55, 145, 215, 60) // 300 ft Chartreuse
+                            else -> AndroidColor.argb(50, 0, 210, 255) // 400 ft Cyan
                         }
                         fillPaint.color = fillA
-                        outlinePaint.color = outlineA
-                        outlinePaint.strokeWidth = 2.0f
+                        // Crisp high-contrast 1 arc-minute grid boundary line so every single 1'x1' square is individually distinct
+                        outlinePaint.color = AndroidColor.argb(210, 15, 20, 30)
+                        outlinePaint.strokeWidth = 1.6f
                     }
                     AirspaceZoneType.SPECIAL_USE -> {
                         fillPaint.color = AndroidColor.argb(45, 255, 140, 0)
