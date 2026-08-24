@@ -6,7 +6,7 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.36` (Build 44)
+- **Current Version**: `v1.3.37` (Build 45)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
