@@ -214,11 +214,150 @@ class WeatherRuleEvaluator : CategoryRuleEvaluator {
             }
         }
 
+        // 5. Operating Temperature vs Aircraft Limits
+        val temp = weather.temperatureF
+        val minTemp = context.aircraft.limitations.minOperatingTempF
+        val maxTemp = context.aircraft.limitations.maxOperatingTempF
+        when {
+            temp < minTemp -> rules.add(
+                RuleResult(
+                    ruleId = "WX-TEMP-001",
+                    category = category,
+                    status = AssessmentStatus.NO_GO,
+                    title = "Temperature Below Operating Limit",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f°F", temp),
+                    thresholdFormatted = String.format(java.util.Locale.US, "Min %.1f°F (%s)", minTemp, context.aircraft.displayName),
+                    explanation = String.format(java.util.Locale.US, "Current temperature (%.1f°F) is below %s's certified minimum operating temperature (%.1f°F). High risk of LiPo battery voltage collapse.", temp, context.aircraft.displayName, minTemp),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+            temp > maxTemp -> rules.add(
+                RuleResult(
+                    ruleId = "WX-TEMP-002",
+                    category = category,
+                    status = AssessmentStatus.NO_GO,
+                    title = "Temperature Above Operating Limit",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f°F", temp),
+                    thresholdFormatted = String.format(java.util.Locale.US, "Max %.1f°F (%s)", maxTemp, context.aircraft.displayName),
+                    explanation = String.format(java.util.Locale.US, "Current temperature (%.1f°F) exceeds %s's maximum operating temperature (%.1f°F). Severe risk of ESC thermal shutdown and battery overheating.", temp, context.aircraft.displayName, maxTemp),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+            temp <= minTemp + 5.0 || temp >= maxTemp - 5.0 -> rules.add(
+                RuleResult(
+                    ruleId = "WX-TEMP-003",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "Temperature Near Operational Boundary",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f°F", temp),
+                    thresholdFormatted = String.format(java.util.Locale.US, "%.1f°F to %.1f°F", minTemp, maxTemp),
+                    explanation = String.format(java.util.Locale.US, "Current temperature (%.1f°F) is near %s's operating limits (%.1f°F to %.1f°F). Monitor battery temperatures continuously.", temp, context.aircraft.displayName, minTemp, maxTemp),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+            else -> rules.add(
+                RuleResult(
+                    ruleId = "WX-TEMP-004",
+                    category = category,
+                    status = AssessmentStatus.GO,
+                    title = "Operating Temperature",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f°F", temp),
+                    thresholdFormatted = String.format(java.util.Locale.US, "%.1f°F to %.1f°F", minTemp, maxTemp),
+                    explanation = String.format(java.util.Locale.US, "Ambient temperature (%.1f°F) is within nominal operating range.", temp),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+        }
+
+        // 6. Surface Wind & Gust Limits
+        val windSpeed = weather.windSpeedMph
+        val windGust = weather.windGustMph
+        val maxSustained = context.aircraft.limitations.maxSustainedWindSpeedMph
+        val maxGust = context.aircraft.limitations.maxGustSpeedMph
+
+        when {
+            windSpeed > maxSustained -> rules.add(
+                RuleResult(
+                    ruleId = "WX-WIND-001",
+                    category = category,
+                    status = AssessmentStatus.NO_GO,
+                    title = "Sustained Wind Exceeded",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f MPH", windSpeed),
+                    thresholdFormatted = String.format(java.util.Locale.US, "Max %.1f MPH (%s)", maxSustained, context.aircraft.displayName),
+                    explanation = String.format(java.util.Locale.US, "Sustained wind of %.1f MPH exceeds %s's limit (%.1f MPH).", windSpeed, context.aircraft.displayName, maxSustained),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+            windSpeed >= maxSustained - 4.0 -> rules.add(
+                RuleResult(
+                    ruleId = "WX-WIND-002",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "Elevated Sustained Wind",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f MPH", windSpeed),
+                    thresholdFormatted = String.format(java.util.Locale.US, "< %.1f MPH", maxSustained - 4.0),
+                    explanation = String.format(java.util.Locale.US, "Sustained wind (%.1f MPH) is near maximum aircraft limit (%.1f MPH).", windSpeed, maxSustained),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+            else -> rules.add(
+                RuleResult(
+                    ruleId = "WX-WIND-003",
+                    category = category,
+                    status = AssessmentStatus.GO,
+                    title = "Sustained Wind Speed",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f MPH", windSpeed),
+                    thresholdFormatted = String.format(java.util.Locale.US, "Max %.1f MPH", maxSustained),
+                    explanation = String.format(java.util.Locale.US, "Sustained winds (%.1f MPH) are within acceptable limits.", windSpeed),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+        }
+
+        when {
+            windGust > maxGust -> rules.add(
+                RuleResult(
+                    ruleId = "WX-GUST-001",
+                    category = category,
+                    status = AssessmentStatus.NO_GO,
+                    title = "Wind Gust Limit Exceeded",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f MPH", windGust),
+                    thresholdFormatted = String.format(java.util.Locale.US, "Max %.1f MPH (%s)", maxGust, context.aircraft.displayName),
+                    explanation = String.format(java.util.Locale.US, "Wind gusts (%.1f MPH) exceed %s's maximum certified limit (%.1f MPH).", windGust, context.aircraft.displayName, maxGust),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+            windGust >= maxGust - 5.0 -> rules.add(
+                RuleResult(
+                    ruleId = "WX-GUST-002",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "Elevated Wind Gusts",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f MPH", windGust),
+                    thresholdFormatted = String.format(java.util.Locale.US, "< %.1f MPH", maxGust - 5.0),
+                    explanation = String.format(java.util.Locale.US, "Wind gusts (%.1f MPH) are near maximum aircraft limit (%.1f MPH).", windGust, maxGust),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+            else -> rules.add(
+                RuleResult(
+                    ruleId = "WX-GUST-003",
+                    category = category,
+                    status = AssessmentStatus.GO,
+                    title = "Wind Gusts",
+                    inputValueFormatted = String.format(java.util.Locale.US, "%.1f MPH", windGust),
+                    thresholdFormatted = String.format(java.util.Locale.US, "Max %.1f MPH", maxGust),
+                    explanation = String.format(java.util.Locale.US, "Wind gusts (%.1f MPH) are within aircraft limits.", windGust),
+                    applicableAircraft = context.aircraft.displayName
+                )
+            )
+        }
+
         val worstStatus = rules.maxByOrNull { it.status.priority }?.status ?: AssessmentStatus.GO
         val summary = when (worstStatus) {
-            AssessmentStatus.NO_GO -> "Meteorological criteria violated (visibility/ceiling/convective storm)"
-            AssessmentStatus.CAUTION -> "Marginal meteorological conditions detected"
-            AssessmentStatus.GO -> "All general weather conditions satisfy operational criteria"
+            AssessmentStatus.NO_GO -> "Meteorological or environmental limitations exceeded"
+            AssessmentStatus.CAUTION -> "Marginal meteorological / environmental conditions detected"
+            AssessmentStatus.GO -> "All weather and environmental conditions satisfy operational criteria"
             AssessmentStatus.DATA_UNAVAILABLE -> "Weather data incomplete"
         }
 
