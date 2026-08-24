@@ -18,7 +18,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
 
     companion object {
         const val DB_NAME = "nasr_airspace.db"
-        const val DB_VERSION = 6
+        const val DB_VERSION = 7
         private const val TAG = "NasrDbHelper"
     }
 
@@ -145,7 +145,31 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 """.trimIndent()
             )
 
-            // 8. Active TFRs Table (Runtime volatile)
+            // 8. National Security UAS Restrictions Table
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS national_security_restrictions (
+                    rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id TEXT UNIQUE,
+                    proponent TEXT,
+                    branch TEXT,
+                    base TEXT,
+                    facility TEXT,
+                    airspace_class TEXT,
+                    reason TEXT,
+                    poc TEXT,
+                    floor_ft REAL,
+                    ceiling_ft REAL,
+                    geom_wkb BLOB,
+                    min_lat REAL,
+                    max_lat REAL,
+                    min_lon REAL,
+                    max_lon REAL
+                )
+                """.trimIndent()
+            )
+
+            // 9. Active TFRs Table (Runtime volatile)
             db.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS tfr_active (
@@ -636,7 +660,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         val eLon = maxOf(minLon, maxLon)
 
         val query = """
-            SELECT id, icao_id, ceiling_ft, geom_wkb
+            SELECT id, icao_id, ceiling_ft, geom_wkb, min_lat, max_lat, min_lon, max_lon
             FROM uasfm_grid
             WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
             LIMIT ?
@@ -648,10 +672,25 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 val icao = cursor.getString(1)
                 val ceiling = cursor.getDouble(2)
                 val wkb = cursor.getBlob(3)
-                val polygon = if (wkb != null) GeometryUtils.decodeWkbToPolygon(wkb) else emptyList()
+                val cMinLat = cursor.getDouble(4)
+                val cMaxLat = cursor.getDouble(5)
+                val cMinLon = cursor.getDouble(6)
+                val cMaxLon = cursor.getDouble(7)
 
-                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (sLat + nLat) / 2.0
-                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (wLon + eLon) / 2.0
+                val polygon = if (wkb != null) {
+                    GeometryUtils.decodeWkbToPolygon(wkb)
+                } else {
+                    listOf(
+                        Pair(cMinLat, cMinLon),
+                        Pair(cMinLat, cMaxLon),
+                        Pair(cMaxLat, cMaxLon),
+                        Pair(cMaxLat, cMinLon),
+                        Pair(cMinLat, cMinLon)
+                    )
+                }
+
+                val cLat = (cMinLat + cMaxLat) / 2.0
+                val cLon = (cMinLon + cMaxLon) / 2.0
 
                 list.add(
                     AirspaceZone(
@@ -668,6 +707,72 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                     )
                 )
             }
+        }
+        return list
+    }
+
+    /**
+     * Queries National Security UAS Flight Restrictions (14 CFR § 99.7 / § 2209) in a bounding box.
+     */
+    fun queryNationalSecurityRestrictionsInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 500): List<AirspaceZone> {
+        val db = readableDatabase
+        val list = mutableListOf<AirspaceZone>()
+        val sLat = minOf(minLat, maxLat)
+        val nLat = maxOf(minLat, maxLat)
+        val wLon = minOf(minLon, maxLon)
+        val eLon = maxOf(minLon, maxLon)
+
+        val query = """
+            SELECT id, proponent, branch, base, facility, airspace_class, reason, poc, floor_ft, ceiling_ft, geom_wkb, min_lat, max_lat, min_lon, max_lon
+            FROM national_security_restrictions
+            WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
+            LIMIT ?
+        """.trimIndent()
+
+        try {
+            db.rawQuery(query, arrayOf(nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getString(0)
+                    val proponent = cursor.getString(1) ?: ""
+                    val branch = cursor.getString(2) ?: ""
+                    val base = cursor.getString(3) ?: ""
+                    val facility = cursor.getString(4) ?: ""
+                    val airspaceClass = cursor.getString(5) ?: ""
+                    val reason = cursor.getString(6) ?: "National Security UAS Flight Restriction"
+                    val poc = cursor.getString(7) ?: ""
+                    val floor = cursor.getDouble(8)
+                    val ceiling = cursor.getDouble(9)
+                    val wkb = cursor.getBlob(10)
+                    val cMinLat = cursor.getDouble(11)
+                    val cMaxLat = cursor.getDouble(12)
+                    val cMinLon = cursor.getDouble(13)
+                    val cMaxLon = cursor.getDouble(14)
+
+                    val polygon = if (wkb != null) GeometryUtils.decodeWkbToPolygon(wkb) else emptyList()
+                    val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (cMinLat + cMaxLat) / 2.0
+                    val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (cMinLon + cMaxLon) / 2.0
+
+                    val labelName = listOf(proponent, branch, base, facility).filter { it.isNotBlank() }.joinToString(" - ")
+                    val desc = "FAA 14 CFR § 99.7 National Security Restriction: $reason" + if (poc.isNotBlank()) "\nPOC: $poc" else ""
+
+                    list.add(
+                        AirspaceZone(
+                            id = "NS-$id",
+                            name = if (labelName.isNotBlank()) labelName else "National Security UAS Restriction",
+                            type = AirspaceZoneType.RESTRICTED_ZONE,
+                            centerLat = cLat,
+                            centerLon = cLon,
+                            radiusMeters = 3000.0,
+                            floorFt = floor,
+                            ceilingFt = ceiling,
+                            description = desc,
+                            polygonCoordinates = polygon
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Table national_security_restrictions query fallback: ${e.message}")
         }
         return list
     }

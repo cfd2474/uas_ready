@@ -223,12 +223,15 @@ fun MapScreen(
                 val suaInExtent = withContext(Dispatchers.IO) {
                     helper.querySuaInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 150)
                 }
+                val nsRestrictionsInExtent = withContext(Dispatchers.IO) {
+                    helper.queryNationalSecurityRestrictionsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 200)
+                }
                 val activeTfrs = withContext(Dispatchers.IO) {
                     helper.queryActiveTfrsInBoundingBox(minLat, maxLat, minLon, maxLon, nowMs = nowMs, limit = 50)
                 }
                 val uasfmInExtent = withContext(Dispatchers.IO) {
-                    if (zoom >= 9.5) {
-                        helper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 2000)
+                    if (zoom >= 10.0) {
+                        helper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 3000)
                     } else {
                         emptyList()
                     }
@@ -245,6 +248,7 @@ fun MapScreen(
                 allExtentZones.addAll(airspacesInExtent)
                 allExtentZones.addAll(uasfmInExtent)
                 allExtentZones.addAll(suaInExtent)
+                allExtentZones.addAll(nsRestrictionsInExtent)
                 for (tfr in activeTfrs) {
                     if (tfr.polygonCoordinates.isNotEmpty()) {
                         allExtentZones.add(
