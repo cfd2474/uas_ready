@@ -18,7 +18,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
 
     companion object {
         const val DB_NAME = "nasr_airspace.db"
-        const val DB_VERSION = 5
+        const val DB_VERSION = 6
         private const val TAG = "NasrDbHelper"
     }
 

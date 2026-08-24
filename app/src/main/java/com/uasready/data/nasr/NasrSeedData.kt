@@ -30,7 +30,7 @@ object NasrSeedData {
         helper.insertAirports(airports)
 
         // 2. Class Airspaces
-        val airspaces = getSeedAirspaces()
+        val airspaces = getSeedAirspaces(airports)
         helper.insertAirspaces(airspaces)
 
         // 3. Special Use Airspaces (SUA)
@@ -154,86 +154,99 @@ object NasrSeedData {
         NasrAirport("BUF", "KBUF", "Buffalo Niagara International", "Buffalo", "NY", 42.9405, -78.7322, 728.0, "PU", ctafFreq = "120.500", towerFreq = "120.500", atisFreq = "125.800")
     )
 
-    fun getSeedAirspaces(): List<NasrAirspaceFeature> = listOf(
-        // --- Class B Controlled Surface Sectors across CONUS ---
-        createSurfaceAirspace("KLAX", "Los Angeles (KLAX) Class B Surface Sector", AirspaceClass.CLASS_B, 33.9425, -118.4081, 11112.0, 10000.0),
-        createSurfaceAirspace("KSAN", "San Diego (KSAN) Class B Surface Sector", AirspaceClass.CLASS_B, 32.7336, -117.1897, 9260.0, 10000.0),
-        createSurfaceAirspace("KSFO", "San Francisco (KSFO) Class B Surface Sector", AirspaceClass.CLASS_B, 37.6190, -122.3748, 11112.0, 10000.0),
-        createSurfaceAirspace("KSEA", "Seattle-Tacoma (KSEA) Class B Surface Sector", AirspaceClass.CLASS_B, 47.4502, -122.3088, 11112.0, 10000.0),
-        createSurfaceAirspace("KLAS", "Harry Reid (KLAS) Class B Surface Sector", AirspaceClass.CLASS_B, 36.0840, -115.1537, 9260.0, 10000.0),
-        createSurfaceAirspace("KPHX", "Phoenix Sky Harbor (KPHX) Class B Surface Sector", AirspaceClass.CLASS_B, 33.4342, -112.0080, 11112.0, 10000.0),
-        createSurfaceAirspace("KSLC", "Salt Lake City (KSLC) Class B Surface Sector", AirspaceClass.CLASS_B, 40.7899, -111.9791, 11112.0, 10000.0),
-        createSurfaceAirspace("KDEN", "Denver (KDEN) Class B Surface Sector", AirspaceClass.CLASS_B, 39.8561, -104.6737, 12964.0, 12000.0),
-        createSurfaceAirspace("KDFW", "Dallas/Fort Worth (KDFW) Class B Surface Sector", AirspaceClass.CLASS_B, 32.8998, -97.0403, 12964.0, 11000.0),
-        createSurfaceAirspace("KIAH", "George Bush Houston (KIAH) Class B Surface Sector", AirspaceClass.CLASS_B, 29.9844, -95.3414, 11112.0, 10000.0),
-        createSurfaceAirspace("KORD", "Chicago O'Hare (KORD) Class B Surface Sector", AirspaceClass.CLASS_B, 41.9742, -87.9073, 11112.0, 10000.0),
-        createSurfaceAirspace("KMSP", "Minneapolis-St. Paul (KMSP) Class B Surface Sector", AirspaceClass.CLASS_B, 44.8848, -93.2223, 11112.0, 10000.0),
-        createSurfaceAirspace("KDTW", "Detroit Metro (KDTW) Class B Surface Sector", AirspaceClass.CLASS_B, 42.2124, -83.3534, 11112.0, 10000.0),
-        createSurfaceAirspace("KATL", "Atlanta (KATL) Class B Surface Sector", AirspaceClass.CLASS_B, 33.6407, -84.4277, 12964.0, 12500.0),
-        createSurfaceAirspace("KMCO", "Orlando (KMCO) Class B Surface Sector", AirspaceClass.CLASS_B, 28.4312, -81.3081, 11112.0, 10000.0),
-        createSurfaceAirspace("KMIA", "Miami (KMIA) Class B Surface Sector", AirspaceClass.CLASS_B, 25.7959, -80.2870, 11112.0, 10000.0),
-        createSurfaceAirspace("KCLT", "Charlotte (KCLT) Class B Surface Sector", AirspaceClass.CLASS_B, 35.2144, -80.9473, 11112.0, 10000.0),
-        createSurfaceAirspace("KIAD", "Washington Dulles (KIAD) Class B Surface Sector", AirspaceClass.CLASS_B, 38.9531, -77.4565, 11112.0, 10000.0),
-        createSurfaceAirspace("KDCA", "Reagan Washington (KDCA) Class B Surface Sector", AirspaceClass.CLASS_B, 38.8512, -77.0377, 9260.0, 10000.0),
-        createSurfaceAirspace("KBWI", "Baltimore/Washington (KBWI) Class B Surface Sector", AirspaceClass.CLASS_B, 39.1754, -76.6683, 11112.0, 10000.0),
-        createSurfaceAirspace("KPHL", "Philadelphia (KPHL) Class B Surface Sector", AirspaceClass.CLASS_B, 39.8721, -75.2407, 11112.0, 10000.0),
-        createSurfaceAirspace("KJFK", "New York JFK (KJFK) Class B Surface Sector", AirspaceClass.CLASS_B, 40.6413, -73.7781, 11112.0, 7000.0),
-        createSurfaceAirspace("KLGA", "New York LaGuardia (KLGA) Class B Surface Sector", AirspaceClass.CLASS_B, 40.7769, -73.8740, 9260.0, 7000.0),
-        createSurfaceAirspace("KEWR", "Newark Liberty (KEWR) Class B Surface Sector", AirspaceClass.CLASS_B, 40.6895, -74.1745, 9260.0, 7000.0),
-        createSurfaceAirspace("KBOS", "Boston Logan (KBOS) Class B Surface Sector", AirspaceClass.CLASS_B, 42.3656, -71.0096, 11112.0, 7000.0),
+    fun getSeedAirspaces(airports: List<NasrAirport> = getSeedAirports()): List<NasrAirspaceFeature> {
+        val explicitAirspaces = listOf(
+            // --- Class B Controlled Surface Sectors across CONUS ---
+            createSurfaceAirspace("KLAX", "Los Angeles (KLAX) Class B Surface Sector", AirspaceClass.CLASS_B, 33.9425, -118.4081, 11112.0, 10000.0),
+            createSurfaceAirspace("KSAN", "San Diego (KSAN) Class B Surface Sector", AirspaceClass.CLASS_B, 32.7336, -117.1897, 9260.0, 10000.0),
+            createSurfaceAirspace("KSFO", "San Francisco (KSFO) Class B Surface Sector", AirspaceClass.CLASS_B, 37.6190, -122.3748, 11112.0, 10000.0),
+            createSurfaceAirspace("KSEA", "Seattle-Tacoma (KSEA) Class B Surface Sector", AirspaceClass.CLASS_B, 47.4502, -122.3088, 11112.0, 10000.0),
+            createSurfaceAirspace("KLAS", "Harry Reid (KLAS) Class B Surface Sector", AirspaceClass.CLASS_B, 36.0840, -115.1537, 9260.0, 10000.0),
+            createSurfaceAirspace("KPHX", "Phoenix Sky Harbor (KPHX) Class B Surface Sector", AirspaceClass.CLASS_B, 33.4342, -112.0080, 11112.0, 10000.0),
+            createSurfaceAirspace("KSLC", "Salt Lake City (KSLC) Class B Surface Sector", AirspaceClass.CLASS_B, 40.7899, -111.9791, 11112.0, 10000.0),
+            createSurfaceAirspace("KDEN", "Denver (KDEN) Class B Surface Sector", AirspaceClass.CLASS_B, 39.8561, -104.6737, 12964.0, 12000.0),
+            createSurfaceAirspace("KDFW", "Dallas/Fort Worth (KDFW) Class B Surface Sector", AirspaceClass.CLASS_B, 32.8998, -97.0403, 12964.0, 11000.0),
+            createSurfaceAirspace("KIAH", "George Bush Houston (KIAH) Class B Surface Sector", AirspaceClass.CLASS_B, 29.9844, -95.3414, 11112.0, 10000.0),
+            createSurfaceAirspace("KORD", "Chicago O'Hare (KORD) Class B Surface Sector", AirspaceClass.CLASS_B, 41.9742, -87.9073, 11112.0, 10000.0),
+            createSurfaceAirspace("KMSP", "Minneapolis-St. Paul (KMSP) Class B Surface Sector", AirspaceClass.CLASS_B, 44.8848, -93.2223, 11112.0, 10000.0),
+            createSurfaceAirspace("KDTW", "Detroit Metro (KDTW) Class B Surface Sector", AirspaceClass.CLASS_B, 42.2124, -83.3534, 11112.0, 10000.0),
+            createSurfaceAirspace("KATL", "Atlanta (KATL) Class B Surface Sector", AirspaceClass.CLASS_B, 33.6407, -84.4277, 12964.0, 12500.0),
+            createSurfaceAirspace("KMCO", "Orlando (KMCO) Class B Surface Sector", AirspaceClass.CLASS_B, 28.4312, -81.3081, 11112.0, 10000.0),
+            createSurfaceAirspace("KMIA", "Miami (KMIA) Class B Surface Sector", AirspaceClass.CLASS_B, 25.7959, -80.2870, 11112.0, 10000.0),
+            createSurfaceAirspace("KCLT", "Charlotte (KCLT) Class B Surface Sector", AirspaceClass.CLASS_B, 35.2144, -80.9473, 11112.0, 10000.0),
+            createSurfaceAirspace("KIAD", "Washington Dulles (KIAD) Class B Surface Sector", AirspaceClass.CLASS_B, 38.9531, -77.4565, 11112.0, 10000.0),
+            createSurfaceAirspace("KDCA", "Reagan Washington (KDCA) Class B Surface Sector", AirspaceClass.CLASS_B, 38.8512, -77.0377, 9260.0, 10000.0),
+            createSurfaceAirspace("KBWI", "Baltimore/Washington (KBWI) Class B Surface Sector", AirspaceClass.CLASS_B, 39.1754, -76.6683, 11112.0, 10000.0),
+            createSurfaceAirspace("KPHL", "Philadelphia (KPHL) Class B Surface Sector", AirspaceClass.CLASS_B, 39.8721, -75.2407, 11112.0, 10000.0),
+            createSurfaceAirspace("KJFK", "New York JFK (KJFK) Class B Surface Sector", AirspaceClass.CLASS_B, 40.6413, -73.7781, 11112.0, 7000.0),
+            createSurfaceAirspace("KLGA", "New York LaGuardia (KLGA) Class B Surface Sector", AirspaceClass.CLASS_B, 40.7769, -73.8740, 9260.0, 7000.0),
+            createSurfaceAirspace("KEWR", "Newark Liberty (KEWR) Class B Surface Sector", AirspaceClass.CLASS_B, 40.6895, -74.1745, 9260.0, 7000.0),
+            createSurfaceAirspace("KBOS", "Boston Logan (KBOS) Class B Surface Sector", AirspaceClass.CLASS_B, 42.3656, -71.0096, 11112.0, 7000.0),
 
-        // --- Class C Controlled Surface Areas across CONUS ---
-        createSurfaceAirspace("KONT", "Ontario (KONT) Class C Surface Area", AirspaceClass.CLASS_C, 34.0560, -117.6012, 9260.0, 5000.0),
-        createSurfaceAirspace("KSNA", "John Wayne (KSNA) Class C Surface Area", AirspaceClass.CLASS_C, 33.6757, -117.8682, 9260.0, 5400.0),
-        createSurfaceAirspace("KRIV", "March ARB (KRIV) Class C Surface Area", AirspaceClass.CLASS_C, 33.8807, -117.2592, 9260.0, 5000.0),
-        createSurfaceAirspace("KOAK", "Oakland (KOAK) Class C Surface Area", AirspaceClass.CLASS_C, 37.7213, -122.2207, 9260.0, 4000.0),
-        createSurfaceAirspace("KSJC", "San Jose (KSJC) Class C Surface Area", AirspaceClass.CLASS_C, 37.3626, -121.9290, 9260.0, 4000.0),
-        createSurfaceAirspace("KSMF", "Sacramento (KSMF) Class C Surface Area", AirspaceClass.CLASS_C, 38.6954, -121.5908, 9260.0, 4000.0),
-        createSurfaceAirspace("KPDX", "Portland (KPDX) Class C Surface Area", AirspaceClass.CLASS_C, 45.5898, -122.5951, 9260.0, 4000.0),
-        createSurfaceAirspace("KBOI", "Boise (KBOI) Class C Surface Area", AirspaceClass.CLASS_C, 43.5644, -116.2228, 9260.0, 6900.0),
-        createSurfaceAirspace("KRNO", "Reno (KRNO) Class C Surface Area", AirspaceClass.CLASS_C, 39.4991, -119.7681, 9260.0, 9000.0),
-        createSurfaceAirspace("KTUS", "Tucson (KTUS) Class C Surface Area", AirspaceClass.CLASS_C, 32.1161, -110.9410, 9260.0, 7000.0),
-        createSurfaceAirspace("KABQ", "Albuquerque (KABQ) Class C Surface Area", AirspaceClass.CLASS_C, 35.0402, -106.6092, 9260.0, 9300.0),
-        createSurfaceAirspace("KCOS", "Colorado Springs (KCOS) Class C Surface Area", AirspaceClass.CLASS_C, 38.8058, -104.7008, 9260.0, 10000.0),
-        createSurfaceAirspace("KDAL", "Dallas Love (KDAL) Class C Surface Area", AirspaceClass.CLASS_C, 32.8471, -96.8518, 9260.0, 3000.0),
-        createSurfaceAirspace("KHOU", "Houston Hobby (KHOU) Class C Surface Area", AirspaceClass.CLASS_C, 29.6454, -95.2789, 9260.0, 4000.0),
-        createSurfaceAirspace("KAUS", "Austin (KAUS) Class C Surface Area", AirspaceClass.CLASS_C, 30.1945, -97.6699, 9260.0, 4100.0),
-        createSurfaceAirspace("KSAT", "San Antonio (KSAT) Class C Surface Area", AirspaceClass.CLASS_C, 29.5337, -98.4698, 9260.0, 4800.0),
-        createSurfaceAirspace("KOKC", "Oklahoma City (KOKC) Class C Surface Area", AirspaceClass.CLASS_C, 35.3931, -97.6007, 9260.0, 5300.0),
-        createSurfaceAirspace("KTUL", "Tulsa (KTUL) Class C Surface Area", AirspaceClass.CLASS_C, 36.1984, -95.8881, 9260.0, 4700.0),
-        createSurfaceAirspace("KMCI", "Kansas City (KMCI) Class C Surface Area", AirspaceClass.CLASS_C, 39.2976, -94.7139, 9260.0, 5000.0),
-        createSurfaceAirspace("KSTL", "St. Louis (KSTL) Class C Surface Area", AirspaceClass.CLASS_C, 38.7487, -90.3700, 9260.0, 4600.0),
-        createSurfaceAirspace("KMSY", "New Orleans (KMSY) Class C Surface Area", AirspaceClass.CLASS_C, 29.9934, -90.2580, 9260.0, 4000.0),
-        createSurfaceAirspace("KMEM", "Memphis (KMEM) Class C Surface Area", AirspaceClass.CLASS_C, 35.0424, -89.9767, 9260.0, 5000.0),
-        createSurfaceAirspace("KMDW", "Chicago Midway (KMDW) Class C Surface Area", AirspaceClass.CLASS_C, 41.7860, -87.7522, 9260.0, 3600.0),
-        createSurfaceAirspace("KMKE", "Milwaukee (KMKE) Class C Surface Area", AirspaceClass.CLASS_C, 42.9472, -87.8966, 9260.0, 4800.0),
-        createSurfaceAirspace("KIND", "Indianapolis (KIND) Class C Surface Area", AirspaceClass.CLASS_C, 39.7173, -86.2944, 9260.0, 4800.0),
-        createSurfaceAirspace("KCVG", "Cincinnati (KCVG) Class C Surface Area", AirspaceClass.CLASS_C, 39.0461, -84.6622, 9260.0, 4900.0),
-        createSurfaceAirspace("KCLE", "Cleveland (KCLE) Class C Surface Area", AirspaceClass.CLASS_C, 41.4094, -81.8547, 9260.0, 4800.0),
-        createSurfaceAirspace("KCMH", "Columbus (KCMH) Class C Surface Area", AirspaceClass.CLASS_C, 39.9980, -82.8919, 9260.0, 4800.0),
-        createSurfaceAirspace("KFLL", "Fort Lauderdale (KFLL) Class C Surface Area", AirspaceClass.CLASS_C, 26.0742, -80.1506, 9260.0, 4000.0),
-        createSurfaceAirspace("KTPA", "Tampa (KTPA) Class C Surface Area", AirspaceClass.CLASS_C, 27.9755, -82.5332, 9260.0, 4000.0),
-        createSurfaceAirspace("KJAX", "Jacksonville (KJAX) Class C Surface Area", AirspaceClass.CLASS_C, 30.4941, -81.6879, 9260.0, 4000.0),
-        createSurfaceAirspace("KPBI", "Palm Beach (KPBI) Class C Surface Area", AirspaceClass.CLASS_C, 26.6832, -80.0956, 9260.0, 4000.0),
-        createSurfaceAirspace("KBNA", "Nashville (KBNA) Class C Surface Area", AirspaceClass.CLASS_C, 36.1245, -86.6782, 9260.0, 4600.0),
-        createSurfaceAirspace("KRDU", "Raleigh-Durham (KRDU) Class C Surface Area", AirspaceClass.CLASS_C, 35.8801, -78.7880, 9260.0, 4400.0),
-        createSurfaceAirspace("KCHS", "Charleston (KCHS) Class C Surface Area", AirspaceClass.CLASS_C, 32.8986, -80.0405, 9260.0, 4000.0),
-        createSurfaceAirspace("KPIT", "Pittsburgh (KPIT) Class C Surface Area", AirspaceClass.CLASS_C, 40.4915, -80.2329, 9260.0, 5200.0),
-        createSurfaceAirspace("KBUF", "Buffalo (KBUF) Class C Surface Area", AirspaceClass.CLASS_C, 42.9405, -78.7322, 9260.0, 4800.0),
-        createSurfaceAirspace("KBDL", "Bradley (KBDL) Class C Surface Area", AirspaceClass.CLASS_C, 41.9389, -72.6832, 9260.0, 4200.0),
+            // --- Class C Controlled Surface Areas across CONUS ---
+            createSurfaceAirspace("KONT", "Ontario (KONT) Class C Surface Area", AirspaceClass.CLASS_C, 34.0560, -117.6012, 9260.0, 5000.0),
+            createSurfaceAirspace("KSNA", "John Wayne (KSNA) Class C Surface Area", AirspaceClass.CLASS_C, 33.6757, -117.8682, 9260.0, 5400.0),
+            createSurfaceAirspace("KRIV", "March ARB (KRIV) Class C Surface Area", AirspaceClass.CLASS_C, 33.8807, -117.2592, 9260.0, 5000.0),
+            createSurfaceAirspace("KOAK", "Oakland (KOAK) Class C Surface Area", AirspaceClass.CLASS_C, 37.7213, -122.2207, 9260.0, 4000.0),
+            createSurfaceAirspace("KSJC", "San Jose (KSJC) Class C Surface Area", AirspaceClass.CLASS_C, 37.3626, -121.9290, 9260.0, 4000.0),
+            createSurfaceAirspace("KSMF", "Sacramento (KSMF) Class C Surface Area", AirspaceClass.CLASS_C, 38.6954, -121.5908, 9260.0, 4000.0),
+            createSurfaceAirspace("KPDX", "Portland (KPDX) Class C Surface Area", AirspaceClass.CLASS_C, 45.5898, -122.5951, 9260.0, 4000.0),
+            createSurfaceAirspace("KBOI", "Boise (KBOI) Class C Surface Area", AirspaceClass.CLASS_C, 43.5644, -116.2228, 9260.0, 6900.0),
+            createSurfaceAirspace("KRNO", "Reno (KRNO) Class C Surface Area", AirspaceClass.CLASS_C, 39.4991, -119.7681, 9260.0, 9000.0),
+            createSurfaceAirspace("KTUS", "Tucson (KTUS) Class C Surface Area", AirspaceClass.CLASS_C, 32.1161, -110.9410, 9260.0, 7000.0),
+            createSurfaceAirspace("KABQ", "Albuquerque (KABQ) Class C Surface Area", AirspaceClass.CLASS_C, 35.0402, -106.6092, 9260.0, 9300.0),
+            createSurfaceAirspace("KCOS", "Colorado Springs (KCOS) Class C Surface Area", AirspaceClass.CLASS_C, 38.8058, -104.7008, 9260.0, 10000.0),
+            createSurfaceAirspace("KDAL", "Dallas Love (KDAL) Class C Surface Area", AirspaceClass.CLASS_C, 32.8471, -96.8518, 9260.0, 3000.0),
+            createSurfaceAirspace("KHOU", "Houston Hobby (KHOU) Class C Surface Area", AirspaceClass.CLASS_C, 29.6454, -95.2789, 9260.0, 4000.0),
+            createSurfaceAirspace("KAUS", "Austin (KAUS) Class C Surface Area", AirspaceClass.CLASS_C, 30.1945, -97.6699, 9260.0, 4100.0),
+            createSurfaceAirspace("KSAT", "San Antonio (KSAT) Class C Surface Area", AirspaceClass.CLASS_C, 29.5337, -98.4698, 9260.0, 4800.0),
+            createSurfaceAirspace("KOKC", "Oklahoma City (KOKC) Class C Surface Area", AirspaceClass.CLASS_C, 35.3931, -97.6007, 9260.0, 5300.0),
+            createSurfaceAirspace("KTUL", "Tulsa (KTUL) Class C Surface Area", AirspaceClass.CLASS_C, 36.1984, -95.8881, 9260.0, 4700.0),
+            createSurfaceAirspace("KMCI", "Kansas City (KMCI) Class C Surface Area", AirspaceClass.CLASS_C, 39.2976, -94.7139, 9260.0, 5000.0),
+            createSurfaceAirspace("KSTL", "St. Louis (KSTL) Class C Surface Area", AirspaceClass.CLASS_C, 38.7487, -90.3700, 9260.0, 4600.0),
+            createSurfaceAirspace("KMSY", "New Orleans (KMSY) Class C Surface Area", AirspaceClass.CLASS_C, 29.9934, -90.2580, 9260.0, 4000.0),
+            createSurfaceAirspace("KMEM", "Memphis (KMEM) Class C Surface Area", AirspaceClass.CLASS_C, 35.0424, -89.9767, 9260.0, 5000.0),
+            createSurfaceAirspace("KMDW", "Chicago Midway (KMDW) Class C Surface Area", AirspaceClass.CLASS_C, 41.7860, -87.7522, 9260.0, 3600.0),
+            createSurfaceAirspace("KMKE", "Milwaukee (KMKE) Class C Surface Area", AirspaceClass.CLASS_C, 42.9472, -87.8966, 9260.0, 4800.0),
+            createSurfaceAirspace("KIND", "Indianapolis (KIND) Class C Surface Area", AirspaceClass.CLASS_C, 39.7173, -86.2944, 9260.0, 4800.0),
+            createSurfaceAirspace("KCVG", "Cincinnati (KCVG) Class C Surface Area", AirspaceClass.CLASS_C, 39.0461, -84.6622, 9260.0, 4900.0),
+            createSurfaceAirspace("KCLE", "Cleveland (KCLE) Class C Surface Area", AirspaceClass.CLASS_C, 41.4094, -81.8547, 9260.0, 4800.0),
+            createSurfaceAirspace("KCMH", "Columbus (KCMH) Class C Surface Area", AirspaceClass.CLASS_C, 39.9980, -82.8919, 9260.0, 4800.0),
+            createSurfaceAirspace("KFLL", "Fort Lauderdale (KFLL) Class C Surface Area", AirspaceClass.CLASS_C, 26.0742, -80.1506, 9260.0, 4000.0),
+            createSurfaceAirspace("KTPA", "Tampa (KTPA) Class C Surface Area", AirspaceClass.CLASS_C, 27.9755, -82.5332, 9260.0, 4000.0),
+            createSurfaceAirspace("KJAX", "Jacksonville (KJAX) Class C Surface Area", AirspaceClass.CLASS_C, 30.4941, -81.6879, 9260.0, 4000.0),
+            createSurfaceAirspace("KPBI", "Palm Beach (KPBI) Class C Surface Area", AirspaceClass.CLASS_C, 26.6832, -80.0956, 9260.0, 4000.0),
+            createSurfaceAirspace("KBNA", "Nashville (KBNA) Class C Surface Area", AirspaceClass.CLASS_C, 36.1245, -86.6782, 9260.0, 4600.0),
+            createSurfaceAirspace("KRDU", "Raleigh-Durham (KRDU) Class C Surface Area", AirspaceClass.CLASS_C, 35.8801, -78.7880, 9260.0, 4400.0),
+            createSurfaceAirspace("KCHS", "Charleston (KCHS) Class C Surface Area", AirspaceClass.CLASS_C, 32.8986, -80.0405, 9260.0, 4000.0),
+            createSurfaceAirspace("KPIT", "Pittsburgh (KPIT) Class C Surface Area", AirspaceClass.CLASS_C, 40.4915, -80.2329, 9260.0, 5200.0),
+            createSurfaceAirspace("KBUF", "Buffalo (KBUF) Class C Surface Area", AirspaceClass.CLASS_C, 42.9405, -78.7322, 9260.0, 4800.0),
+            createSurfaceAirspace("KBDL", "Bradley (KBDL) Class C Surface Area", AirspaceClass.CLASS_C, 41.9389, -72.6832, 9260.0, 4200.0),
+            createSurfaceAirspace("KPSP", "Palm Springs (KPSP) Class C Surface Area", AirspaceClass.CLASS_C, 33.8297, -116.5067, 9260.0, 5000.0)
+        )
 
-        // --- Class D Surface Airspaces ---
-        createSurfaceAirspace("KRAL", "Riverside (KRAL) Class D Surface Airspace", AirspaceClass.CLASS_D, 33.9519, -117.4451, 7778.0, 3300.0),
-        createSurfaceAirspace("KCNO", "Chino (KCNO) Class D Surface Airspace", AirspaceClass.CLASS_D, 33.9747, -117.6366, 8890.0, 2700.0),
-        createSurfaceAirspace("KFUL", "Fullerton (KFUL) Class D Surface Airspace", AirspaceClass.CLASS_D, 33.8720, -117.9799, 7408.0, 2600.0),
-        createSurfaceAirspace("KLGB", "Long Beach (KLGB) Class D Surface Airspace", AirspaceClass.CLASS_D, 33.8177, -118.1516, 8148.0, 3000.0),
-        createSurfaceAirspace("KSBD", "San Bernardino (KSBD) Class D Surface Airspace", AirspaceClass.CLASS_D, 34.0954, -117.2350, 7778.0, 3700.0),
-        createSurfaceAirspace("KBUR", "Burbank (KBUR) Class D Surface Airspace", AirspaceClass.CLASS_D, 34.2007, -118.3585, 7408.0, 3000.0),
-        createSurfaceAirspace("KVNY", "Van Nuys (KVNY) Class D Surface Airspace", AirspaceClass.CLASS_D, 34.2098, -118.4899, 7408.0, 3000.0),
-        createSurfaceAirspace("KBFI", "Boeing Field (KBFI) Class D Surface Airspace", AirspaceClass.CLASS_D, 47.5300, -122.3019, 7408.0, 2500.0),
-        createSurfaceAirspace("KAPA", "Centennial (KAPA) Class D Surface Airspace", AirspaceClass.CLASS_D, 39.5701, -104.8493, 7408.0, 8000.0),
-        createSurfaceAirspace("KTEB", "Teterboro (KTEB) Class D Surface Airspace", AirspaceClass.CLASS_D, 40.8501, -74.0608, 7408.0, 2000.0)
-    )
+        val explicitIcaos = explicitAirspaces.map { it.id.substringAfter("NASR-").substringBefore("-") }.toSet()
+        val allAirspaces = explicitAirspaces.toMutableList()
+
+        // Generate authoritative Class D Surface Airspaces for ALL towered airports across CONUS
+        for (apt in airports) {
+            if (!apt.towerFreq.isNullOrBlank() && !explicitIcaos.contains(apt.icaoId)) {
+                val ceiling = apt.elevationFt + 2500.0
+                allAirspaces.add(
+                    createSurfaceAirspace(
+                        apt.icaoId,
+                        "${apt.name} (${apt.icaoId}) Class D Surface Airspace",
+                        AirspaceClass.CLASS_D,
+                        apt.latitude,
+                        apt.longitude,
+                        7778.0, // 4.2 NM standard Class D radius
+                        ceiling
+                    )
+                )
+            }
+        }
+        return allAirspaces
+    }
 
     private fun createSurfaceAirspace(id: String, name: String, cls: AirspaceClass, lat: Double, lon: Double, radiusM: Double, ceilFt: Double): NasrAirspaceFeature {
         return NasrAirspaceFeature(

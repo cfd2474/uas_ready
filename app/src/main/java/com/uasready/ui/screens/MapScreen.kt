@@ -175,7 +175,7 @@ fun MapScreen(
     }
 
     // Master function: Queries visible extent, applies LOD / clustering, and rebuilds overlays with markers ON TOP
-    fun renderExtentOverlays(mapView: MapView, helper: NasrDatabaseHelper) {
+    fun renderExtentOverlays(mapView: MapView, helper: NasrDatabaseHelper, currentEnabledTypes: Set<AirspaceZoneType> = enabledZoneTypes) {
         val bbox = mapView.boundingBox ?: return
         val zoom = mapView.zoomLevelDouble
 
@@ -239,7 +239,7 @@ fun MapScreen(
         // LAYER 0: MapEventsReceiver (Underneath all polygons and markers for background taps)
         val mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
             override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                val activeZones = allExtentZones.filter { it.type in enabledZoneTypes }
+                val activeZones = allExtentZones.filter { it.type in currentEnabledTypes }
                 val overlapping = activeZones.filter { isPointInZone(p.latitude, p.longitude, it) }
                 val matchedApt = findAssociatedAirport(p, overlapping.firstOrNull(), allAptsInExtent, helper)
                 inspectionResult = AirspaceInspection(p, overlapping, matchedApt)
@@ -251,7 +251,7 @@ fun MapScreen(
         mapView.overlays.add(mapEventsOverlay)
 
         // LAYER 1: Polygon Overlays (Airspace, 1-arcminute UASFM grids, SUA, TFRs)
-        val filteredZones = allExtentZones.filter { it.type in enabledZoneTypes }
+        val filteredZones = allExtentZones.filter { it.type in currentEnabledTypes }
         val sortedZones = filteredZones.sortedBy { if (it.type == AirspaceZoneType.ALTITUDE_ZONE) 1 else 0 }
 
         sortedZones.forEach { zone ->
@@ -339,7 +339,7 @@ fun MapScreen(
                 title = "${apt.name} (${apt.icaoId})"
                 snippet = "CTAF: ${apt.effectiveCtaf ?: "N/A"} • Elev: ${apt.elevationFt.toInt()} ft MSL"
                 setOnMarkerClickListener { _, _ ->
-                    val active = allExtentZones.filter { it.type in enabledZoneTypes }
+                    val active = allExtentZones.filter { it.type in currentEnabledTypes }
                     val overlapping = active.filter { isPointInZone(apt.latitude, apt.longitude, it) }
                     inspectionResult = AirspaceInspection(aptPos, overlapping, apt)
                     true
@@ -348,7 +348,16 @@ fun MapScreen(
             mapView.overlays.add(aptMarker)
         }
 
+        mapView.invalidate()
         mapView.postInvalidate()
+    }
+
+    // Reactive listener to immediately re-render overlays when layer toggles change
+    LaunchedEffect(enabledZoneTypes) {
+        mapViewRef?.let { map ->
+            val helper = NasrDatabaseHelper(map.context)
+            renderExtentOverlays(map, helper, enabledZoneTypes)
+        }
     }
 
     Box(
@@ -375,18 +384,18 @@ fun MapScreen(
                     // Dynamic Extent Listener: Re-queries SQLite whenever pan/scroll/zoom extent changes
                     addMapListener(object : MapListener {
                         override fun onScroll(event: ScrollEvent?): Boolean {
-                            renderExtentOverlays(this@apply, helper)
+                            renderExtentOverlays(this@apply, helper, enabledZoneTypes)
                             return true
                         }
 
                         override fun onZoom(event: ZoomEvent?): Boolean {
-                            renderExtentOverlays(this@apply, helper)
+                            renderExtentOverlays(this@apply, helper, enabledZoneTypes)
                             return true
                         }
                     })
 
                     post {
-                        renderExtentOverlays(this, helper)
+                        renderExtentOverlays(this, helper, enabledZoneTypes)
                     }
                 }
             },
@@ -411,7 +420,7 @@ fun MapScreen(
                     shouldRecenterMap = false
                 }
 
-                renderExtentOverlays(mapView, helper)
+                renderExtentOverlays(mapView, helper, enabledZoneTypes)
             },
             modifier = Modifier.fillMaxSize()
         )
