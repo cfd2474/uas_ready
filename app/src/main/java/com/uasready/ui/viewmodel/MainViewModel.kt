@@ -198,7 +198,7 @@ class MainViewModel @JvmOverloads constructor(
             )
 
             val cycleInfo = airspaceRepo.getAiracCycleInfo()
-            val nearbyAirports = airspaceRepo.getNearbyAirports(lat, lon, radiusNm = 40.0)
+            val nearbyAirports = airspaceRepo.getNearbyAirports(lat, lon, radiusNm = 120.0)
             val shouldPromptExpiry = cycleInfo.isExpired && !hasDismissedAiracWarningThisSession
 
             val assessment = assessmentEngine.assess(context)

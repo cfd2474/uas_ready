@@ -100,12 +100,12 @@ class NasrAirspaceRepository(
                 Log.d(TAG, "Live FAA UASFM query skipped / offline: ${e.message}")
             }
 
-            // 2. Query nearby Airspace boundaries, UASFM grids, SUA, TFRs, and Airports
-            val nearbyAirspaces = dbHelper.queryAirspaceNearby(latitude, longitude, radiusNm = 35.0)
-            val nearbyUasfm = dbHelper.queryUasfmGridsNearby(latitude, longitude, radiusNm = 25.0)
-            val nearbySua = dbHelper.querySuaNearby(latitude, longitude, radiusNm = 40.0)
-            val nearbyAirports = dbHelper.queryAirportsNearby(latitude, longitude, radiusNm = 30.0)
-            val nearbyTfrs = dbHelper.queryActiveTfrsNearby(latitude, longitude, radiusNm = 50.0, nowMs = now)
+            // 2. Query nearby Airspace boundaries, UASFM grids, SUA, TFRs, and Airports with nationwide CONUS coverage
+            val nearbyAirspaces = dbHelper.queryAirspaceNearby(latitude, longitude, radiusNm = 150.0)
+            val nearbyUasfm = dbHelper.queryUasfmGridsNearby(latitude, longitude, radiusNm = 75.0)
+            val nearbySua = dbHelper.querySuaNearby(latitude, longitude, radiusNm = 200.0)
+            val nearbyAirports = dbHelper.queryAirportsNearby(latitude, longitude, radiusNm = 120.0)
+            val nearbyTfrs = dbHelper.queryActiveTfrsNearby(latitude, longitude, radiusNm = 250.0, nowMs = now)
 
             val allZones = mutableListOf<AirspaceZone>()
             allZones.addAll(nearbyAirspaces)
@@ -157,10 +157,8 @@ class NasrAirspaceRepository(
             }
 
             // Evaluate UASFM grid cell containment
-            var matchedUasfmGrid: AirspaceZone? = null
             for (grid in nearbyUasfm) {
                 if (grid.polygonCoordinates.isNotEmpty() && GeometryUtils.isPointInsidePolygon(latitude, longitude, grid.polygonCoordinates)) {
-                    matchedUasfmGrid = grid
                     uasfmCeiling = grid.ceilingFt
                     break
                 }
@@ -179,8 +177,8 @@ class NasrAirspaceRepository(
                 }
             }
 
-            // 4. Nearest Airport & CTAF
-            val nearestApt = nearbyAirports.firstOrNull()
+            // 4. Nearest Airport & CTAF across CONUS (unconstrained distance fallback)
+            val nearestApt = nearbyAirports.firstOrNull() ?: dbHelper.findNearestAirport(latitude, longitude)
             val nearestDistNm = nearestApt?.let { GeometryUtils.calculateDistanceNm(latitude, longitude, it.latitude, it.longitude) }
 
             // 5. AIRAC Cycle Metadata & Staleness check
@@ -236,8 +234,24 @@ class NasrAirspaceRepository(
         return tfrPoller.pollTfrs()
     }
 
-    fun getNearbyAirports(lat: Double, lon: Double, radiusNm: Double = 30.0): List<NasrAirport> {
+    fun getNearbyAirports(lat: Double, lon: Double, radiusNm: Double = 100.0): List<NasrAirport> {
         return dbHelper.queryAirportsNearby(lat, lon, radiusNm)
+    }
+
+    fun getAirportsInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double): List<NasrAirport> {
+        return dbHelper.queryAirportsInBoundingBox(minLat, maxLat, minLon, maxLon)
+    }
+
+    fun getAirspacesInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double): List<AirspaceZone> {
+        return dbHelper.queryAirspaceInBoundingBox(minLat, maxLat, minLon, maxLon)
+    }
+
+    fun getUasfmInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double): List<AirspaceZone> {
+        return dbHelper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon)
+    }
+
+    fun getSuaInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double): List<AirspaceZone> {
+        return dbHelper.querySuaInBoundingBox(minLat, maxLat, minLon, maxLon)
     }
 
     fun getAiracCycleInfo(): AiracCycleInfo {

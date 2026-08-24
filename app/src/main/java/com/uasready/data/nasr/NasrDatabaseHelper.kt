@@ -422,23 +422,33 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
 
     /**
      * Queries airports within bounding box around (lat, lon) with radius in nautical miles.
+     * Default radius is 100 NM to provide expansive regional situational awareness across CONUS.
      */
-    fun queryAirportsNearby(lat: Double, lon: Double, radiusNm: Double = 30.0): List<NasrAirport> {
-        val db = readableDatabase
+    fun queryAirportsNearby(lat: Double, lon: Double, radiusNm: Double = 100.0): List<NasrAirport> {
         val degRadius = radiusNm / 60.0
-        val minLat = lat - degRadius
-        val maxLat = lat + degRadius
-        val minLon = lon - degRadius
-        val maxLon = lon + degRadius
+        return queryAirportsInBoundingBox(
+            minLat = lat - degRadius,
+            maxLat = lat + degRadius,
+            minLon = lon - degRadius,
+            maxLon = lon + degRadius,
+            limit = 500
+        ).sortedBy { GeometryUtils.calculateDistanceNm(lat, lon, it.latitude, it.longitude) }
+    }
 
+    /**
+     * Queries airports in an arbitrary geographic bounding box across CONUS without distance clamping.
+     */
+    fun queryAirportsInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 1000): List<NasrAirport> {
+        val db = readableDatabase
         val list = mutableListOf<NasrAirport>()
         val query = """
             SELECT facility_id, icao_id, name, city, state, lat, lon, elevation_ft, use_type, ctaf_freq, unicom_freq, tower_freq, atis_freq
             FROM airports
             WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
+            LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 list.add(
                     NasrAirport(
@@ -459,28 +469,82 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 )
             }
         }
-        return list.sortedBy { GeometryUtils.calculateDistanceNm(lat, lon, it.latitude, it.longitude) }
+        return list
+    }
+
+    /**
+     * Finds the nearest airport to given coordinates across the entire CONUS database with no distance limits.
+     */
+    fun findNearestAirport(lat: Double, lon: Double): NasrAirport? {
+        val db = readableDatabase
+        // Stepwise radial expansion: 60 NM, 300 NM, 1000 NM, entire DB
+        for (radiusDeg in listOf(1.0, 5.0, 16.0)) {
+            val candidates = queryAirportsInBoundingBox(
+                minLat = lat - radiusDeg,
+                maxLat = lat + radiusDeg,
+                minLon = lon - radiusDeg,
+                maxLon = lon + radiusDeg,
+                limit = 300
+            )
+            if (candidates.isNotEmpty()) {
+                return candidates.minByOrNull { GeometryUtils.calculateDistanceNm(lat, lon, it.latitude, it.longitude) }
+            }
+        }
+        val allQuery = "SELECT facility_id, icao_id, name, city, state, lat, lon, elevation_ft, use_type, ctaf_freq, unicom_freq, tower_freq, atis_freq FROM airports"
+        val list = mutableListOf<NasrAirport>()
+        db.rawQuery(allQuery, null).use { cursor ->
+            while (cursor.moveToNext()) {
+                list.add(
+                    NasrAirport(
+                        facilityId = cursor.getString(0) ?: "",
+                        icaoId = cursor.getString(1) ?: "",
+                        name = cursor.getString(2) ?: "",
+                        city = cursor.getString(3) ?: "",
+                        state = cursor.getString(4) ?: "",
+                        latitude = cursor.getDouble(5),
+                        longitude = cursor.getDouble(6),
+                        elevationFt = cursor.getDouble(7),
+                        useType = cursor.getString(8) ?: "PU",
+                        ctafFreq = cursor.getString(9),
+                        unicomFreq = cursor.getString(10),
+                        towerFreq = cursor.getString(11),
+                        atisFreq = cursor.getString(12)
+                    )
+                )
+            }
+        }
+        return list.minByOrNull { GeometryUtils.calculateDistanceNm(lat, lon, it.latitude, it.longitude) }
     }
 
     /**
      * Queries airspace polygons intersecting bounding box around (lat, lon).
+     * Expanded radius default to 150 NM to ensure full regional coverage across CONUS.
      */
-    fun queryAirspaceNearby(lat: Double, lon: Double, radiusNm: Double = 35.0): List<AirspaceZone> {
-        val db = readableDatabase
+    fun queryAirspaceNearby(lat: Double, lon: Double, radiusNm: Double = 150.0): List<AirspaceZone> {
         val degRadius = radiusNm / 60.0
-        val minLat = lat - degRadius
-        val maxLat = lat + degRadius
-        val minLon = lon - degRadius
-        val maxLon = lon + degRadius
+        return queryAirspaceInBoundingBox(
+            minLat = lat - degRadius,
+            maxLat = lat + degRadius,
+            minLon = lon - degRadius,
+            maxLon = lon + degRadius,
+            limit = 500
+        )
+    }
 
+    /**
+     * Queries airspace polygons in an arbitrary geographic bounding box across CONUS without distance clamping.
+     */
+    fun queryAirspaceInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 1000): List<AirspaceZone> {
+        val db = readableDatabase
         val list = mutableListOf<AirspaceZone>()
         val query = """
             SELECT id, name, class, type, floor_ft, ceiling_ft, geom_wkb
             FROM airspace
             WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
+            LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val name = cursor.getString(1)
@@ -493,8 +557,8 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 val polygon = if (wkb != null) GeometryUtils.decodeWkbToPolygon(wkb) else emptyList()
                 val zoneType = try { AirspaceZoneType.valueOf(typeStr) } catch (_: Exception) { AirspaceZoneType.AUTHORIZATION_ZONE }
 
-                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else lat
-                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else lon
+                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (minLat + maxLat) / 2.0
+                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (minLon + maxLon) / 2.0
 
                 list.add(
                     AirspaceZone(
@@ -517,23 +581,33 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
 
     /**
      * Queries UASFM grid squares around (lat, lon).
+     * Expanded radius default to 75 NM.
      */
-    fun queryUasfmGridsNearby(lat: Double, lon: Double, radiusNm: Double = 25.0): List<AirspaceZone> {
-        val db = readableDatabase
+    fun queryUasfmGridsNearby(lat: Double, lon: Double, radiusNm: Double = 75.0): List<AirspaceZone> {
         val degRadius = radiusNm / 60.0
-        val minLat = lat - degRadius
-        val maxLat = lat + degRadius
-        val minLon = lon - degRadius
-        val maxLon = lon + degRadius
+        return queryUasfmInBoundingBox(
+            minLat = lat - degRadius,
+            maxLat = lat + degRadius,
+            minLon = lon - degRadius,
+            maxLon = lon + degRadius,
+            limit = 2000
+        )
+    }
 
+    /**
+     * Queries UASFM grid squares in an arbitrary geographic bounding box across CONUS without distance clamping.
+     */
+    fun queryUasfmInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 3000): List<AirspaceZone> {
+        val db = readableDatabase
         val list = mutableListOf<AirspaceZone>()
         val query = """
             SELECT id, icao_id, ceiling_ft, geom_wkb
             FROM uasfm_grid
             WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
+            LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val icao = cursor.getString(1)
@@ -541,8 +615,8 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 val wkb = cursor.getBlob(3)
                 val polygon = if (wkb != null) GeometryUtils.decodeWkbToPolygon(wkb) else emptyList()
 
-                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else lat
-                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else lon
+                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (minLat + maxLat) / 2.0
+                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (minLon + maxLon) / 2.0
 
                 list.add(
                     AirspaceZone(
@@ -565,23 +639,33 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
 
     /**
      * Queries Special Use Airspace around (lat, lon).
+     * Expanded radius default to 200 NM.
      */
-    fun querySuaNearby(lat: Double, lon: Double, radiusNm: Double = 40.0): List<AirspaceZone> {
-        val db = readableDatabase
+    fun querySuaNearby(lat: Double, lon: Double, radiusNm: Double = 200.0): List<AirspaceZone> {
         val degRadius = radiusNm / 60.0
-        val minLat = lat - degRadius
-        val maxLat = lat + degRadius
-        val minLon = lon - degRadius
-        val maxLon = lon + degRadius
+        return querySuaInBoundingBox(
+            minLat = lat - degRadius,
+            maxLat = lat + degRadius,
+            minLon = lon - degRadius,
+            maxLon = lon + degRadius,
+            limit = 1000
+        )
+    }
 
+    /**
+     * Queries Special Use Airspace in an arbitrary geographic bounding box across CONUS without distance clamping.
+     */
+    fun querySuaInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 1500): List<AirspaceZone> {
+        val db = readableDatabase
         val list = mutableListOf<AirspaceZone>()
         val query = """
             SELECT id, name, type, floor_ft, ceiling_ft, schedule_desc, geom_wkb
             FROM sua
             WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
+            LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val name = cursor.getString(1)
@@ -592,8 +676,8 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 val wkb = cursor.getBlob(6)
                 val polygon = if (wkb != null) GeometryUtils.decodeWkbToPolygon(wkb) else emptyList()
 
-                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else lat
-                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else lon
+                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (minLat + maxLat) / 2.0
+                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (minLon + maxLon) / 2.0
 
                 val zoneType = when (type.uppercase()) {
                     "RESTRICTED", "PROHIBITED" -> AirspaceZoneType.RESTRICTED_ZONE
@@ -621,23 +705,34 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
 
     /**
      * Queries active TFRs around (lat, lon).
+     * Expanded radius default to 250 NM.
      */
-    fun queryActiveTfrsNearby(lat: Double, lon: Double, radiusNm: Double = 50.0, nowMs: Long = System.currentTimeMillis()): List<ParsedTfr> {
-        val db = readableDatabase
+    fun queryActiveTfrsNearby(lat: Double, lon: Double, radiusNm: Double = 250.0, nowMs: Long = System.currentTimeMillis()): List<ParsedTfr> {
         val degRadius = radiusNm / 60.0
-        val minLat = lat - degRadius
-        val maxLat = lat + degRadius
-        val minLon = lon - degRadius
-        val maxLon = lon + degRadius
+        return queryActiveTfrsInBoundingBox(
+            minLat = lat - degRadius,
+            maxLat = lat + degRadius,
+            minLon = lon - degRadius,
+            maxLon = lon + degRadius,
+            nowMs = nowMs,
+            limit = 500
+        )
+    }
 
+    /**
+     * Queries active TFRs in an arbitrary geographic bounding box across CONUS without distance clamping.
+     */
+    fun queryActiveTfrsInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, nowMs: Long = System.currentTimeMillis(), limit: Int = 1000): List<ParsedTfr> {
+        val db = readableDatabase
         val list = mutableListOf<ParsedTfr>()
         val query = """
             SELECT notam_id, issue_date, type, description, floor_ft, ceiling_ft, start_epoch, end_epoch, min_lat, max_lat, min_lon, max_lon, geom_wkb
             FROM tfr_active
             WHERE end_epoch >= ? AND min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
+            LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(nowMs.toString(), maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(nowMs.toString(), maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 val notamId = cursor.getString(0)
                 val issueDate = cursor.getString(1)
