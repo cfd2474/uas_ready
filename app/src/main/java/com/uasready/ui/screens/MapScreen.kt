@@ -32,6 +32,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.uasready.data.nasr.GeometryUtils
 import com.uasready.data.nasr.NasrAirport
 import com.uasready.data.nasr.NasrDatabaseHelper
+import com.uasready.data.nasr.NasrSeedData
 import com.uasready.data.nasr.ParsedTfr
 import com.uasready.domain.model.AirspaceZone
 import com.uasready.domain.model.AirspaceZoneType
@@ -358,11 +359,14 @@ fun MapScreen(
         AndroidView(
             factory = { context ->
                 val helper = NasrDatabaseHelper(context)
+                NasrSeedData.populateDatabaseIfEmpty(helper)
                 Configuration.getInstance().userAgentValue = "UASReady-Android-App/1.0"
                 MapView(context).apply {
                     mapViewRef = this
                     setTileSource(STREET_TILE_SOURCE)
                     setMultiTouchControls(true)
+                    setBuiltInZoomControls(false)
+                    zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
                     controller.setZoom(12.8)
                     val startPoint = GeoPoint(loc.latitude, loc.longitude)
                     controller.setCenter(startPoint)
@@ -388,6 +392,7 @@ fun MapScreen(
             update = { mapView ->
                 mapViewRef = mapView
                 val helper = NasrDatabaseHelper(mapView.context)
+                NasrSeedData.populateDatabaseIfEmpty(helper)
 
                 // Apply Selected NO-POI Basemap Tile Source
                 val targetTileSource = when (selectedBasemap) {

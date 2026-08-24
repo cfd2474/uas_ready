@@ -18,7 +18,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
 
     companion object {
         const val DB_NAME = "nasr_airspace.db"
-        const val DB_VERSION = 1
+        const val DB_VERSION = 5
         private const val TAG = "NasrDbHelper"
     }
 
@@ -185,8 +185,28 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         }
     }
 
+    override fun onOpen(db: SQLiteDatabase) {
+        super.onOpen(db)
+        try {
+            // Verify if nationwide CONUS seed data (e.g. KLAS) exists in the database
+            var hasKlas = false
+            db.rawQuery("SELECT COUNT(*) FROM airports WHERE icao_id = 'KLAS'", null).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    hasKlas = cursor.getInt(0) > 0
+                }
+            }
+            if (!hasKlas) {
+                Log.i(TAG, "Nationwide CONUS data (KLAS) not found in DB. Re-creating schema & loading full CONUS dataset...")
+                onUpgrade(db, 1, DB_VERSION)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking DB seed status on open: ${e.message}")
+        }
+    }
+
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         // Atomic drop / recreate on schema change
+        Log.i(TAG, "Upgrading database from version $oldVersion to $newVersion...")
         db.execSQL("DROP TABLE IF EXISTS meta")
         db.execSQL("DROP TABLE IF EXISTS airports")
         db.execSQL("DROP TABLE IF EXISTS runways")
@@ -795,11 +815,15 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     }
 
     /**
-     * Checks whether database contains valid seed data.
+     * Checks whether database contains valid nationwide CONUS seed data.
      */
     fun hasAirportData(): Boolean {
+        return hasNationwideAirportData()
+    }
+
+    fun hasNationwideAirportData(): Boolean {
         val db = readableDatabase
-        db.rawQuery("SELECT COUNT(*) FROM airports", null).use { cursor ->
+        db.rawQuery("SELECT COUNT(*) FROM airports WHERE icao_id = 'KLAS'", null).use { cursor ->
             if (cursor.moveToFirst()) {
                 return cursor.getInt(0) > 0
             }

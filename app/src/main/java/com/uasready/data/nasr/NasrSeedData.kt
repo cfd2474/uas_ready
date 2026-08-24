@@ -13,7 +13,7 @@ object NasrSeedData {
     const val CURRENT_CYCLE_EXPIRE_DATE = "2026-09-10"
 
     fun populateDatabaseIfEmpty(helper: NasrDatabaseHelper) {
-        if (helper.hasAirportData()) {
+        if (helper.hasNationwideAirportData()) {
             return
         }
 
