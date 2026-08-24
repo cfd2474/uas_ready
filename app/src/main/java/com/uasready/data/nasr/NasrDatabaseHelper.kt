@@ -305,38 +305,17 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     override fun onOpen(db: SQLiteDatabase) {
         super.onOpen(db)
         try {
-            // Verify if nationwide CONUS seed data (e.g. KLAS) exists in the database
-            var hasKlas = false
-            db.rawQuery("SELECT COUNT(*) FROM airports WHERE icao_id = 'KLAS'", null).use { cursor ->
-                if (cursor.moveToFirst()) {
-                    hasKlas = cursor.getInt(0) > 0
-                }
+            val count = db.rawQuery("SELECT COUNT(*) FROM airports", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
             }
-            if (!hasKlas) {
-                Log.i(TAG, "Nationwide CONUS data (KLAS) not found in DB. Re-creating schema & loading full CONUS dataset...")
-                onUpgrade(db, 1, DB_VERSION)
-            }
+            Log.i(TAG, "NasrDatabaseHelper onOpen: $count airports present.")
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking DB seed status on open: ${e.message}")
+            Log.e(TAG, "Error checking DB status on open: ${e.message}")
         }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Atomic drop / recreate on schema change
-        Log.i(TAG, "Upgrading database from version $oldVersion to $newVersion...")
-        db.execSQL("DROP TABLE IF EXISTS meta")
-        db.execSQL("DROP TABLE IF EXISTS airports")
-        db.execSQL("DROP TABLE IF EXISTS runways")
-        db.execSQL("DROP TABLE IF EXISTS frequencies")
-        db.execSQL("DROP TABLE IF EXISTS airspace")
-        db.execSQL("DROP TABLE IF EXISTS uasfm_grid")
-        db.execSQL("DROP TABLE IF EXISTS sua")
-        db.execSQL("DROP TABLE IF EXISTS tfr_active")
-        db.execSQL("DROP TABLE IF EXISTS rtree_airports")
-        db.execSQL("DROP TABLE IF EXISTS rtree_airspace")
-        db.execSQL("DROP TABLE IF EXISTS rtree_uasfm")
-        db.execSQL("DROP TABLE IF EXISTS rtree_sua")
-        db.execSQL("DROP TABLE IF EXISTS rtree_tfr")
+        Log.i(TAG, "Database version changed from $oldVersion to $newVersion. Ensuring schema tables exist...")
         onCreate(db)
     }
 

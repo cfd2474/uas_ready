@@ -629,9 +629,8 @@ cur.execute("CREATE INDEX IF NOT EXISTS idx_ns_bbox ON national_security_restric
 cur.execute("CREATE INDEX IF NOT EXISTS idx_sua_bbox ON sua(min_lat, max_lat, min_lon, max_lon);")
 cur.execute("CREATE INDEX IF NOT EXISTS idx_tfrs_bbox ON tfrs(min_lat, max_lat, min_lon, max_lon);")
 
-conn.commit()
-
-print("Running SQLite VACUUM and PRAGMA optimize...")
+print("Setting PRAGMA user_version = 7 and optimizing...")
+cur.execute("PRAGMA user_version = 7;")
 cur.execute("PRAGMA optimize;")
 conn.commit()
 conn.close()
