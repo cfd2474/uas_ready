@@ -441,6 +441,11 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     fun queryAirportsInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 1000): List<NasrAirport> {
         val db = readableDatabase
         val list = mutableListOf<NasrAirport>()
+        val sLat = minOf(minLat, maxLat)
+        val nLat = maxOf(minLat, maxLat)
+        val wLon = minOf(minLon, maxLon)
+        val eLon = maxOf(minLon, maxLon)
+
         val query = """
             SELECT facility_id, icao_id, name, city, state, lat, lon, elevation_ft, use_type, ctaf_freq, unicom_freq, tower_freq, atis_freq
             FROM airports
@@ -448,7 +453,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
             LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(minLat.toString(), maxLat.toString(), minLon.toString(), maxLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(sLat.toString(), nLat.toString(), wLon.toString(), eLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 list.add(
                     NasrAirport(
@@ -537,6 +542,11 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     fun queryAirspaceInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 1000): List<AirspaceZone> {
         val db = readableDatabase
         val list = mutableListOf<AirspaceZone>()
+        val sLat = minOf(minLat, maxLat)
+        val nLat = maxOf(minLat, maxLat)
+        val wLon = minOf(minLon, maxLon)
+        val eLon = maxOf(minLon, maxLon)
+
         val query = """
             SELECT id, name, class, type, floor_ft, ceiling_ft, geom_wkb
             FROM airspace
@@ -544,7 +554,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
             LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val name = cursor.getString(1)
@@ -557,8 +567,8 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 val polygon = if (wkb != null) GeometryUtils.decodeWkbToPolygon(wkb) else emptyList()
                 val zoneType = try { AirspaceZoneType.valueOf(typeStr) } catch (_: Exception) { AirspaceZoneType.AUTHORIZATION_ZONE }
 
-                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (minLat + maxLat) / 2.0
-                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (minLon + maxLon) / 2.0
+                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (sLat + nLat) / 2.0
+                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (wLon + eLon) / 2.0
 
                 list.add(
                     AirspaceZone(
@@ -600,6 +610,11 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     fun queryUasfmInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 3000): List<AirspaceZone> {
         val db = readableDatabase
         val list = mutableListOf<AirspaceZone>()
+        val sLat = minOf(minLat, maxLat)
+        val nLat = maxOf(minLat, maxLat)
+        val wLon = minOf(minLon, maxLon)
+        val eLon = maxOf(minLon, maxLon)
+
         val query = """
             SELECT id, icao_id, ceiling_ft, geom_wkb
             FROM uasfm_grid
@@ -607,7 +622,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
             LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val icao = cursor.getString(1)
@@ -615,8 +630,8 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 val wkb = cursor.getBlob(3)
                 val polygon = if (wkb != null) GeometryUtils.decodeWkbToPolygon(wkb) else emptyList()
 
-                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (minLat + maxLat) / 2.0
-                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (minLon + maxLon) / 2.0
+                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (sLat + nLat) / 2.0
+                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (wLon + eLon) / 2.0
 
                 list.add(
                     AirspaceZone(
@@ -658,6 +673,11 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     fun querySuaInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 1500): List<AirspaceZone> {
         val db = readableDatabase
         val list = mutableListOf<AirspaceZone>()
+        val sLat = minOf(minLat, maxLat)
+        val nLat = maxOf(minLat, maxLat)
+        val wLon = minOf(minLon, maxLon)
+        val eLon = maxOf(minLon, maxLon)
+
         val query = """
             SELECT id, name, type, floor_ft, ceiling_ft, schedule_desc, geom_wkb
             FROM sua
@@ -665,7 +685,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
             LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 val name = cursor.getString(1)
@@ -676,8 +696,8 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                 val wkb = cursor.getBlob(6)
                 val polygon = if (wkb != null) GeometryUtils.decodeWkbToPolygon(wkb) else emptyList()
 
-                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (minLat + maxLat) / 2.0
-                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (minLon + maxLon) / 2.0
+                val cLat = if (polygon.isNotEmpty()) polygon.map { it.first }.average() else (sLat + nLat) / 2.0
+                val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (wLon + eLon) / 2.0
 
                 val zoneType = when (type.uppercase()) {
                     "RESTRICTED", "PROHIBITED" -> AirspaceZoneType.RESTRICTED_ZONE
@@ -725,6 +745,11 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     fun queryActiveTfrsInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, nowMs: Long = System.currentTimeMillis(), limit: Int = 1000): List<ParsedTfr> {
         val db = readableDatabase
         val list = mutableListOf<ParsedTfr>()
+        val sLat = minOf(minLat, maxLat)
+        val nLat = maxOf(minLat, maxLat)
+        val wLon = minOf(minLon, maxLon)
+        val eLon = maxOf(minLon, maxLon)
+
         val query = """
             SELECT notam_id, issue_date, type, description, floor_ft, ceiling_ft, start_epoch, end_epoch, min_lat, max_lat, min_lon, max_lon, geom_wkb
             FROM tfr_active
@@ -732,7 +757,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
             LIMIT ?
         """.trimIndent()
 
-        db.rawQuery(query, arrayOf(nowMs.toString(), maxLat.toString(), minLat.toString(), maxLon.toString(), minLon.toString(), limit.toString())).use { cursor ->
+        db.rawQuery(query, arrayOf(nowMs.toString(), nLat.toString(), sLat.toString(), eLon.toString(), wLon.toString(), limit.toString())).use { cursor ->
             while (cursor.moveToNext()) {
                 val notamId = cursor.getString(0)
                 val issueDate = cursor.getString(1)

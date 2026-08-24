@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.uasready.data.nasr.GeometryUtils
 import com.uasready.data.nasr.NasrAirport
 import com.uasready.data.nasr.NasrDatabaseHelper
 import com.uasready.data.nasr.ParsedTfr
@@ -59,7 +60,8 @@ enum class BasemapType(val displayName: String) {
 
 data class AirspaceInspection(
     val point: GeoPoint,
-    val zones: List<AirspaceZone>
+    val zones: List<AirspaceZone>,
+    val associatedAirport: NasrAirport? = null
 )
 
 // Google Street NO-POIs
@@ -132,8 +134,6 @@ fun MapScreen(
     var inspectionResult by remember { mutableStateOf<AirspaceInspection?>(null) }
     var shouldRecenterMap by remember { mutableStateOf(false) }
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
-    var extentAirports by remember { mutableStateOf<List<NasrAirport>>(emptyList()) }
-    var extentAirspaceZones by remember { mutableStateOf<List<AirspaceZone>>(emptyList()) }
 
     var enabledZoneTypes by remember {
         mutableStateOf(
@@ -151,25 +151,68 @@ fun MapScreen(
     val gnss = uiState.estimatedGnss
     val airac = uiState.airacCycleInfo
 
-    // Query helper for dynamic extent rendering
-    fun refreshExtentData(mapView: MapView, helper: NasrDatabaseHelper) {
+    // Helper: Match or look up associated airport for a clicked location/polygon
+    fun findAssociatedAirport(point: GeoPoint, zone: AirspaceZone?, airports: List<NasrAirport>, helper: NasrDatabaseHelper): NasrAirport? {
+        if (zone != null) {
+            val icaoCandidate = zone.id.substringAfter("NASR-").substringBefore("-").takeIf { it.length in 3..4 }
+                ?: zone.name.split(" ", "(", ")", "-").firstOrNull { it.length == 4 && (it.startsWith("K") || it.startsWith("P")) }
+            if (icaoCandidate != null) {
+                val matched = airports.find { it.icaoId.equals(icaoCandidate, ignoreCase = true) }
+                if (matched != null) return matched
+            }
+        }
+        val nearby = airports.minByOrNull { GeometryUtils.calculateDistanceNm(point.latitude, point.longitude, it.latitude, it.longitude) }
+        if (nearby != null && GeometryUtils.calculateDistanceNm(point.latitude, point.longitude, nearby.latitude, nearby.longitude) <= 8.0) {
+            return nearby
+        }
+        val nearest = helper.findNearestAirport(point.latitude, point.longitude)
+        return if (nearest != null && GeometryUtils.calculateDistanceNm(point.latitude, point.longitude, nearest.latitude, nearest.longitude) <= 10.0) {
+            nearest
+        } else {
+            null
+        }
+    }
+
+    // Master function: Queries visible extent, applies LOD / clustering, and rebuilds overlays with markers ON TOP
+    fun renderExtentOverlays(mapView: MapView, helper: NasrDatabaseHelper) {
         val bbox = mapView.boundingBox ?: return
-        val minLat = bbox.latSouth
-        val maxLat = bbox.latNorth
-        val minLon = bbox.lonWest
-        val maxLon = bbox.lonEast
+        val zoom = mapView.zoomLevelDouble
+
+        // Expand bounds by 15% to guarantee smooth panning without visible popping
+        val latMargin = maxOf(0.04, abs(bbox.latNorth - bbox.latSouth) * 0.15)
+        val lonMargin = maxOf(0.04, abs(bbox.lonEast - bbox.lonWest) * 0.15)
+        val minLat = bbox.latSouth - latMargin
+        val maxLat = bbox.latNorth + latMargin
+        val minLon = bbox.lonWest - lonMargin
+        val maxLon = bbox.lonEast + lonMargin
         val nowMs = System.currentTimeMillis()
 
-        val apts = helper.queryAirportsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 200)
-        val airspaces = helper.queryAirspaceInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 150)
-        val uasfmGrids = helper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 500)
-        val suaZones = helper.querySuaInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 80)
-        val activeTfrs = helper.queryActiveTfrsInBoundingBox(minLat, maxLat, minLon, maxLon, nowMs = nowMs, limit = 40)
+        // 1. Query Airports in extent
+        val allAptsInExtent = helper.queryAirportsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 500)
+
+        // 2. Query Airspaces, SUAs, and TFRs in extent
+        val airspacesInExtent = helper.queryAirspaceInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 300)
+        val suaInExtent = helper.querySuaInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 150)
+        val activeTfrs = helper.queryActiveTfrsInBoundingBox(minLat, maxLat, minLon, maxLon, nowMs = nowMs, limit = 50)
+
+        // 3. Dynamic LOD: Render 1-arcminute UASFM grid squares only when zoom >= 9.5 to prevent state-wide visual clutter
+        val uasfmInExtent = if (zoom >= 9.5) {
+            helper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 2000)
+        } else {
+            emptyList()
+        }
+
+        // 4. Dynamic LOD / Stacking for Airports on wide zoom
+        val visibleAirports = when {
+            zoom >= 8.5 -> allAptsInExtent
+            zoom >= 6.0 -> allAptsInExtent.filter { !it.towerFreq.isNullOrBlank() || it.useType == "PU" }
+            else -> allAptsInExtent.filter { !it.towerFreq.isNullOrBlank() }
+        }
 
         val allExtentZones = mutableListOf<AirspaceZone>()
-        allExtentZones.addAll(airspaces)
-        allExtentZones.addAll(uasfmGrids)
-        allExtentZones.addAll(suaZones)
+        allExtentZones.addAll(airspacesInExtent)
+        allExtentZones.addAll(uasfmInExtent)
+        allExtentZones.addAll(suaInExtent)
         for (tfr in activeTfrs) {
             if (tfr.polygonCoordinates.isNotEmpty()) {
                 allExtentZones.add(
@@ -189,8 +232,121 @@ fun MapScreen(
             }
         }
 
-        extentAirports = apts
-        extentAirspaceZones = allExtentZones
+        // Clear all previous overlays
+        mapView.overlays.clear()
+
+        // LAYER 0: MapEventsReceiver (Underneath all polygons and markers for background taps)
+        val mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                val activeZones = allExtentZones.filter { it.type in enabledZoneTypes }
+                val overlapping = activeZones.filter { isPointInZone(p.latitude, p.longitude, it) }
+                val matchedApt = findAssociatedAirport(p, overlapping.firstOrNull(), allAptsInExtent, helper)
+                inspectionResult = AirspaceInspection(p, overlapping, matchedApt)
+                return true
+            }
+
+            override fun longPressHelper(p: GeoPoint): Boolean = false
+        })
+        mapView.overlays.add(mapEventsOverlay)
+
+        // LAYER 1: Polygon Overlays (Airspace, 1-arcminute UASFM grids, SUA, TFRs)
+        val filteredZones = allExtentZones.filter { it.type in enabledZoneTypes }
+        val sortedZones = filteredZones.sortedBy { if (it.type == AirspaceZoneType.ALTITUDE_ZONE) 1 else 0 }
+
+        sortedZones.forEach { zone ->
+            val pointsList: List<GeoPoint> = if (zone.polygonCoordinates.size >= 3) {
+                zone.polygonCoordinates.map { GeoPoint(it.first, it.second) }
+            } else {
+                Polygon.pointsAsCircle(GeoPoint(zone.centerLat, zone.centerLon), zone.radiusMeters)
+            }
+
+            val polygon = Polygon(mapView).apply {
+                points = pointsList
+                title = zone.name
+                snippet = zone.description
+
+                when (zone.type) {
+                    AirspaceZoneType.RESTRICTED_ZONE -> {
+                        fillPaint.color = AndroidColor.argb(70, 218, 54, 51)
+                        outlinePaint.color = AndroidColor.argb(255, 218, 54, 51)
+                        outlinePaint.strokeWidth = 3.5f
+                    }
+                    AirspaceZoneType.AUTHORIZATION_ZONE -> {
+                        fillPaint.color = AndroidColor.argb(45, 56, 139, 253)
+                        outlinePaint.color = AndroidColor.argb(255, 56, 139, 253)
+                        outlinePaint.strokeWidth = 3f
+                    }
+                    AirspaceZoneType.WARNING_ZONE -> {
+                        fillPaint.color = AndroidColor.argb(45, 227, 179, 65)
+                        outlinePaint.color = AndroidColor.argb(255, 227, 179, 65)
+                        outlinePaint.strokeWidth = 2.5f
+                    }
+                    AirspaceZoneType.ALTITUDE_ZONE -> {
+                        // 1 Arc-Minute UAS Facility Map Grids with altitude-tiered coloring
+                        val ceiling = zone.ceilingFt ?: 400.0
+                        val (fillA, outlineA) = when {
+                            ceiling <= 0.0 -> Pair(AndroidColor.argb(75, 235, 65, 65), AndroidColor.argb(255, 235, 65, 65)) // 0 ft Red
+                            ceiling <= 100.0 -> Pair(AndroidColor.argb(65, 255, 140, 0), AndroidColor.argb(255, 255, 140, 0)) // 50-100 ft Orange
+                            ceiling <= 200.0 -> Pair(AndroidColor.argb(55, 240, 195, 35), AndroidColor.argb(255, 240, 195, 35)) // 200 ft Yellow
+                            ceiling <= 300.0 -> Pair(AndroidColor.argb(50, 145, 215, 60), AndroidColor.argb(255, 145, 215, 60)) // 300 ft Chartreuse
+                            else -> Pair(AndroidColor.argb(45, 0, 210, 255), AndroidColor.argb(255, 0, 210, 255)) // 400 ft Cyan
+                        }
+                        fillPaint.color = fillA
+                        outlinePaint.color = outlineA
+                        outlinePaint.strokeWidth = 2.0f
+                    }
+                    AirspaceZoneType.SPECIAL_USE -> {
+                        fillPaint.color = AndroidColor.argb(45, 255, 140, 0)
+                        outlinePaint.color = AndroidColor.argb(255, 255, 140, 0)
+                        outlinePaint.strokeWidth = 2.5f
+                    }
+                }
+
+                // Forward polygon clicks to multi-layer inspection with associated airport
+                setOnClickListener { _, _, clickPoint ->
+                    val active = allExtentZones.filter { it.type in enabledZoneTypes }
+                    val overlapping = active.filter { isPointInZone(clickPoint.latitude, clickPoint.longitude, it) }
+                    val matchedApt = findAssociatedAirport(clickPoint, zone, allAptsInExtent, helper)
+                    inspectionResult = AirspaceInspection(clickPoint, overlapping, matchedApt)
+                    true
+                }
+            }
+            mapView.overlays.add(polygon)
+        }
+
+        // LAYER 2: User Launch Point Marker
+        val userPoint = GeoPoint(loc.latitude, loc.longitude)
+        val userMarker = Marker(mapView).apply {
+            id = "USER_MARKER"
+            position = userPoint
+            icon = createSmallRedPinDrawable(mapView.context)
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            title = "Launch Point: ${loc.displayName}"
+            snippet = "Coordinates: ${loc.formattedCoordinates}"
+        }
+        mapView.overlays.add(userMarker)
+
+        // LAYER 3: Airport Markers (On top of polygons for highest visual visibility and touch priority)
+        visibleAirports.forEach { apt ->
+            val aptPos = GeoPoint(apt.latitude, apt.longitude)
+            val aptMarker = Marker(mapView).apply {
+                id = "APT_${apt.icaoId}"
+                position = aptPos
+                icon = createAirportMarkerDrawable(mapView.context, apt.icaoId, apt.effectiveCtaf ?: "")
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                title = "${apt.name} (${apt.icaoId})"
+                snippet = "CTAF: ${apt.effectiveCtaf ?: "N/A"} • Elev: ${apt.elevationFt.toInt()} ft MSL"
+                setOnMarkerClickListener { _, _ ->
+                    val active = allExtentZones.filter { it.type in enabledZoneTypes }
+                    val overlapping = active.filter { isPointInZone(apt.latitude, apt.longitude, it) }
+                    inspectionResult = AirspaceInspection(aptPos, overlapping, apt)
+                    true
+                }
+            }
+            mapView.overlays.add(aptMarker)
+        }
+
+        mapView.postInvalidate()
     }
 
     Box(
@@ -211,37 +367,28 @@ fun MapScreen(
                     val startPoint = GeoPoint(loc.latitude, loc.longitude)
                     controller.setCenter(startPoint)
 
-                    // User Launch Point Marker (50% smaller Red Pin)
-                    val userMarker = Marker(this).apply {
-                        id = "USER_MARKER"
-                        position = startPoint
-                        icon = createSmallRedPinDrawable(context)
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        title = "Launch Point: ${loc.displayName}"
-                        snippet = "Coordinates: ${loc.formattedCoordinates}"
-                    }
-                    overlays.add(userMarker)
-
                     // Dynamic Extent Listener: Re-queries SQLite whenever pan/scroll/zoom extent changes
                     addMapListener(object : MapListener {
                         override fun onScroll(event: ScrollEvent?): Boolean {
-                            refreshExtentData(this@apply, helper)
+                            renderExtentOverlays(this@apply, helper)
                             return true
                         }
 
                         override fun onZoom(event: ZoomEvent?): Boolean {
-                            refreshExtentData(this@apply, helper)
+                            renderExtentOverlays(this@apply, helper)
                             return true
                         }
                     })
 
                     post {
-                        refreshExtentData(this, helper)
+                        renderExtentOverlays(this, helper)
                     }
                 }
             },
             update = { mapView ->
                 mapViewRef = mapView
+                val helper = NasrDatabaseHelper(mapView.context)
+
                 // Apply Selected NO-POI Basemap Tile Source
                 val targetTileSource = when (selectedBasemap) {
                     BasemapType.STREET -> STREET_TILE_SOURCE
@@ -252,139 +399,13 @@ fun MapScreen(
                     mapView.setTileSource(targetTileSource)
                 }
 
-                val point = GeoPoint(loc.latitude, loc.longitude)
                 if (shouldRecenterMap) {
+                    val point = GeoPoint(loc.latitude, loc.longitude)
                     mapView.controller.animateTo(point)
                     shouldRecenterMap = false
                 }
 
-                // Update or reposition User Marker
-                val userMarker = mapView.overlays.filterIsInstance<Marker>().firstOrNull { it.id == "USER_MARKER" }
-                if (userMarker != null) {
-                    userMarker.position = point
-                    userMarker.title = "Launch Point: ${loc.displayName}"
-                    userMarker.snippet = "Coordinates: ${loc.formattedCoordinates}"
-                }
-
-                // Clear previous airspace polygons, airport markers and events
-                mapView.overlays.removeAll { it is Polygon || it is MapEventsOverlay || (it is Marker && it.id.startsWith("APT_")) }
-
-                // Map Touch Receiver: Handles clicks across all overlapping polygons in the visible extent
-                val mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
-                    override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                        val activeZones = extentAirspaceZones.filter { it.type in enabledZoneTypes }
-                        val overlapping = activeZones.filter { isPointInZone(p.latitude, p.longitude, it) }
-                        inspectionResult = AirspaceInspection(p, overlapping)
-                        return true
-                    }
-
-                    override fun longPressHelper(p: GeoPoint): Boolean {
-                        return false
-                    }
-                })
-                mapView.overlays.add(0, mapEventsOverlay)
-
-                // Render Airport Markers strictly within the current extent with CTAF Frequencies
-                extentAirports.forEach { apt ->
-                    val aptPos = GeoPoint(apt.latitude, apt.longitude)
-                    val aptMarker = Marker(mapView).apply {
-                        id = "APT_${apt.icaoId}"
-                        position = aptPos
-                        icon = createAirportMarkerDrawable(mapView.context, apt.icaoId, apt.effectiveCtaf ?: "")
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        title = "${apt.name} (${apt.icaoId})"
-                        snippet = "CTAF: ${apt.effectiveCtaf ?: "N/A"} • Elev: ${apt.elevationFt.toInt()} ft MSL"
-                        setOnMarkerClickListener { _, _ ->
-                            val activeZones = extentAirspaceZones.filter { it.type in enabledZoneTypes }
-                            val overlapping = activeZones.filter { isPointInZone(apt.latitude, apt.longitude, it) }.toMutableList()
-                            overlapping.add(
-                                0,
-                                AirspaceZone(
-                                    id = "APT-${apt.icaoId}",
-                                    name = "${apt.name} (${apt.icaoId})",
-                                    type = AirspaceZoneType.AUTHORIZATION_ZONE,
-                                    centerLat = apt.latitude,
-                                    centerLon = apt.longitude,
-                                    radiusMeters = 4000.0,
-                                    floorFt = 0.0,
-                                    ceilingFt = 400.0,
-                                    description = "Public Facility • CTAF: ${apt.effectiveCtaf ?: "N/A"} MHz • Tower: ${apt.towerFreq ?: "None"} • ATIS: ${apt.atisFreq ?: "None"} • Elev: ${apt.elevationFt.toInt()} ft"
-                                )
-                            )
-                            inspectionResult = AirspaceInspection(aptPos, overlapping)
-                            true
-                        }
-                    }
-                    mapView.overlays.add(aptMarker)
-                }
-
-                // Filter extent zones based on active category toggles
-                val filteredZones = extentAirspaceZones.filter { it.type in enabledZoneTypes }
-
-                // Sort: Render larger controlled/warning polygons first, then 1-arcminute UAS Facility grid on top
-                val sortedZones = filteredZones.sortedBy { if (it.type == AirspaceZoneType.ALTITUDE_ZONE) 1 else 0 }
-
-                sortedZones.forEach { zone ->
-                    val pointsList: List<GeoPoint> = if (zone.polygonCoordinates.size >= 3) {
-                        zone.polygonCoordinates.map { GeoPoint(it.first, it.second) }
-                    } else {
-                        Polygon.pointsAsCircle(GeoPoint(zone.centerLat, zone.centerLon), zone.radiusMeters)
-                    }
-
-                    val polygon = Polygon(mapView).apply {
-                        points = pointsList
-                        title = zone.name
-                        snippet = zone.description
-
-                        when (zone.type) {
-                            AirspaceZoneType.RESTRICTED_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(70, 218, 54, 51)
-                                outlinePaint.color = AndroidColor.argb(255, 218, 54, 51)
-                                outlinePaint.strokeWidth = 3.5f
-                            }
-                            AirspaceZoneType.AUTHORIZATION_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(45, 56, 139, 253)
-                                outlinePaint.color = AndroidColor.argb(255, 56, 139, 253)
-                                outlinePaint.strokeWidth = 3f
-                            }
-                            AirspaceZoneType.WARNING_ZONE -> {
-                                fillPaint.color = AndroidColor.argb(45, 227, 179, 65)
-                                outlinePaint.color = AndroidColor.argb(255, 227, 179, 65)
-                                outlinePaint.strokeWidth = 2.5f
-                            }
-                            AirspaceZoneType.ALTITUDE_ZONE -> {
-                                // 1 Arc-Minute UAS Facility Map Grids with altitude-tiered coloring
-                                val ceiling = zone.ceilingFt ?: 400.0
-                                val (fillA, outlineA) = when {
-                                    ceiling <= 0.0 -> Pair(AndroidColor.argb(75, 235, 65, 65), AndroidColor.argb(255, 235, 65, 65)) // 0 ft Red
-                                    ceiling <= 100.0 -> Pair(AndroidColor.argb(65, 255, 140, 0), AndroidColor.argb(255, 255, 140, 0)) // 50-100 ft Orange
-                                    ceiling <= 200.0 -> Pair(AndroidColor.argb(55, 240, 195, 35), AndroidColor.argb(255, 240, 195, 35)) // 200 ft Yellow
-                                    ceiling <= 300.0 -> Pair(AndroidColor.argb(50, 145, 215, 60), AndroidColor.argb(255, 145, 215, 60)) // 300 ft Chartreuse
-                                    else -> Pair(AndroidColor.argb(45, 0, 210, 255), AndroidColor.argb(255, 0, 210, 255)) // 400 ft Cyan
-                                }
-                                fillPaint.color = fillA
-                                outlinePaint.color = outlineA
-                                outlinePaint.strokeWidth = 2.0f
-                            }
-                            AirspaceZoneType.SPECIAL_USE -> {
-                                fillPaint.color = AndroidColor.argb(45, 255, 140, 0)
-                                outlinePaint.color = AndroidColor.argb(255, 255, 140, 0)
-                                outlinePaint.strokeWidth = 2.5f
-                            }
-                        }
-
-                        // Forward polygon clicks to multi-layer inspection
-                        setOnClickListener { _, _, clickPoint ->
-                            val activeZones = extentAirspaceZones.filter { it.type in enabledZoneTypes }
-                            val overlapping = activeZones.filter { isPointInZone(clickPoint.latitude, clickPoint.longitude, it) }
-                            inspectionResult = AirspaceInspection(clickPoint, overlapping)
-                            true
-                        }
-                    }
-                    mapView.overlays.add(polygon)
-                }
-
-                mapView.postInvalidate()
+                renderExtentOverlays(mapView, helper)
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -661,7 +682,7 @@ fun MapScreen(
 
                     HorizontalDivider(color = AviationDarkBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 3.dp))
 
-                    if (inspect.zones.isEmpty()) {
+                    if (inspect.zones.isEmpty() && inspect.associatedAirport == null) {
                         Row(
                             modifier = Modifier.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -678,6 +699,88 @@ fun MapScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
+                            // Associated Airport Facility Card (CTAF Listen Only, Tower, ATIS, Elevation)
+                            inspect.associatedAirport?.let { apt ->
+                                item {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = AviationDarkSurface,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationAccent.copy(alpha = 0.6f)),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    Icon(Icons.Default.FlightTakeoff, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(14.dp))
+                                                    Text(
+                                                        text = "${apt.name} (${apt.icaoId})",
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 11.sp)
+                                                    )
+                                                }
+                                                Surface(
+                                                    shape = RoundedCornerShape(3.dp),
+                                                    color = AviationAccent.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = "AIRPORT FACILITY",
+                                                        style = MaterialTheme.typography.labelSmall.copy(color = AviationAccent, fontSize = 8.sp, fontWeight = FontWeight.Bold),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(3.dp))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                apt.effectiveCtaf?.let { ctaf ->
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = AviationCyan.copy(alpha = 0.2f),
+                                                        border = androidx.compose.foundation.BorderStroke(0.5.dp, AviationCyan)
+                                                    ) {
+                                                        Text(
+                                                            text = "CTAF: $ctaf MHz",
+                                                            style = MaterialTheme.typography.labelSmall.copy(color = AviationCyan, fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                                apt.towerFreq?.let { twr ->
+                                                    Text(
+                                                        text = "Tower: $twr MHz",
+                                                        style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 8.5.sp)
+                                                    )
+                                                }
+                                                apt.atisFreq?.let { atis ->
+                                                    Text(
+                                                        text = "ATIS: $atis MHz",
+                                                        style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 8.5.sp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "Elev: ${apt.elevationFt.toInt()} ft MSL",
+                                                    style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 8.5.sp)
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "• Note: CTAF is Listen-Only. UAS pilots are not authorized to talk on air frequencies.",
+                                                style = MaterialTheme.typography.bodySmall.copy(color = SafetyCautionLight, fontSize = 7.5.sp, fontWeight = FontWeight.SemiBold)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
                             items(inspect.zones) { zone ->
                                 val (badgeColor, badgeText) = when (zone.type) {
                                     AirspaceZoneType.RESTRICTED_ZONE -> Pair(SafetyNoGo, "RESTRICTED / TFR")
