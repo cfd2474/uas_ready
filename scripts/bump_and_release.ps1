@@ -134,12 +134,13 @@ Write-Host "Current Release: $targetApkPath" -ForegroundColor Green
 
 # Git commit and push if requested
 if ($GitPush) {
-    Write-Host "`nCommitting and pushing release to GitHub..." -ForegroundColor Cyan
+    $currentBranch = (git branch --show-current).Trim()
+    Write-Host "`nCommitting and pushing release to GitHub ($currentBranch)..." -ForegroundColor Cyan
     if ([string]::IsNullOrWhiteSpace($CommitMessage)) {
         $CommitMessage = "Release v$newName (Build $newCode)"
     }
     git add .
     git commit -m $CommitMessage
-    git push origin main
-    Write-Host "Pushed release to origin/main successfully!" -ForegroundColor Green
+    git push origin $currentBranch
+    Write-Host "Pushed release to origin/$currentBranch successfully!" -ForegroundColor Green
 }
