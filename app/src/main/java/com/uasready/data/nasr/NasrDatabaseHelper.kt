@@ -81,7 +81,7 @@ class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME)
                 }
             }
 
-            Log.i(TAG, "Extracting authoritative master database from $MASTER_ASSET_PATH directly to $dbFile...")
+            Log.i(TAG, "Extracting authoritative master database directly to $dbFile...")
             resetInstance()
             return try {
                 context.deleteDatabase(DB_NAME)
@@ -93,17 +93,48 @@ class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME)
                 } catch (_: Exception) {}
                 dbFile.parentFile?.mkdirs()
 
-                val buffer = ByteArray(65536)
-                context.assets.open(MASTER_ASSET_PATH).use { rawIn ->
-                    java.util.zip.GZIPInputStream(rawIn, 65536).use { gzIn ->
-                        java.io.FileOutputStream(dbFile).use { out ->
-                            var bytesRead: Int
-                            while (gzIn.read(buffer).also { bytesRead = it } != -1) {
-                                out.write(buffer, 0, bytesRead)
-                            }
-                            out.flush()
-                            out.fd.sync()
+                val possibleAssetPaths = listOf(
+                    "databases/nasr_airspace.db",
+                    "databases/nasr_airspace.db.gz",
+                    "nasr_airspace.db",
+                    "nasr_airspace.db.gz"
+                )
+
+                var openedStream: java.io.InputStream? = null
+                var matchedPath = ""
+                for (path in possibleAssetPaths) {
+                    try {
+                        openedStream = context.assets.open(path)
+                        matchedPath = path
+                        break
+                    } catch (_: Exception) {}
+                }
+
+                if (openedStream == null) {
+                    Log.e(TAG, "Could not find any master FAA database asset in APK assets: $possibleAssetPaths")
+                    return false
+                }
+
+                Log.i(TAG, "Found master database asset: $matchedPath. Streaming to $dbFile...")
+                val pushback = java.io.PushbackInputStream(openedStream, 2)
+                val head = ByteArray(2)
+                val readHead = pushback.read(head)
+                val isGzip = (readHead == 2 && (head[0].toInt() and 0xFF == 0x1F) && (head[1].toInt() and 0xFF == 0x8B))
+                if (readHead > 0) {
+                    pushback.unread(head, 0, readHead)
+                }
+
+                val finalIn: java.io.InputStream = if (isGzip) java.util.zip.GZIPInputStream(pushback, 65536) else pushback
+
+                finalIn.use { input ->
+                    java.io.FileOutputStream(dbFile).use { out ->
+                        val buffer = ByteArray(65536)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            out.write(buffer, 0, bytesRead)
                         }
+                        out.flush()
+                        out.fd.sync()
                     }
                 }
 
@@ -286,17 +317,6 @@ class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME)
                 """.trimIndent()
             )
 
-            // Try creating R*Tree Virtual Index Tables
-            try {
-                db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS rtree_airports USING rtree(id, min_lat, max_lat, min_lon, max_lon)")
-                db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS rtree_airspace USING rtree(id, min_lat, max_lat, min_lon, max_lon)")
-                db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS rtree_uasfm USING rtree(id, min_lat, max_lat, min_lon, max_lon)")
-                db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS rtree_sua USING rtree(id, min_lat, max_lat, min_lon, max_lon)")
-                db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS rtree_tfr USING rtree(id, min_lat, max_lat, min_lon, max_lon)")
-            } catch (rtreeEx: Exception) {
-                Log.w(TAG, "R*Tree virtual table creation fallback: ${rtreeEx.message}")
-            }
-
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -354,15 +374,7 @@ class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME)
                     put("tower_freq", apt.towerFreq)
                     put("atis_freq", apt.atisFreq)
                 }
-                val rowId = db.insertWithOnConflict("airports", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-                if (rowId > 0) {
-                    try {
-                        db.execSQL(
-                            "INSERT OR REPLACE INTO rtree_airports VALUES (?, ?, ?, ?, ?)",
-                            arrayOf(rowId, apt.latitude - 0.001, apt.latitude + 0.001, apt.longitude - 0.001, apt.longitude + 0.001)
-                        )
-                    } catch (_: Exception) {}
-                }
+                db.insertWithOnConflict("airports", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
             }
             db.setTransactionSuccessful()
         } finally {
@@ -392,15 +404,7 @@ class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME)
                     put("min_lon", bbox.minLon)
                     put("max_lon", bbox.maxLon)
                 }
-                val rowId = db.insertWithOnConflict("airspace", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-                if (rowId > 0) {
-                    try {
-                        db.execSQL(
-                            "INSERT OR REPLACE INTO rtree_airspace VALUES (?, ?, ?, ?, ?)",
-                            arrayOf(rowId, bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon)
-                        )
-                    } catch (_: Exception) {}
-                }
+                db.insertWithOnConflict("airspace", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
             }
             db.setTransactionSuccessful()
         } finally {
@@ -425,15 +429,7 @@ class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME)
                     put("min_lon", bbox.minLon)
                     put("max_lon", bbox.maxLon)
                 }
-                val rowId = db.insertWithOnConflict("uasfm_grid", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-                if (rowId > 0) {
-                    try {
-                        db.execSQL(
-                            "INSERT OR REPLACE INTO rtree_uasfm VALUES (?, ?, ?, ?, ?)",
-                            arrayOf(rowId, bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon)
-                        )
-                    } catch (_: Exception) {}
-                }
+                db.insertWithOnConflict("uasfm_grid", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
             }
             db.setTransactionSuccessful()
         } finally {
@@ -461,15 +457,7 @@ class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME)
                     put("min_lon", bbox.minLon)
                     put("max_lon", bbox.maxLon)
                 }
-                val rowId = db.insertWithOnConflict("sua", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-                if (rowId > 0) {
-                    try {
-                        db.execSQL(
-                            "INSERT OR REPLACE INTO rtree_sua VALUES (?, ?, ?, ?, ?)",
-                            arrayOf(rowId, bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon)
-                        )
-                    } catch (_: Exception) {}
-                }
+                db.insertWithOnConflict("sua", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
             }
             db.setTransactionSuccessful()
         } finally {
@@ -507,15 +495,7 @@ class NasrDatabaseHelper(private val context: Context, dbName: String = DB_NAME)
                     put("min_lon", bbox.minLon)
                     put("max_lon", bbox.maxLon)
                 }
-                val rowId = db.insertWithOnConflict("tfr_active", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-                if (rowId > 0 && wkb != null) {
-                    try {
-                        db.execSQL(
-                            "INSERT OR REPLACE INTO rtree_tfr VALUES (?, ?, ?, ?, ?)",
-                            arrayOf(rowId, bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon)
-                        )
-                    } catch (_: Exception) {}
-                }
+                db.insertWithOnConflict("tfr_active", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
             }
             db.setTransactionSuccessful()
         } finally {
