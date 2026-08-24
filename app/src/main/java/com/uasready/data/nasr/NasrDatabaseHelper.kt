@@ -20,13 +20,17 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         const val DB_NAME = "nasr_airspace.db"
         const val DB_VERSION = 7
         private const val TAG = "NasrDbHelper"
+        private const val MASTER_ASSET_PATH = "databases/nasr_airspace.db.gz"
 
         @Volatile
         private var instance: NasrDatabaseHelper? = null
 
         fun getInstance(context: Context): NasrDatabaseHelper {
             return instance ?: synchronized(this) {
-                instance ?: NasrDatabaseHelper(context.applicationContext).also { instance = it }
+                instance ?: run {
+                    ensureMasterDatabaseExtracted(context.applicationContext)
+                    NasrDatabaseHelper(context.applicationContext).also { instance = it }
+                }
             }
         }
 
@@ -36,6 +40,74 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                     instance?.close()
                 } catch (_: Exception) {}
                 instance = null
+            }
+        }
+
+        /**
+         * Verifies that the on-device database exists and contains the authoritative master dataset
+         * (at least 300,000 UASFM grid cells and 15,000 airports). If missing or incomplete,
+         * it synchronously extracts the master pre-compiled asset.
+         */
+        @Synchronized
+        fun ensureMasterDatabaseExtracted(context: Context): Boolean {
+            val dbFile = context.getDatabasePath(DB_NAME)
+
+            // Check if existing DB file is valid with full data
+            if (dbFile.exists() && dbFile.length() > 30_000_000L) {
+                var isValid = false
+                try {
+                    SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+                        val uasfmCount = db.rawQuery("SELECT COUNT(*) FROM uasfm_grid", null).use { c ->
+                            if (c.moveToFirst()) c.getInt(0) else 0
+                        }
+                        val airportCount = db.rawQuery("SELECT COUNT(*) FROM airports", null).use { c ->
+                            if (c.moveToFirst()) c.getInt(0) else 0
+                        }
+                        Log.i(TAG, "Database health check on disk: $uasfmCount UASFM cells, $airportCount airports")
+                        if (uasfmCount >= 300_000 && airportCount >= 15_000) {
+                            isValid = true
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Existing database file invalid: ${e.message}")
+                    isValid = false
+                }
+                if (isValid) {
+                    return true
+                }
+            }
+
+            Log.i(TAG, "Extracting authoritative master database from $MASTER_ASSET_PATH...")
+            return try {
+                resetInstance()
+                context.deleteDatabase(DB_NAME)
+                dbFile.parentFile?.mkdirs()
+
+                val tempFile = File(dbFile.parentFile, "$DB_NAME.tmp")
+                if (tempFile.exists()) tempFile.delete()
+
+                context.assets.open(MASTER_ASSET_PATH).use { rawIn ->
+                    java.util.zip.GZIPInputStream(rawIn).use { gzIn ->
+                        java.io.FileOutputStream(tempFile).use { out ->
+                            gzIn.copyTo(out)
+                        }
+                    }
+                }
+
+                if (tempFile.renameTo(dbFile) || run {
+                    tempFile.copyTo(dbFile, overwrite = true)
+                    tempFile.delete()
+                    true
+                }) {
+                    Log.i(TAG, "Master FAA database asset extracted successfully (${dbFile.length()} bytes)")
+                    true
+                } else {
+                    Log.e(TAG, "Failed to rename temp database file to $dbFile")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to extract master FAA database asset: ${e.message}", e)
+                false
             }
         }
     }
@@ -937,21 +1009,37 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
         return list
     }
 
+    fun getUasfmCount(): Int {
+        return try {
+            val db = readableDatabase
+            db.rawQuery("SELECT COUNT(*) FROM uasfm_grid", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    fun getAirportCount(): Int {
+        return try {
+            val db = readableDatabase
+            db.rawQuery("SELECT COUNT(*) FROM airports", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+        } catch (_: Exception) {
+            0
+        }
+    }
+
     /**
-     * Checks whether database contains valid nationwide CONUS seed data.
+     * Checks whether database contains valid nationwide CONUS master data.
      */
     fun hasAirportData(): Boolean {
         return hasNationwideAirportData()
     }
 
     fun hasNationwideAirportData(): Boolean {
-        val db = readableDatabase
-        db.rawQuery("SELECT COUNT(*) FROM airports WHERE icao_id = 'KLAS'", null).use { cursor ->
-            if (cursor.moveToFirst()) {
-                return cursor.getInt(0) > 0
-            }
-        }
-        return false
+        return getAirportCount() >= 15000 && getUasfmCount() >= 300000
     }
 
     /**
