@@ -110,89 +110,10 @@ class LiveAirspaceRepository : AirspaceRepository {
                 Log.d("AirspaceRepo", "FAA UASFM API query skipped: ${e.message}")
             }
 
-            // 2. Query openAIP Airspaces API for controlled and restricted airspace
+            // 2. Query official FAA ArcGIS Aeronautical GeoJSON API for Airspace Boundaries
             try {
-                val distMeters = 40000
-                val openAipUrl = "https://api.core.openaip.net/api/airspaces?page=1&limit=100&pos=$longitude,$latitude&dist=$distMeters"
-                val conn = (URL(openAipUrl).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = 3000
-                    readTimeout = 3000
-                    setRequestProperty("Accept", "application/json")
-                    setRequestProperty("User-Agent", "UASReady-App/1.0")
-                }
-
-                if (conn.responseCode == 200) {
-                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(responseText)
-                    val items = json.optJSONArray("items") ?: JSONArray()
-
-                    for (i in 0 until items.length()) {
-                        val item = items.optJSONObject(i) ?: continue
-                        val name = item.optString("name", "Airspace Zone")
-                        val icaoClassInt = item.optInt("icaoClass", -1)
-                        val typeInt = item.optInt("type", -1)
-                        
-                        val geometry = item.optJSONObject("geometry")
-                        val coordinates = geometry?.optJSONArray("coordinates")
-                        val polyPoints = mutableListOf<Pair<Double, Double>>()
-
-                        val zoneType = when {
-                            typeInt in listOf(0, 1, 2) -> AirspaceZoneType.RESTRICTED_ZONE
-                            icaoClassInt in listOf(1, 2, 3) || typeInt in listOf(3, 4) -> AirspaceZoneType.AUTHORIZATION_ZONE
-                            icaoClassInt == 4 -> AirspaceZoneType.WARNING_ZONE
-                            else -> AirspaceZoneType.AUTHORIZATION_ZONE
-                        }
-
-                        var centerLat = latitude
-                        var centerLon = longitude
-                        if (coordinates != null && coordinates.length() > 0) {
-                            val outerRing = coordinates.optJSONArray(0)
-                            if (outerRing != null && outerRing.length() > 0) {
-                                var sumLat = 0.0
-                                var sumLon = 0.0
-                                for (p in 0 until outerRing.length()) {
-                                    val pt = outerRing.optJSONArray(p)
-                                    if (pt != null && pt.length() >= 2) {
-                                        val pLon = pt.optDouble(0, longitude)
-                                        val pLat = pt.optDouble(1, latitude)
-                                        polyPoints.add(Pair(pLat, pLon))
-                                        sumLon += pLon
-                                        sumLat += pLat
-                                    }
-                                }
-                                if (outerRing.length() > 0) {
-                                    centerLat = sumLat / outerRing.length()
-                                    centerLon = sumLon / outerRing.length()
-                                }
-                            }
-                        }
-
-                        zones.add(
-                            AirspaceZone(
-                                id = "OPENAIP-${item.optString("_id", i.toString())}",
-                                name = name,
-                                type = zoneType,
-                                centerLat = centerLat,
-                                centerLon = centerLon,
-                                radiusMeters = 4500.0,
-                                floorFt = 0.0,
-                                ceilingFt = 400.0,
-                                description = "openAIP: $name",
-                                polygonCoordinates = polyPoints
-                            )
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                Log.d("AirspaceRepo", "openAIP query skipped: ${e.message}")
-            }
-
-            // 2. If openAIP had no results, query official FAA ArcGIS Aeronautical GeoJSON API
-            if (zones.isEmpty()) {
-                try {
-                    val faaUrl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/Airspace_Boundary/FeatureServer/0/query?where=1%3D1&geometry=$longitude,$latitude&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=40000&units=esriSRUnit_Meter&outFields=NAME,CLASS,LOCAL_TYPE,LOW_ALT,HIGH_ALT&returnGeometry=true&f=geojson"
-                    val conn = (URL(faaUrl).openConnection() as HttpURLConnection).apply {
+                val faaUrl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/Airspace_Boundary/FeatureServer/0/query?where=1%3D1&geometry=$longitude,$latitude&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=40000&units=esriSRUnit_Meter&outFields=NAME,CLASS,LOCAL_TYPE,LOW_ALT,HIGH_ALT&returnGeometry=true&f=geojson"
+                val conn = (URL(faaUrl).openConnection() as HttpURLConnection).apply {
                         requestMethod = "GET"
                         connectTimeout = 4000
                         readTimeout = 4000
@@ -270,7 +191,6 @@ class LiveAirspaceRepository : AirspaceRepository {
                 } catch (e: Exception) {
                     Log.d("AirspaceRepo", "FAA ArcGIS query skipped: ${e.message}")
                 }
-            }
 
             // 3. Fallback Aeronautical Airspace & UAS Facility Map Grids Generator within map view extent
             // Provides high-fidelity official sectional geometry and UASFM grids around regional airspaces

@@ -323,7 +323,7 @@ class MainActivity : ComponentActivity() {
                                 val navItems = listOf(
                                     Triple(Screen.Home.route, "Flight Readiness", Icons.Default.Dashboard),
                                     Triple(Screen.Assessment.route, "Detailed Report", Icons.Default.Assessment),
-                                    Triple(Screen.Map.route, "Aviation Map (openAIP)", Icons.Default.Map),
+                                    Triple(Screen.Map.route, "Aviation Map (FAA NASR)", Icons.Default.Map),
                                     Triple(Screen.Reference.route, "Checklists & Emergency", Icons.AutoMirrored.Filled.MenuBook),
                                     Triple(Screen.Settings.route, "Settings & Fleet", Icons.Default.Settings)
                                 )
@@ -453,6 +453,7 @@ class MainActivity : ComponentActivity() {
                                         )
                                         viewModel.refreshGpsLocation()
                                     },
+                                    onDismissAiracWarning = { viewModel.dismissAiracWarning() },
                                     onNavigateBack = { navController.popBackStack() }
                                 )
                             }
@@ -488,6 +489,10 @@ class MainActivity : ComponentActivity() {
                                     onSelectAircraft = { viewModel.selectAircraft(it) },
                                     onSetThemeMode = { viewModel.setThemeMode(it) },
                                     onNavigateToAircraft = { navController.navigate(Screen.Aircraft.route) },
+                                    onCheckAiracUpdate = { viewModel.checkForAiracUpdates() },
+                                    onPerformAiracUpdate = { viewModel.performAiracUpdate() },
+                                    onRebuildNasrDatabase = { viewModel.rebuildNasrDatabase() },
+                                    onResetAiracUpdateStatus = { viewModel.resetAiracUpdateStatus() },
                                     onNavigateBack = { navController.popBackStack() }
                                 )
                             }

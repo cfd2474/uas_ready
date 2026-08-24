@@ -116,6 +116,7 @@ private val HYBRID_TILE_SOURCE = object : OnlineTileSourceBase(
 fun MapScreen(
     uiState: MainUiState,
     onRefreshGpsLocation: () -> Unit,
+    onDismissAiracWarning: () -> Unit = {},
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -139,6 +140,8 @@ fun MapScreen(
     val loc = uiState.currentLocation
     val gnss = uiState.estimatedGnss
     val liveAirspaceZones: List<AirspaceZone> = uiState.airspaceInfo?.zones ?: emptyList()
+    val nearbyAirports = uiState.nearbyAirports
+    val airac = uiState.airacCycleInfo
 
     Box(
         modifier = modifier
@@ -193,8 +196,8 @@ fun MapScreen(
                     userMarker.snippet = "Coordinates: ${loc.formattedCoordinates}"
                 }
 
-                // Clear previous airspace polygons and events
-                mapView.overlays.removeAll { it is Polygon || it is MapEventsOverlay }
+                // Clear previous airspace polygons, airport markers and events
+                mapView.overlays.removeAll { it is Polygon || it is MapEventsOverlay || (it is Marker && it.id.startsWith("APT_")) }
 
                 // Map Touch Receiver: Handles clicks across all overlapping polygons
                 val mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
@@ -210,6 +213,40 @@ fun MapScreen(
                     }
                 })
                 mapView.overlays.add(0, mapEventsOverlay)
+
+                // Render Airport Markers with CTAF Frequencies
+                nearbyAirports.forEach { apt ->
+                    val aptPos = GeoPoint(apt.latitude, apt.longitude)
+                    val aptMarker = Marker(mapView).apply {
+                        id = "APT_${apt.icaoId}"
+                        position = aptPos
+                        icon = createAirportMarkerDrawable(mapView.context, apt.icaoId, apt.effectiveCtaf ?: "")
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        title = "${apt.name} (${apt.icaoId})"
+                        snippet = "CTAF: ${apt.effectiveCtaf ?: "N/A"} • Elev: ${apt.elevationFt.toInt()} ft MSL"
+                        setOnMarkerClickListener { _, _ ->
+                            val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+                            val overlapping = activeZones.filter { isPointInZone(apt.latitude, apt.longitude, it) }.toMutableList()
+                            overlapping.add(
+                                0,
+                                AirspaceZone(
+                                    id = "APT-${apt.icaoId}",
+                                    name = "${apt.name} (${apt.icaoId})",
+                                    type = AirspaceZoneType.AUTHORIZATION_ZONE,
+                                    centerLat = apt.latitude,
+                                    centerLon = apt.longitude,
+                                    radiusMeters = 4000.0,
+                                    floorFt = 0.0,
+                                    ceilingFt = 400.0,
+                                    description = "Public Facility • CTAF: ${apt.effectiveCtaf ?: "N/A"} MHz • Tower: ${apt.towerFreq ?: "None"} • ATIS: ${apt.atisFreq ?: "None"} • Elev: ${apt.elevationFt.toInt()} ft"
+                                )
+                            )
+                            inspectionResult = AirspaceInspection(aptPos, overlapping)
+                            true
+                        }
+                    }
+                    mapView.overlays.add(aptMarker)
+                }
 
                 // Filter zones based on active category toggles
                 val filteredZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
@@ -274,7 +311,7 @@ fun MapScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Top Floating Control Bar (Basemap Selector + Legend Toggle)
+        // Top Floating Control Bar (Basemap Selector + AIRAC Badge + Legend Toggle)
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -311,6 +348,42 @@ fun MapScreen(
                                 )
                             )
                         }
+                    }
+                }
+            }
+
+            // AIRAC Cycle Currency Indicator Badge
+            if (airac != null) {
+                val badgeColor = when {
+                    airac.isExpired -> SafetyNoGo
+                    airac.daysUntilExpiry <= 3 -> SafetyCautionLight
+                    else -> SafetyGoLight
+                }
+                val badgeStatusText = when {
+                    airac.isExpired -> "EXPIRED"
+                    airac.daysUntilExpiry <= 3 -> "${airac.daysUntilExpiry}d LEFT"
+                    else -> "CURRENT"
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = AviationDarkCard.copy(alpha = 0.95f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor.copy(alpha = 0.6f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(badgeColor))
+                        Text(
+                            text = "FAA NASR ${airac.cycleName} • $badgeStatusText",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp
+                            )
+                        )
                     }
                 }
             }
@@ -595,6 +668,43 @@ fun MapScreen(
                 }
             }
         }
+        // AIRAC Cycle Expiry Warning Dialog (Advisory, never locks flight)
+        if (uiState.showAiracExpiryPrompt && airac != null) {
+            AlertDialog(
+                onDismissRequest = onDismissAiracWarning,
+                icon = {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = SafetyCautionLight, modifier = Modifier.size(28.dp))
+                },
+                title = {
+                    Text(
+                        text = "AIRAC CYCLE EXPIRED (${airac.cycleName})",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "The on-device FAA NASR aeronautical database cycle (${airac.cycleName}) has expired.",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary)
+                        )
+                        Text(
+                            text = "Aviation awareness remains active. You may proceed with caution or update to the latest cycle via Settings.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = onDismissAiracWarning,
+                        colors = ButtonDefaults.buttonColors(containerColor = AviationCyan)
+                    ) {
+                        Text("Proceed with Caution", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                },
+                containerColor = AviationDarkCard,
+                textContentColor = TextPrimary
+            )
+        }
     }
 }
 
@@ -686,8 +796,8 @@ private fun calculateDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lo
 // 50% Decreased Size Red Location Pin
 private fun createSmallRedPinDrawable(context: Context): BitmapDrawable {
     val density = context.resources.displayMetrics.density
-    val width = (14 * density).toInt() // Reduced 50% from 28dp
-    val height = (20 * density).toInt() // Reduced 50% from 40dp
+    val width = (14 * density).toInt()
+    val height = (20 * density).toInt()
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
@@ -700,7 +810,7 @@ private fun createSmallRedPinDrawable(context: Context): BitmapDrawable {
     }
 
     val pinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.rgb(220, 38, 38) // Vivid Red
+        color = AndroidColor.rgb(220, 38, 38)
         style = Paint.Style.FILL
     }
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -716,6 +826,45 @@ private fun createSmallRedPinDrawable(context: Context): BitmapDrawable {
     canvas.drawPath(path, pinPaint)
     canvas.drawPath(path, borderPaint)
     canvas.drawCircle(width / 2f, radius, radius * 0.4f, dotPaint)
+
+    return BitmapDrawable(context.resources, bitmap)
+}
+
+// Airport CTAF Badge Marker (High-Contrast Sectional Style)
+private fun createAirportMarkerDrawable(context: Context, icao: String, ctaf: String): BitmapDrawable {
+    val density = context.resources.displayMetrics.density
+    val width = (64 * density).toInt()
+    val height = (26 * density).toInt()
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.argb(220, 13, 17, 23)
+        style = Paint.Style.FILL
+    }
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.argb(255, 0, 210, 255)
+        style = Paint.Style.STROKE
+        strokeWidth = 1.2f * density
+    }
+    val textPaintIcao = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        textSize = 9f * density
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+    val textPaintCtaf = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.rgb(0, 210, 255)
+        textSize = 8f * density
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+
+    val rect = android.graphics.RectF(1.5f * density, 1.5f * density, width - 1.5f * density, height - 1.5f * density)
+    canvas.drawRoundRect(rect, 4f * density, 4f * density, bgPaint)
+    canvas.drawRoundRect(rect, 4f * density, 4f * density, borderPaint)
+
+    canvas.drawText(icao, 5f * density, 11f * density, textPaintIcao)
+    val ctafLabel = if (ctaf.isNotBlank()) ctaf else "CTAF"
+    canvas.drawText(ctafLabel, 5f * density, 21f * density, textPaintCtaf)
 
     return BitmapDrawable(context.resources, bitmap)
 }

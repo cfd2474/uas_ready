@@ -37,7 +37,21 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
             it.effectiveStartEpochMs <= flightWindow.endEpochMs && it.effectiveEndEpochMs >= flightWindow.startEpochMs
         }
 
-        if (activeTfrs.isNotEmpty()) {
+        val hazardTfr = activeTfrs.find { it.type.contains("91.137", true) || it.description.contains("91.137", true) || it.description.contains("FIRE", true) || it.description.contains("HAZARD", true) }
+
+        if (hazardTfr != null) {
+            rules.add(
+                RuleResult(
+                    ruleId = "AIR-TFR-91137",
+                    category = category,
+                    status = AssessmentStatus.NO_GO,
+                    title = "CRITICAL: 14 CFR § 91.137 Firefighting / Disaster TFR",
+                    inputValueFormatted = hazardTfr.id,
+                    thresholdFormatted = "Zero Hazard TFRs in AOR",
+                    explanation = String.format("Flight location directly intersects a 14 CFR § 91.137 emergency firefighting / disaster relief TFR (%s). Unauthorized UAS operations risk mid-air collision with low-level aerial firefighting aircraft and face immediate federal criminal prosecution.", hazardTfr.description)
+                )
+            )
+        } else if (activeTfrs.isNotEmpty()) {
             val tfr = activeTfrs.first()
             rules.add(
                 RuleResult(
@@ -157,6 +171,37 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
                 )
             )
         }
+
+        // 5. AIRAC Cycle Staleness Check
+        if (airspace.isStale) {
+            rules.add(
+                RuleResult(
+                    ruleId = "AIR-CYCLE-STALE",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "AIRAC Aeronautical Cycle Expired",
+                    inputValueFormatted = airspace.sourceName,
+                    thresholdFormatted = "Current AIRAC Cycle Recommended",
+                    explanation = "On-device FAA NASR aeronautical data cycle has expired. Advisories remain active, but database update is recommended."
+                )
+            )
+        }
+
+        // 6. Local CTAF Frequency Awareness (Listen Only)
+        val ctafNotam = airspace.notams.firstOrNull { it.id.startsWith("CTAF-") }
+        val ctafDesc = ctafNotam?.text ?: "Nearest Airport CTAF: 122.800 MHz"
+        val ctafFreq = if (ctafDesc.contains("CTAF: ")) ctafDesc.substringAfter("CTAF: ") else "122.800 MHz"
+        rules.add(
+            RuleResult(
+                ruleId = "AIR-CTAF-001",
+                category = category,
+                status = AssessmentStatus.GO,
+                title = "Local CTAF (Listen Only)",
+                inputValueFormatted = ctafFreq,
+                thresholdFormatted = "Listen-Only Monitoring",
+                explanation = "$ctafDesc. NOTE: LISTEN ONLY — UAS pilots are not authorized to talk or transmit on aviation air frequencies (14 CFR § 107.37 manned traffic awareness only)."
+            )
+        )
 
         val worstStatus = rules.maxByOrNull { it.status.priority }?.status ?: AssessmentStatus.GO
         val summary = when (worstStatus) {

@@ -131,15 +131,32 @@ fun HomeScreen(
             )
         }
 
-        // Card 3: Airspace & openAIP (Square Card)
+        // Card 3: Airspace & FAA NASR (Square Card)
         item {
             val airspaceRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AIR-CTRL") || it.ruleId.startsWith("AIR-TFR") }
             SquareMetricCard(
-                title = "Airspace & openAIP",
+                title = "Airspace & FAA NASR",
                 primaryValue = airspaceRule?.inputValueFormatted ?: "Class G (Uncontrolled)",
                 secondaryValue = airspaceRule?.thresholdFormatted ?: "No active flight restrictions",
                 status = airspaceCat?.status,
                 icon = Icons.Default.Flight,
+                onClick = { onNavigateToAssessment(AssessmentCategory.AIRSPACE) }
+            )
+        }
+
+        // Card 4: Local CTAF (Listen Only)
+        item {
+            val nearestApt = uiState.nearbyAirports.firstOrNull()
+            val ctafRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "AIR-CTAF-001" }
+            val ctafFreq = nearestApt?.effectiveCtaf ?: ctafRule?.inputValueFormatted ?: "122.800 MHz"
+            val aptSubtitle = if (nearestApt != null) "${nearestApt.icaoId} • ${nearestApt.name}" else "Uncontrolled Traffic"
+
+            SquareMetricCard(
+                title = "Local CTAF (Listen Only)",
+                primaryValue = ctafFreq,
+                secondaryValue = "$aptSubtitle • No Transmit",
+                status = AssessmentStatus.GO,
+                icon = Icons.Default.Hearing,
                 onClick = { onNavigateToAssessment(AssessmentCategory.AIRSPACE) }
             )
         }
@@ -288,7 +305,7 @@ fun ObtainingStatusPlaceholder(
                         )
                     )
                     Text(
-                        text = if (isPilotPending) "Select pilot status in dialog to start evaluation" else "Querying openAIP, NOAA Space Weather & local METAR...",
+                        text = if (isPilotPending) "Select pilot status in dialog to start evaluation" else "Querying FAA NASR, NOAA Space Weather & local METAR...",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = TextSecondary,
                             fontSize = 11.sp

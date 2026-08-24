@@ -507,5 +507,64 @@ class AssessmentEngineTest {
         assertTrue(ctrlRule.title.contains("Controlled Airspace Warning"))
         assertTrue(ctrlRule.explanation.contains("LAANC"))
     }
+
+    @Test
+    fun test14Cfr91137HazardTfrProducesCriticalNoGo() {
+        val hazardTfr = TemporaryFlightRestriction(
+            id = "4/1234",
+            description = "WILDFIRE EMERGENCY FIREFIGHTING OPERATIONS",
+            type = "91.137 Hazard / Firefighting",
+            minAltitudeFt = 0.0,
+            maxAltitudeFt = 12000.0,
+            effectiveStartEpochMs = defaultFlightWindow.startEpochMs - 3600000L,
+            effectiveEndEpochMs = defaultFlightWindow.endEpochMs + 3600000L,
+            radiusNm = 5.0,
+            centerLat = defaultLocation.latitude,
+            centerLon = defaultLocation.longitude
+        )
+        val tfrAirspace = nominalAirspace.copy(
+            activeTfrs = listOf(hazardTfr)
+        )
+        val context = AssessmentContext(
+            aircraft = defaultAircraft,
+            pilot = defaultPilot,
+            weather = nominalWeather,
+            forecast = null,
+            spaceWeather = nominalSpaceWeather,
+            airspace = tfrAirspace,
+            sunData = nominalSunData,
+            flightWindow = defaultFlightWindow,
+            location = defaultLocation
+        )
+        val result = engine.assess(context)
+        assertEquals(AssessmentStatus.NO_GO, result.overallStatus)
+        val tfrRule = result.noGoRules.first { it.ruleId == "AIR-TFR-91137" }
+        assertEquals(AssessmentStatus.NO_GO, tfrRule.status)
+        assertTrue(tfrRule.title.contains("91.137"))
+        assertTrue(tfrRule.explanation.contains("firefighting"))
+    }
+
+    @Test
+    fun testAiracCycleStaleProducesCaution() {
+        val staleAirspace = nominalAirspace.copy(
+            isStale = true,
+            sourceName = "FAA NASR Cycle 2607"
+        )
+        val context = AssessmentContext(
+            aircraft = defaultAircraft,
+            pilot = defaultPilot,
+            weather = nominalWeather,
+            forecast = null,
+            spaceWeather = nominalSpaceWeather,
+            airspace = staleAirspace,
+            sunData = nominalSunData,
+            flightWindow = defaultFlightWindow,
+            location = defaultLocation
+        )
+        val result = engine.assess(context)
+        val staleRule = result.cautionRules.first { it.ruleId == "AIR-CYCLE-STALE" }
+        assertEquals(AssessmentStatus.CAUTION, staleRule.status)
+        assertTrue(staleRule.title.contains("Cycle Expired"))
+    }
 }
 

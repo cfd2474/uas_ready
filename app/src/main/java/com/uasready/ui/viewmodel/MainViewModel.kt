@@ -18,6 +18,12 @@ import com.uasready.data.repository.PersistentAircraftRepository
 import com.uasready.domain.model.PilotAuthorityType
 import com.uasready.ui.theme.AppThemeMode
 
+import com.uasready.data.nasr.AiracCycleInfo
+import com.uasready.data.nasr.AiracUpdateStatus
+import com.uasready.data.nasr.NasrAirport
+import com.uasready.data.nasr.NasrAirspaceRepository
+import com.uasready.data.nasr.NasrUpdateManager
+
 data class MainUiState(
     val selectedAircraft: Aircraft = Aircraft.getDefault(),
     val allAircraft: List<Aircraft> = Aircraft.PRESETS,
@@ -37,7 +43,11 @@ data class MainUiState(
     val estimatedGnss: GnssEstimation? = null,
     val selectedCategoryFilter: AssessmentCategory? = null,
     val scrollToForecastOnDetail: Boolean = false,
-    val lastTelemetryUpdateEpochMs: Long = System.currentTimeMillis()
+    val lastTelemetryUpdateEpochMs: Long = System.currentTimeMillis(),
+    val airacCycleInfo: AiracCycleInfo? = null,
+    val showAiracExpiryPrompt: Boolean = false,
+    val nearbyAirports: List<NasrAirport> = emptyList(),
+    val airacUpdateStatus: AiracUpdateStatus = AiracUpdateStatus.Idle
 )
 
 class MainViewModel @JvmOverloads constructor(
@@ -45,7 +55,8 @@ class MainViewModel @JvmOverloads constructor(
     private val weatherRepo: WeatherRepository = LiveWeatherRepository(),
     private val spaceWeatherRepo: SpaceWeatherRepository = LiveSpaceWeatherRepository(),
     private val solarRepo: SolarRepository = AstronomicalSolarRepository(),
-    private val airspaceRepo: AirspaceRepository = LiveAirspaceRepository(),
+    private val airspaceRepo: NasrAirspaceRepository = NasrAirspaceRepository(application),
+    private val nasrUpdateManager: NasrUpdateManager = NasrUpdateManager(application),
     private val terrainRepo: TerrainRepository = LiveTerrainRepository(),
     private val aircraftRepo: AircraftRepository = PersistentAircraftRepository(application),
     private val pilotRepo: PilotRepository = InMemoryPilotRepository(),
@@ -54,6 +65,7 @@ class MainViewModel @JvmOverloads constructor(
 ) : AndroidViewModel(application) {
 
     private val setupPrefs = application.getSharedPreferences("uas_ready_setup_prefs", android.content.Context.MODE_PRIVATE)
+    private var hasDismissedAiracWarningThisSession = false
 
     private val _uiState = MutableStateFlow(
         MainUiState(
@@ -185,6 +197,10 @@ class MainViewModel @JvmOverloads constructor(
                 hasInternetConnection = weatherResult.isSuccess || spaceResult.isSuccess
             )
 
+            val cycleInfo = airspaceRepo.getAiracCycleInfo()
+            val nearbyAirports = airspaceRepo.getNearbyAirports(lat, lon, radiusNm = 40.0)
+            val shouldPromptExpiry = cycleInfo.isExpired && !hasDismissedAiracWarningThisSession
+
             val assessment = assessmentEngine.assess(context)
             _uiState.update {
                 it.copy(
@@ -194,11 +210,19 @@ class MainViewModel @JvmOverloads constructor(
                     weatherForecast = weatherPair?.second,
                     airspaceInfo = airspace,
                     estimatedGnss = gnss,
+                    airacCycleInfo = cycleInfo,
+                    showAiracExpiryPrompt = shouldPromptExpiry,
+                    nearbyAirports = nearbyAirports,
                     lastTelemetryUpdateEpochMs = System.currentTimeMillis(),
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
                 )
             }
         }
+    }
+
+    fun dismissAiracWarning() {
+        hasDismissedAiracWarningThisSession = true
+        _uiState.update { it.copy(showAiracExpiryPrompt = false) }
     }
 
     fun reevaluateAssessment() {
@@ -269,5 +293,55 @@ class MainViewModel @JvmOverloads constructor(
 
     fun setThemeMode(mode: AppThemeMode) {
         _uiState.update { it.copy(themeMode = mode) }
+    }
+
+    fun checkForAiracUpdates() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(airacUpdateStatus = AiracUpdateStatus.Checking) }
+            val status = nasrUpdateManager.checkForUpdates()
+            val cycleInfo = airspaceRepo.getAiracCycleInfo()
+            _uiState.update {
+                it.copy(
+                    airacUpdateStatus = status,
+                    airacCycleInfo = cycleInfo
+                )
+            }
+        }
+    }
+
+    fun performAiracUpdate() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(airacUpdateStatus = AiracUpdateStatus.Downloading(0)) }
+            val status = nasrUpdateManager.performUpdate()
+            val cycleInfo = airspaceRepo.getAiracCycleInfo()
+            _uiState.update {
+                it.copy(
+                    airacUpdateStatus = status,
+                    airacCycleInfo = cycleInfo,
+                    showAiracExpiryPrompt = false
+                )
+            }
+            fetchLiveData()
+        }
+    }
+
+    fun rebuildNasrDatabase() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(airacUpdateStatus = AiracUpdateStatus.Rebuilding) }
+            val status = nasrUpdateManager.rebuildDatabase()
+            val cycleInfo = airspaceRepo.getAiracCycleInfo()
+            _uiState.update {
+                it.copy(
+                    airacUpdateStatus = status,
+                    airacCycleInfo = cycleInfo,
+                    showAiracExpiryPrompt = false
+                )
+            }
+            fetchLiveData()
+        }
+    }
+
+    fun resetAiracUpdateStatus() {
+        _uiState.update { it.copy(airacUpdateStatus = AiracUpdateStatus.Idle) }
     }
 }
