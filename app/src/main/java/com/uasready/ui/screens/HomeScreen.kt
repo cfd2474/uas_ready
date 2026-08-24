@@ -116,16 +116,24 @@ fun HomeScreen(
 
         // Card 2: Weather & Wind (Square Card)
         item {
-            val tempRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AC-TEMP") }
-            val gustRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AC-GUST") }
+            val tempRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-TEMP") || it.ruleId.startsWith("AC-TEMP") }
+            val gustRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-GUST") || it.ruleId.startsWith("AC-GUST") }
+            val windRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-WIND") || it.ruleId.startsWith("AC-WIND") }
             val visRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-VIS") }
 
             val weatherSummary = "${gustRule?.inputValueFormatted ?: "Wind 8 MPH"} • ${visRule?.inputValueFormatted ?: "Vis 10 SM"}"
+            val weatherWorstStatus = listOfNotNull(
+                weatherCat?.status,
+                tempRule?.status,
+                gustRule?.status,
+                windRule?.status
+            ).maxByOrNull { it.priority } ?: weatherCat?.status
+
             SquareMetricCard(
                 title = "Weather & Wind",
                 primaryValue = "${tempRule?.inputValueFormatted ?: "75°F"} • Wind",
                 secondaryValue = weatherSummary,
-                status = weatherCat?.status,
+                status = weatherWorstStatus,
                 icon = Icons.Default.Cloud,
                 onClick = { onNavigateToAssessment(AssessmentCategory.WEATHER) }
             )
