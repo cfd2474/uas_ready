@@ -123,6 +123,7 @@ fun MapScreen(
     var selectedBasemap by remember { mutableStateOf(BasemapType.STREET) }
     var inspectionResult by remember { mutableStateOf<AirspaceInspection?>(null) }
     var shouldRecenterMap by remember { mutableStateOf(false) }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
     var enabledZoneTypes by remember {
         mutableStateOf(
@@ -130,7 +131,6 @@ fun MapScreen(
                 AirspaceZoneType.RESTRICTED_ZONE,
                 AirspaceZoneType.AUTHORIZATION_ZONE,
                 AirspaceZoneType.WARNING_ZONE,
-                AirspaceZoneType.ALTITUDE_ZONE,
                 AirspaceZoneType.SPECIAL_USE
             )
         )
@@ -152,6 +152,7 @@ fun MapScreen(
                 MapView(context).apply {
                     setTileSource(STREET_TILE_SOURCE)
                     setMultiTouchControls(true)
+                    setBuiltInZoomControls(false)
                     controller.setZoom(12.8)
                     val startPoint = GeoPoint(loc.latitude, loc.longitude)
                     controller.setCenter(startPoint)
@@ -166,9 +167,12 @@ fun MapScreen(
                         snippet = "Coordinates: ${loc.formattedCoordinates}"
                     }
                     overlays.add(userMarker)
+                    mapViewRef = this
                 }
             },
             update = { mapView ->
+                mapViewRef = mapView
+
                 // Apply Selected NO-POI Basemap Tile Source
                 val targetTileSource = when (selectedBasemap) {
                     BasemapType.STREET -> STREET_TILE_SOURCE
@@ -214,10 +218,7 @@ fun MapScreen(
                 // Filter zones based on active category toggles
                 val filteredZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
 
-                // Sort: Render larger controlled/warning polygons first, then UAS Facility grid on top
-                val sortedZones = filteredZones.sortedBy { if (it.type == AirspaceZoneType.ALTITUDE_ZONE) 1 else 0 }
-
-                sortedZones.forEach { zone ->
+                filteredZones.forEach { zone ->
                     val pointsList: List<GeoPoint> = if (zone.polygonCoordinates.size >= 3) {
                         zone.polygonCoordinates.map { GeoPoint(it.first, it.second) }
                     } else {
@@ -246,9 +247,8 @@ fun MapScreen(
                                 outlinePaint.strokeWidth = 2.5f
                             }
                             AirspaceZoneType.ALTITUDE_ZONE -> {
-                                // UAS Facility Map Grids (Cyan)
-                                fillPaint.color = AndroidColor.argb(55, 0, 210, 255)
-                                outlinePaint.color = AndroidColor.argb(255, 0, 210, 255)
+                                fillPaint.color = AndroidColor.argb(45, 56, 139, 253)
+                                outlinePaint.color = AndroidColor.argb(255, 56, 139, 253)
                                 outlinePaint.strokeWidth = 2.5f
                             }
                             AirspaceZoneType.SPECIAL_USE -> {
@@ -333,6 +333,77 @@ fun MapScreen(
             }
         }
 
+        // Top-Center Airspace 30 NM Radius Disclaimer Banner
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 10.dp),
+            shape = RoundedCornerShape(6.dp),
+            color = AviationDarkCard.copy(alpha = 0.92f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    tint = AviationAccent,
+                    modifier = Modifier.size(11.dp)
+                )
+                Text(
+                    text = "Aeronautical Airspace within 30 NM radius",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = TextSecondary,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                )
+            }
+        }
+
+        // Left-Center Vertical Zoom Controls (DJI RC Pro Enterprise Glove-Friendly Touch Targets)
+        Surface(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 8.dp),
+            shape = RoundedCornerShape(8.dp),
+            color = AviationDarkCard.copy(alpha = 0.95f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+        ) {
+            Column(
+                modifier = Modifier.padding(2.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                IconButton(
+                    onClick = { mapViewRef?.controller?.zoomIn() },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Zoom In",
+                        tint = AviationCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                HorizontalDivider(color = AviationDarkBorder, thickness = 0.8.dp, modifier = Modifier.width(32.dp))
+                IconButton(
+                    onClick = { mapViewRef?.controller?.zoomOut() },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Remove,
+                        contentDescription = "Zoom Out",
+                        tint = AviationCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
         // Floating Airspace Classification Legend & Layer Toggles (Top-Right)
         if (showLegend) {
             Card(
@@ -399,15 +470,6 @@ fun MapScreen(
                         enabled = enabledZoneTypes.contains(AirspaceZoneType.WARNING_ZONE),
                         onToggle = { enabled ->
                             enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.WARNING_ZONE else enabledZoneTypes - AirspaceZoneType.WARNING_ZONE
-                        }
-                    )
-
-                    AirspaceLayerToggleRow(
-                        name = "UAS Facility Grid (UASFM)",
-                        color = Color(0xFF00D2FF),
-                        enabled = enabledZoneTypes.contains(AirspaceZoneType.ALTITUDE_ZONE),
-                        onToggle = { enabled ->
-                            enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.ALTITUDE_ZONE else enabledZoneTypes - AirspaceZoneType.ALTITUDE_ZONE
                         }
                     )
 
@@ -485,7 +547,7 @@ fun MapScreen(
                                     AirspaceZoneType.RESTRICTED_ZONE -> Pair(SafetyNoGo, "RESTRICTED / TFR")
                                     AirspaceZoneType.AUTHORIZATION_ZONE -> Pair(AviationCyan, "CONTROLLED AIRSPACE")
                                     AirspaceZoneType.WARNING_ZONE -> Pair(SafetyCautionLight, "WARNING / SURFACE E")
-                                    AirspaceZoneType.ALTITUDE_ZONE -> Pair(Color(0xFF00D2FF), "UAS FACILITY MAP (UASFM)")
+                                    AirspaceZoneType.ALTITUDE_ZONE -> Pair(AviationCyan, "CONTROLLED AIRSPACE")
                                     AirspaceZoneType.SPECIAL_USE -> Pair(Color(0xFFFF8C00), "SPECIAL USE / MOA")
                                 }
 
@@ -540,7 +602,7 @@ fun MapScreen(
             }
         }
 
-        // Bottom Telemetry Bar (640x360 Landscape Optimized)
+        // Bottom Telemetry Bar (640x360 Landscape Optimized with CTAF)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -556,18 +618,18 @@ fun MapScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1.5f)) {
+                Column(modifier = Modifier.weight(1.6f)) {
                     Text(
                         text = loc.displayName,
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp, color = TextPrimary)
                     )
                     Text(
-                        text = "${loc.formattedCoordinates} • ${loc.elevationFt.toInt()} ft MSL",
+                        text = "${loc.formattedCoordinates} • ${loc.ctafDisplay}",
                         style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 9.sp)
                     )
                 }
 
-                Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(0.9f)) {
                     Text(
                         text = if (gnss != null) "~${gnss.lockedSatellitesCount} Sats Visible" else "12+ Sats Visible",
                         style = MaterialTheme.typography.bodySmall.copy(color = AviationAccent, fontWeight = FontWeight.Bold, fontSize = 10.sp)

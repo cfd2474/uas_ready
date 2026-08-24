@@ -233,7 +233,23 @@ class MainViewModel @JvmOverloads constructor(
     }
 
     fun updateLocation(location: LocationInfo) {
-        _uiState.update { it.copy(currentLocation = location) }
+        val updatedLoc = if (location.ctafFrequency == null) {
+            val ctafResult = com.uasready.data.repository.CtafLookupHelper.findNearestCtaf(location.latitude, location.longitude)
+            if (ctafResult != null) {
+                location.copy(
+                    ctafFrequency = ctafResult.frequencyMhz,
+                    ctafType = ctafResult.type,
+                    nearestAirportIdent = ctafResult.ident,
+                    nearestAirportName = ctafResult.name,
+                    nearestAirportDistanceNm = ctafResult.distanceNm
+                )
+            } else {
+                location
+            }
+        } else {
+            location
+        }
+        _uiState.update { it.copy(currentLocation = updatedLoc) }
         if (!_uiState.value.isPilotSelectionPending) {
             fetchLiveData()
         }

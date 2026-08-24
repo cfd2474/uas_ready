@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.uasready.data.repository.CtafLookupHelper.initialize(applicationContext)
         setContent {
             val uiState by viewModel.uiState.collectAsState()
 
