@@ -29,13 +29,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.uasready.data.nasr.NasrAirport
+import com.uasready.data.nasr.NasrDatabaseHelper
+import com.uasready.data.nasr.ParsedTfr
 import com.uasready.domain.model.AirspaceZone
 import com.uasready.domain.model.AirspaceZoneType
 import com.uasready.ui.theme.*
 import com.uasready.ui.viewmodel.MainUiState
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
@@ -124,6 +131,9 @@ fun MapScreen(
     var selectedBasemap by remember { mutableStateOf(BasemapType.STREET) }
     var inspectionResult by remember { mutableStateOf<AirspaceInspection?>(null) }
     var shouldRecenterMap by remember { mutableStateOf(false) }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+    var extentAirports by remember { mutableStateOf<List<NasrAirport>>(emptyList()) }
+    var extentAirspaceZones by remember { mutableStateOf<List<AirspaceZone>>(emptyList()) }
 
     var enabledZoneTypes by remember {
         mutableStateOf(
@@ -139,9 +149,49 @@ fun MapScreen(
 
     val loc = uiState.currentLocation
     val gnss = uiState.estimatedGnss
-    val liveAirspaceZones: List<AirspaceZone> = uiState.airspaceInfo?.zones ?: emptyList()
-    val nearbyAirports = uiState.nearbyAirports
     val airac = uiState.airacCycleInfo
+
+    // Query helper for dynamic extent rendering
+    fun refreshExtentData(mapView: MapView, helper: NasrDatabaseHelper) {
+        val bbox = mapView.boundingBox ?: return
+        val minLat = bbox.latSouth
+        val maxLat = bbox.latNorth
+        val minLon = bbox.lonWest
+        val maxLon = bbox.lonEast
+        val nowMs = System.currentTimeMillis()
+
+        val apts = helper.queryAirportsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 200)
+        val airspaces = helper.queryAirspaceInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 150)
+        val uasfmGrids = helper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 500)
+        val suaZones = helper.querySuaInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 80)
+        val activeTfrs = helper.queryActiveTfrsInBoundingBox(minLat, maxLat, minLon, maxLon, nowMs = nowMs, limit = 40)
+
+        val allExtentZones = mutableListOf<AirspaceZone>()
+        allExtentZones.addAll(airspaces)
+        allExtentZones.addAll(uasfmGrids)
+        allExtentZones.addAll(suaZones)
+        for (tfr in activeTfrs) {
+            if (tfr.polygonCoordinates.isNotEmpty()) {
+                allExtentZones.add(
+                    AirspaceZone(
+                        id = "TFR-${tfr.notamId}",
+                        name = if (tfr.isHazard91137) "14 CFR § 91.137 TFR (${tfr.notamId})" else "TFR ${tfr.notamId} (${tfr.type})",
+                        type = AirspaceZoneType.RESTRICTED_ZONE,
+                        centerLat = tfr.centerLat ?: ((minLat + maxLat) / 2.0),
+                        centerLon = tfr.centerLon ?: ((minLon + maxLon) / 2.0),
+                        radiusMeters = tfr.radiusNm * 1852.0,
+                        floorFt = tfr.floorFt,
+                        ceilingFt = tfr.ceilingFt,
+                        description = "FAA TFR: ${tfr.description}",
+                        polygonCoordinates = tfr.polygonCoordinates
+                    )
+                )
+            }
+        }
+
+        extentAirports = apts
+        extentAirspaceZones = allExtentZones
+    }
 
     Box(
         modifier = modifier
@@ -151,8 +201,10 @@ fun MapScreen(
         // Interactive Map View with Live Aeronautical Overlays & Selectable NO-POI Basemaps
         AndroidView(
             factory = { context ->
+                val helper = NasrDatabaseHelper(context)
                 Configuration.getInstance().userAgentValue = "UASReady-Android-App/1.0"
                 MapView(context).apply {
+                    mapViewRef = this
                     setTileSource(STREET_TILE_SOURCE)
                     setMultiTouchControls(true)
                     controller.setZoom(12.8)
@@ -169,9 +221,27 @@ fun MapScreen(
                         snippet = "Coordinates: ${loc.formattedCoordinates}"
                     }
                     overlays.add(userMarker)
+
+                    // Dynamic Extent Listener: Re-queries SQLite whenever pan/scroll/zoom extent changes
+                    addMapListener(object : MapListener {
+                        override fun onScroll(event: ScrollEvent?): Boolean {
+                            refreshExtentData(this@apply, helper)
+                            return true
+                        }
+
+                        override fun onZoom(event: ZoomEvent?): Boolean {
+                            refreshExtentData(this@apply, helper)
+                            return true
+                        }
+                    })
+
+                    post {
+                        refreshExtentData(this, helper)
+                    }
                 }
             },
             update = { mapView ->
+                mapViewRef = mapView
                 // Apply Selected NO-POI Basemap Tile Source
                 val targetTileSource = when (selectedBasemap) {
                     BasemapType.STREET -> STREET_TILE_SOURCE
@@ -199,10 +269,10 @@ fun MapScreen(
                 // Clear previous airspace polygons, airport markers and events
                 mapView.overlays.removeAll { it is Polygon || it is MapEventsOverlay || (it is Marker && it.id.startsWith("APT_")) }
 
-                // Map Touch Receiver: Handles clicks across all overlapping polygons
+                // Map Touch Receiver: Handles clicks across all overlapping polygons in the visible extent
                 val mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
                     override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                        val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+                        val activeZones = extentAirspaceZones.filter { it.type in enabledZoneTypes }
                         val overlapping = activeZones.filter { isPointInZone(p.latitude, p.longitude, it) }
                         inspectionResult = AirspaceInspection(p, overlapping)
                         return true
@@ -214,8 +284,8 @@ fun MapScreen(
                 })
                 mapView.overlays.add(0, mapEventsOverlay)
 
-                // Render Airport Markers with CTAF Frequencies
-                nearbyAirports.forEach { apt ->
+                // Render Airport Markers strictly within the current extent with CTAF Frequencies
+                extentAirports.forEach { apt ->
                     val aptPos = GeoPoint(apt.latitude, apt.longitude)
                     val aptMarker = Marker(mapView).apply {
                         id = "APT_${apt.icaoId}"
@@ -225,7 +295,7 @@ fun MapScreen(
                         title = "${apt.name} (${apt.icaoId})"
                         snippet = "CTAF: ${apt.effectiveCtaf ?: "N/A"} • Elev: ${apt.elevationFt.toInt()} ft MSL"
                         setOnMarkerClickListener { _, _ ->
-                            val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+                            val activeZones = extentAirspaceZones.filter { it.type in enabledZoneTypes }
                             val overlapping = activeZones.filter { isPointInZone(apt.latitude, apt.longitude, it) }.toMutableList()
                             overlapping.add(
                                 0,
@@ -248,10 +318,10 @@ fun MapScreen(
                     mapView.overlays.add(aptMarker)
                 }
 
-                // Filter zones based on active category toggles
-                val filteredZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+                // Filter extent zones based on active category toggles
+                val filteredZones = extentAirspaceZones.filter { it.type in enabledZoneTypes }
 
-                // Sort: Render larger controlled/warning polygons first, then UAS Facility grid on top
+                // Sort: Render larger controlled/warning polygons first, then 1-arcminute UAS Facility grid on top
                 val sortedZones = filteredZones.sortedBy { if (it.type == AirspaceZoneType.ALTITUDE_ZONE) 1 else 0 }
 
                 sortedZones.forEach { zone ->
@@ -283,7 +353,7 @@ fun MapScreen(
                                 outlinePaint.strokeWidth = 2.5f
                             }
                             AirspaceZoneType.ALTITUDE_ZONE -> {
-                                // UAS Facility Map Grids with altitude-tiered coloring
+                                // 1 Arc-Minute UAS Facility Map Grids with altitude-tiered coloring
                                 val ceiling = zone.ceilingFt ?: 400.0
                                 val (fillA, outlineA) = when {
                                     ceiling <= 0.0 -> Pair(AndroidColor.argb(75, 235, 65, 65), AndroidColor.argb(255, 235, 65, 65)) // 0 ft Red
@@ -305,7 +375,7 @@ fun MapScreen(
 
                         // Forward polygon clicks to multi-layer inspection
                         setOnClickListener { _, _, clickPoint ->
-                            val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+                            val activeZones = extentAirspaceZones.filter { it.type in enabledZoneTypes }
                             val overlapping = activeZones.filter { isPointInZone(clickPoint.latitude, clickPoint.longitude, it) }
                             inspectionResult = AirspaceInspection(clickPoint, overlapping)
                             true
@@ -318,6 +388,53 @@ fun MapScreen(
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // Center-Left Vertical Zoom Controls (Optimized for thumb reach on DJI RC Pro Enterprise landscape canvas)
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = AviationDarkCard.copy(alpha = 0.95f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder),
+                modifier = Modifier.size(48.dp)
+            ) {
+                IconButton(
+                    onClick = { mapViewRef?.controller?.zoomIn() },
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Zoom In",
+                        tint = AviationAccent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = AviationDarkCard.copy(alpha = 0.95f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder),
+                modifier = Modifier.size(48.dp)
+            ) {
+                IconButton(
+                    onClick = { mapViewRef?.controller?.zoomOut() },
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Remove,
+                        contentDescription = "Zoom Out",
+                        tint = AviationAccent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
 
         // Top Floating Control Bar (Basemap Selector + AIRAC Badge + Legend Toggle)
         Row(
