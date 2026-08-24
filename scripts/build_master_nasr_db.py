@@ -213,10 +213,10 @@ with open(UASFM_GEOJSON, 'r', encoding='utf-8') as f:
             try:
                 feat = json.loads(line)
                 props = feat.get('properties', {})
-                grid_id = props.get('GLOBAL_ID') or f"UASFM-{props.get('OBJECTID')}"
-                icao = props.get('APT_IDENT') or props.get('AIRPORT_IDENT') or props.get('ICAO') or ""
-                faaid = props.get('LOC_ID') or icao
-                apt_name = props.get('APT_NAME') or f"{icao} Airport"
+                grid_id = props.get('GLOBALID') or props.get('GLOBAL_ID') or f"UASFM-{props.get('OBJECTID')}"
+                icao = props.get('APT1_ICAO') or props.get('APT_IDENT') or props.get('AIRPORT_IDENT') or props.get('ICAO') or ""
+                faaid = props.get('APT1_FAAID') or props.get('LOC_ID') or icao
+                apt_name = props.get('APT1_NAME') or props.get('APT_NAME') or f"{icao} Airport"
                 ceiling = float(props.get('CEILING', 0))
 
                 geom = feat.get('geometry', {})

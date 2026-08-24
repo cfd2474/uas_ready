@@ -1,6 +1,7 @@
 package com.uasready.ui.screens
 
 import android.content.Context
+import android.util.Log
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
@@ -259,7 +260,7 @@ fun MapScreen(
 
                 // Execute SQLite queries on background IO dispatcher
                 val allAptsInExtent = withContext(Dispatchers.IO) {
-                    helper.queryAirportsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 2000)
+                    helper.queryAirportsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 3000)
                 }
                 val airspacesInExtent = withContext(Dispatchers.IO) {
                     helper.queryAirspaceInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 1000)
@@ -281,12 +282,17 @@ fun MapScreen(
                     }
                 }
 
-                // Dynamic LOD / Stacking for Airports on wide zoom
+                // Dynamic LOD for Airports on wide zoom
                 val visibleAirports = when {
-                    zoom >= 8.5 -> allAptsInExtent
-                    zoom >= 6.0 -> allAptsInExtent.filter { !it.towerFreq.isNullOrBlank() || it.useType == "PU" }
+                    zoom >= 9.5 -> allAptsInExtent
+                    zoom >= 7.0 -> allAptsInExtent.filter { !it.towerFreq.isNullOrBlank() || it.useType == "PU" }
                     else -> allAptsInExtent.filter { !it.towerFreq.isNullOrBlank() }
                 }
+
+                Log.i(
+                    "MapOverlay",
+                    "Extent [${String.format(Locale.US, "%.3f", minLat)}..${String.format(Locale.US, "%.3f", maxLat)}, ${String.format(Locale.US, "%.3f", minLon)}..${String.format(Locale.US, "%.3f", maxLon)}] @ Zoom ${String.format(Locale.US, "%.1f", zoom)} -> Visible Apts: ${visibleAirports.size}/${allAptsInExtent.size}, UASFM: ${uasfmInExtent.size}, Airspaces: ${airspacesInExtent.size}, SUAs: ${suaInExtent.size}"
+                )
 
                 val allExtentZones = mutableListOf<AirspaceZone>()
                 allExtentZones.addAll(airspacesInExtent)
@@ -413,7 +419,7 @@ fun MapScreen(
                     val aptMarker = Marker(mapView).apply {
                         id = "APT_${apt.icaoId}"
                         position = aptPos
-                        icon = createAirportMarkerDrawable(mapView.context, apt.icaoId, apt.effectiveCtaf ?: "")
+                        icon = getOrCreateAirportMarkerDrawable(mapView.context, apt.icaoId, apt.effectiveCtaf ?: "")
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         title = "${apt.name} (${apt.icaoId})"
                         snippet = "CTAF: ${apt.effectiveCtaf ?: "N/A"} • Elev: ${apt.elevationFt.toInt()} ft MSL"
@@ -429,6 +435,8 @@ fun MapScreen(
 
                 mapView.invalidate()
                 mapView.postInvalidate()
+            } catch (e: Exception) {
+                Log.e("MapOverlay", "Error rendering extent overlays: ${e.message}", e)
             } finally {
                 isRenderingAirspace = false
             }
@@ -1185,6 +1193,16 @@ private fun createSmallRedPinDrawable(context: Context): BitmapDrawable {
     canvas.drawCircle(width / 2f, radius, radius * 0.4f, dotPaint)
 
     return BitmapDrawable(context.resources, bitmap)
+}
+
+// Airport CTAF Badge Marker Cache (Prevents continuous Bitmap allocations during pan/zoom)
+private val airportMarkerCache = java.util.concurrent.ConcurrentHashMap<String, BitmapDrawable>()
+
+private fun getOrCreateAirportMarkerDrawable(context: Context, icao: String, ctaf: String): BitmapDrawable {
+    val key = "${icao}_${ctaf}"
+    return airportMarkerCache.getOrPut(key) {
+        createAirportMarkerDrawable(context, icao, ctaf)
+    }
 }
 
 // Airport CTAF Badge Marker (High-Contrast Sectional Style)

@@ -60,11 +60,14 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                         val uasfmCount = db.rawQuery("SELECT COUNT(*) FROM uasfm_grid", null).use { c ->
                             if (c.moveToFirst()) c.getInt(0) else 0
                         }
+                        val uasfmWithIcao = db.rawQuery("SELECT COUNT(*) FROM uasfm_grid WHERE icao_id != '' AND icao_id IS NOT NULL", null).use { c ->
+                            if (c.moveToFirst()) c.getInt(0) else 0
+                        }
                         val airportCount = db.rawQuery("SELECT COUNT(*) FROM airports", null).use { c ->
                             if (c.moveToFirst()) c.getInt(0) else 0
                         }
-                        Log.i(TAG, "Database health check on disk: $uasfmCount UASFM cells, $airportCount airports")
-                        if (uasfmCount >= 300_000 && airportCount >= 15_000) {
+                        Log.i(TAG, "Database health check on disk: $uasfmCount UASFM cells ($uasfmWithIcao with ICAO), $airportCount airports")
+                        if (uasfmCount >= 300_000 && uasfmWithIcao >= 300_000 && airportCount >= 15_000) {
                             isValid = true
                         }
                     }
