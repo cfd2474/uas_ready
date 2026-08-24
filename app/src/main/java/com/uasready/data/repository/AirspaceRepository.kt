@@ -28,91 +28,9 @@ class LiveAirspaceRepository : AirspaceRepository {
             var authRequired: Boolean = false
             var uasfmCeiling: Double? = 400.0
 
-            // 1. Query Official FAA Live UAS Facility Map V5 ArcGIS FeatureServer
+            // 1. Query openAIP Airspaces API for controlled and restricted airspace
             try {
-                val uasfmUrl = "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/FAA_UAS_FacilityMap_Data_V5/FeatureServer/0/query?where=1%3D1&geometry=$longitude,$latitude&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=35000&units=esriSRUnit_Meter&outFields=OBJECTID,CEILING,APT1_ICAO,APT1_NAME,AIRSPACE_1&returnGeometry=true&f=geojson"
-                val conn = (URL(uasfmUrl).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = 6000
-                    readTimeout = 6000
-                    setRequestProperty("Accept", "application/json")
-                    setRequestProperty("User-Agent", "UASReady-App/1.0")
-                }
-
-                if (conn.responseCode == 200) {
-                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                    val geoJson = JSONObject(responseText)
-                    val features = geoJson.optJSONArray("features") ?: JSONArray()
-
-                    for (i in 0 until features.length()) {
-                        val feature = features.optJSONObject(i) ?: continue
-                        val props = feature.optJSONObject("properties") ?: JSONObject()
-                        val ceiling = props.optDouble("CEILING", 400.0)
-                        val icao = props.optString("APT1_ICAO", "UASFM")
-                        val aptName = props.optString("APT1_NAME", "Airport")
-                        val airClass = props.optString("AIRSPACE_1", "")
-
-                        val geom = feature.optJSONObject("geometry")
-                        val coords = geom?.optJSONArray("coordinates")
-                        val polyPoints = mutableListOf<Pair<Double, Double>>()
-
-                        if (coords != null && coords.length() > 0) {
-                            val ring = coords.optJSONArray(0)
-                            if (ring != null) {
-                                for (p in 0 until ring.length()) {
-                                    val pt = ring.optJSONArray(p)
-                                    if (pt != null && pt.length() >= 2) {
-                                        polyPoints.add(Pair(pt.optDouble(1), pt.optDouble(0)))
-                                    }
-                                }
-                            }
-                        }
-
-                        if (polyPoints.isNotEmpty()) {
-                            val cellId = props.optInt("OBJECTID", i)
-                            val isLaunchInCell = isPointInsidePolygon(latitude, longitude, polyPoints)
-                            if (isLaunchInCell) {
-                                uasfmCeiling = ceiling
-                                if (airClass.isNotBlank()) {
-                                    authRequired = true
-                                    primaryClass = when (airClass.uppercase()) {
-                                        "B" -> AirspaceClass.CLASS_B
-                                        "C" -> AirspaceClass.CLASS_C
-                                        "D" -> AirspaceClass.CLASS_D
-                                        "E" -> AirspaceClass.CLASS_E_SURFACE
-                                        else -> AirspaceClass.CLASS_D
-                                    }
-                                }
-                            }
-
-                            zones.add(
-                                AirspaceZone(
-                                    id = "FAA-UASFM-$cellId",
-                                    name = "$icao UAS Facility Grid (${ceiling.toInt()} ft AGL)",
-                                    type = AirspaceZoneType.ALTITUDE_ZONE,
-                                    centerLat = polyPoints.map { it.first }.average(),
-                                    centerLon = polyPoints.map { it.second }.average(),
-                                    radiusMeters = 500.0,
-                                    floorFt = 0.0,
-                                    ceilingFt = ceiling,
-                                    description = "$aptName ($icao) Class $airClass: Max auto-approved LAANC ceiling is ${ceiling.toInt()} ft AGL.",
-                                    polygonCoordinates = polyPoints
-                                )
-                            )
-                        }
-                    }
-                    if (zones.any { it.type == AirspaceZoneType.ALTITUDE_ZONE }) {
-                        sourceName = "FAA Live UAS Facility Map Service"
-                        Log.i("AirspaceRepo", "Loaded ${zones.count { it.type == AirspaceZoneType.ALTITUDE_ZONE }} official FAA UASFM grid cells")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.d("AirspaceRepo", "FAA UASFM API query skipped: ${e.message}")
-            }
-
-            // 2. Query openAIP Airspaces API for controlled and restricted airspace
-            try {
-                val distMeters = 40000
+                val distMeters = 55560 // 30 NM radius
                 val openAipUrl = "https://api.core.openaip.net/api/airspaces?page=1&limit=100&pos=$longitude,$latitude&dist=$distMeters"
                 val conn = (URL(openAipUrl).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
@@ -168,6 +86,19 @@ class LiveAirspaceRepository : AirspaceRepository {
                             }
                         }
 
+                        if (polyPoints.isNotEmpty() && isPointInsidePolygon(latitude, longitude, polyPoints)) {
+                            if (zoneType == AirspaceZoneType.AUTHORIZATION_ZONE || zoneType == AirspaceZoneType.RESTRICTED_ZONE) {
+                                authRequired = true
+                                primaryClass = when (icaoClassInt) {
+                                    1 -> AirspaceClass.CLASS_B
+                                    2 -> AirspaceClass.CLASS_C
+                                    3 -> AirspaceClass.CLASS_D
+                                    4 -> AirspaceClass.CLASS_E_SURFACE
+                                    else -> AirspaceClass.CLASS_D
+                                }
+                            }
+                        }
+
                         zones.add(
                             AirspaceZone(
                                 id = "OPENAIP-${item.optString("_id", i.toString())}",
@@ -178,7 +109,7 @@ class LiveAirspaceRepository : AirspaceRepository {
                                 radiusMeters = 4500.0,
                                 floorFt = 0.0,
                                 ceilingFt = 400.0,
-                                description = "openAIP: $name",
+                                description = "Aeronautical Airspace: $name",
                                 polygonCoordinates = polyPoints
                             )
                         )
@@ -191,7 +122,7 @@ class LiveAirspaceRepository : AirspaceRepository {
             // 2. If openAIP had no results, query official FAA ArcGIS Aeronautical GeoJSON API
             if (zones.isEmpty()) {
                 try {
-                    val faaUrl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/Airspace_Boundary/FeatureServer/0/query?where=1%3D1&geometry=$longitude,$latitude&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=40000&units=esriSRUnit_Meter&outFields=NAME,CLASS,LOCAL_TYPE,LOW_ALT,HIGH_ALT&returnGeometry=true&f=geojson"
+                    val faaUrl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/Airspace_Boundary/FeatureServer/0/query?where=1%3D1&geometry=$longitude,$latitude&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=55560&units=esriSRUnit_Meter&outFields=NAME,CLASS,LOCAL_TYPE,LOW_ALT,HIGH_ALT&returnGeometry=true&f=geojson"
                     val conn = (URL(faaUrl).openConnection() as HttpURLConnection).apply {
                         requestMethod = "GET"
                         connectTimeout = 4000
@@ -220,7 +151,7 @@ class LiveAirspaceRepository : AirspaceRepository {
                                 airClassStr.contains("B") || airClassStr.contains("C") || airClassStr.contains("D") -> AirspaceZoneType.AUTHORIZATION_ZONE
                                 airClassStr.contains("E") -> AirspaceZoneType.WARNING_ZONE
                                 name.contains("RESTRICTED", true) || name.contains("PROHIBITED", true) -> AirspaceZoneType.RESTRICTED_ZONE
-                                else -> AirspaceZoneType.ALTITUDE_ZONE
+                                else -> AirspaceZoneType.AUTHORIZATION_ZONE
                             }
 
                             if (geomType == "Polygon" && coords != null && coords.length() > 0) {
@@ -247,6 +178,17 @@ class LiveAirspaceRepository : AirspaceRepository {
                             }
 
                             if (polyPoints.isNotEmpty()) {
+                                if (isPointInsidePolygon(latitude, longitude, polyPoints)) {
+                                    authRequired = true
+                                    primaryClass = when {
+                                        airClassStr.contains("B") -> AirspaceClass.CLASS_B
+                                        airClassStr.contains("C") -> AirspaceClass.CLASS_C
+                                        airClassStr.contains("D") -> AirspaceClass.CLASS_D
+                                        airClassStr.contains("E") -> AirspaceClass.CLASS_E_SURFACE
+                                        else -> AirspaceClass.CLASS_D
+                                    }
+                                }
+
                                 zones.add(
                                     AirspaceZone(
                                         id = "FAA-ARC-$i",
@@ -272,10 +214,8 @@ class LiveAirspaceRepository : AirspaceRepository {
                 }
             }
 
-            // 3. Fallback Aeronautical Airspace & UAS Facility Map Grids Generator within map view extent
-            // Provides high-fidelity official sectional geometry and UASFM grids around regional airspaces
+            // 3. Fallback Aeronautical Airspace Sectors within map view radius (30 NM / 55 km)
             val regionalAeronauticalSectors = listOf(
-                // Southern California Controlled Airspace Sectors & UASFM Grids
                 AeronauticalSector("Ontario (KONT) Class C Surface Area", "KONT", "Ontario Intl", 34.0560, -117.6012, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KONT Class C Surface to 5,000 ft MSL"),
                 AeronauticalSector("Riverside (KRAL) Class D Airspace", "KRAL", "Riverside Muni", 33.9519, -117.4451, 7778.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KRAL Class D Surface to 3,300 ft MSL"),
                 AeronauticalSector("Chino (KCNO) Class D Airspace", "KCNO", "Chino Airport", 33.9747, -117.6366, 8890.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KCNO Class D Surface to 2,700 ft MSL"),
@@ -288,12 +228,9 @@ class LiveAirspaceRepository : AirspaceRepository {
                 AeronauticalSector("Prado Dam Wildlife Sensitive Area", "PRADO", "Prado Basin", 33.8920, -117.6350, 4500.0, AirspaceZoneType.WARNING_ZONE, AirspaceClass.CLASS_G, "Environmental / Wildlife Warning Area")
             )
 
-            // If no online zones were found or to ensure rich UAS Facility Map grid coverage
-            val hasExistingUasfm = zones.any { it.type == AirspaceZoneType.ALTITUDE_ZONE }
             for (sec in regionalAeronauticalSectors) {
                 val distKm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon) * 1.852
-                // Include if within map view radius (~45 km)
-                if (distKm <= 45.0) {
+                if (distKm <= 55.0) { // 30 NM radius
                     val distToCenterNm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon)
                     val radiusNm = sec.radiusMeters * 0.000539957
 
@@ -318,24 +255,6 @@ class LiveAirspaceRepository : AirspaceRepository {
                                 polygonCoordinates = poly
                             )
                         )
-                    }
-
-                    // Generate UAS Facility Map Grid cells if not already loaded
-                    if (!hasExistingUasfm && sec.type == AirspaceZoneType.AUTHORIZATION_ZONE) {
-                        val uasfmGrids = generateUasfmGridCells(
-                            airportCode = sec.code,
-                            airportName = sec.airportName,
-                            centerLat = sec.lat,
-                            centerLon = sec.lon
-                        )
-                        zones.addAll(uasfmGrids)
-
-                        // Check if current location falls into one of the UASFM grids
-                        for (grid in uasfmGrids) {
-                            if (isPointInsidePolygon(latitude, longitude, grid.polygonCoordinates)) {
-                                uasfmCeiling = grid.ceilingFt
-                            }
-                        }
                     }
                 }
             }

@@ -87,10 +87,14 @@ fun calculateForecastBlocks(uiState: MainUiState): List<ForecastTimeBlock> {
         val maxGust = aircraft.limitations.maxGustSpeedMph
         val maxSustained = aircraft.limitations.maxSustainedWindSpeedMph
         val precipAllowed = aircraft.limitations.precipitationAllowed
+        val minTemp = aircraft.limitations.minOperatingTempF
+        val maxTemp = aircraft.limitations.maxOperatingTempF
 
         val status = when {
+            tempF < minTemp || tempF > maxTemp -> AssessmentStatus.NO_GO
             windGust > maxGust || windSpeed > maxSustained -> AssessmentStatus.NO_GO
             precipType != PrecipitationType.NONE && !precipAllowed && precipRate > 0.0 -> AssessmentStatus.NO_GO
+            tempF <= minTemp + 5.0 || tempF >= maxTemp - 5.0 -> AssessmentStatus.CAUTION
             windGust >= maxGust - 5.0 || windSpeed >= maxSustained - 4.0 -> AssessmentStatus.CAUTION
             precipProb >= 30 || (cloudCeiling != null && cloudCeiling < 1000.0) -> AssessmentStatus.CAUTION
             else -> AssessmentStatus.GO
