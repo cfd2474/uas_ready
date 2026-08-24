@@ -28,7 +28,6 @@ fun SquareMetricCard(
     title: String,
     primaryValue: String,
     secondaryValue: String? = null,
-    tertiaryValue: String? = null,
     status: AssessmentStatus? = null,
     icon: ImageVector? = null,
     onClick: (() -> Unit)? = null,
@@ -130,20 +129,6 @@ fun SquareMetricCard(
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = TextMuted,
                         fontSize = 10.sp
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            // Tertiary Detail Value (e.g. CTAF frequency, high contrast highlight)
-            if (tertiaryValue != null) {
-                Text(
-                    text = tertiaryValue,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = AviationCyan,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
