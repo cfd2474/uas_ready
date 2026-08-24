@@ -56,8 +56,8 @@ fun HomeScreen(
     // Any failure in 0-60m window -> NO-GO; Failures in 60-120m window -> CAUTION; Otherwise -> GO
     val forecastStatus: AssessmentStatus = when {
         assessment == null -> AssessmentStatus.DATA_UNAVAILABLE
-        weatherCat?.status == AssessmentStatus.NO_GO || daylightCat?.status == AssessmentStatus.NO_GO -> AssessmentStatus.NO_GO
-        weatherCat?.status == AssessmentStatus.CAUTION || daylightCat?.status == AssessmentStatus.CAUTION -> AssessmentStatus.CAUTION
+        weatherCat?.status == AssessmentStatus.NO_GO || daylightCat?.status == AssessmentStatus.NO_GO || aircraftCat?.status == AssessmentStatus.NO_GO -> AssessmentStatus.NO_GO
+        weatherCat?.status == AssessmentStatus.CAUTION || daylightCat?.status == AssessmentStatus.CAUTION || aircraftCat?.status == AssessmentStatus.CAUTION -> AssessmentStatus.CAUTION
         else -> AssessmentStatus.GO
     }
 
@@ -121,13 +121,28 @@ fun HomeScreen(
             val visRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-VIS") }
 
             val weatherSummary = "${gustRule?.inputValueFormatted ?: "Wind 8 MPH"} • ${visRule?.inputValueFormatted ?: "Vis 10 SM"}"
+
+            // Combined status of environmental weather & aircraft limits (temperature, wind, gusts, precipitation)
+            val combinedWeatherStatus = when {
+                weatherCat?.status == AssessmentStatus.NO_GO || aircraftCat?.status == AssessmentStatus.NO_GO -> AssessmentStatus.NO_GO
+                weatherCat?.status == AssessmentStatus.CAUTION || aircraftCat?.status == AssessmentStatus.CAUTION -> AssessmentStatus.CAUTION
+                weatherCat?.status == AssessmentStatus.DATA_UNAVAILABLE || aircraftCat?.status == AssessmentStatus.DATA_UNAVAILABLE -> AssessmentStatus.DATA_UNAVAILABLE
+                else -> AssessmentStatus.GO
+            }
+
+            val targetCategory = if (aircraftCat?.status == AssessmentStatus.NO_GO || aircraftCat?.status == AssessmentStatus.CAUTION) {
+                AssessmentCategory.AIRCRAFT_LIMITS
+            } else {
+                AssessmentCategory.WEATHER
+            }
+
             SquareMetricCard(
                 title = "Weather & Wind",
                 primaryValue = "${tempRule?.inputValueFormatted ?: "75°F"} • Wind",
                 secondaryValue = weatherSummary,
-                status = weatherCat?.status,
+                status = combinedWeatherStatus,
                 icon = Icons.Default.Cloud,
-                onClick = { onNavigateToAssessment(AssessmentCategory.WEATHER) }
+                onClick = { onNavigateToAssessment(targetCategory) }
             )
         }
 

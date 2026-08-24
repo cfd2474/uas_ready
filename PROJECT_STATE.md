@@ -6,7 +6,7 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.42` (Build 50)
+- **Current Version**: `v1.3.43` (Build 51)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
@@ -20,13 +20,13 @@
 - [x] **Chunk 3**: Runtime TFR Ingest (tfr.faa.gov XML), 14 CFR § 91.137 Alerting, and TFR Map Rendering.
 - [x] **Chunk 4**: 28-Day AIRAC Cycle Currency Engine, Checker, Atomic DB Swap, and UI Staleness Badges.
 - [x] **Chunk 5**: openAIP Removal, Settings/Telemetry Updates, and End-to-End Acceptance Testing.
-- [ ] **Chunk 6**: Master FAA UASFM (380,644 cells) & National Security Flight Restrictions (2,267 sites) Ingestion & Database Packaging.
-  - Step 1: Create `scripts/build_master_nasr_db.py` to ingest master GeoJSONs into optimized SQLite DB and compress to `app/src/main/assets/databases/nasr_airspace.db.gz`.
-  - Step 2: Update `NasrDatabaseHelper.kt` with `national_security_restrictions` table and queries.
-  - Step 3: Update `NasrDatabaseSync.kt` to unpack `nasr_airspace.db.gz` from assets on package install/upgrade.
-  - Step 4: Discard procedural synthetic UASFM generator in `NasrSeedData.kt`.
-  - Step 5: Update `MapScreen.kt` to query/render authentic 0.5 arc-minute UASFM grid cells and National Security Restricted zones.
-  - Step 6: Verify all unit tests, build signed release `v1.3.43` (Build 51), push to `dev`, and update state.
+- [x] **Chunk 6**: Master FAA UASFM (380,644 cells) & National Security Flight Restrictions (2,267 sites) Ingestion & Database Packaging. (COMPLETED)
+  - Step 1: Ingested master GeoJSONs into high-performance SQLite DB with R*Tree-compatible bounding box B-Tree indexing and compressed to `app/src/main/assets/databases/nasr_airspace.db.gz` (22.8 MB).
+  - Step 2: Updated `NasrDatabaseHelper.kt` (DB_VERSION 7) with `national_security_restrictions` table and spatial queries.
+  - Step 3: Updated `NasrDatabaseSync.kt` with `unpackMasterDatabaseFromAssets` to automatically decompress and install the authoritative master database on app install or update.
+  - Step 4: Discarded synthetic procedural UASFM generator in `NasrSeedData.kt`.
+  - Step 5: Updated `MapScreen.kt` to query/render authentic 0.5 arc-minute ($30''$) UASFM cells and National Security Restricted zones with POC details.
+  - Step 6: Verified all unit tests, built signed release `v1.3.43` (Build 51), and pushed to `dev`.
 
 ---
 
