@@ -62,6 +62,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
+import java.util.Locale
 import kotlin.math.*
 
 enum class BasemapType(val displayName: String) {
@@ -152,6 +153,45 @@ fun MapScreen(
     val coroutineScope = rememberCoroutineScope()
     var renderJob by remember { mutableStateOf<Job?>(null) }
     var isRenderingAirspace by remember { mutableStateOf(false) }
+
+    var currentZoomLevel by remember { mutableStateOf(12.8) }
+    var currentExtentText by remember { mutableStateOf("~10.0 NM") }
+    var currentScaleText by remember { mutableStateOf("1\"≈2.1 NM") }
+
+    fun updateZoomAndScale(map: MapView) {
+        val zoom = map.zoomLevelDouble
+        currentZoomLevel = zoom
+        val bbox = map.boundingBox
+        if (bbox != null) {
+            val widthNm = GeometryUtils.calculateDistanceNm(
+                bbox.centerLatitude, bbox.lonWest,
+                bbox.centerLatitude, bbox.lonEast
+            )
+            val heightNm = GeometryUtils.calculateDistanceNm(
+                bbox.latSouth, bbox.centerLongitude,
+                bbox.latNorth, bbox.centerLongitude
+            )
+            val maxSpanNm = maxOf(widthNm, heightNm)
+            currentExtentText = if (maxSpanNm >= 100.0) {
+                String.format(Locale.US, "Span %.0f NM", maxSpanNm)
+            } else if (maxSpanNm >= 10.0) {
+                String.format(Locale.US, "Span %.1f NM", maxSpanNm)
+            } else {
+                String.format(Locale.US, "Span %.2f NM", maxSpanNm)
+            }
+
+            // Ground scale calculation: approx nautical miles per standard inch on screen (~4.8" horizontal on 5.5" landscape)
+            val nmPerInch = if (widthNm > 0) widthNm / 4.8 else 1.0
+            currentScaleText = if (nmPerInch >= 10.0) {
+                String.format(Locale.US, "1\"≈%.0f NM", nmPerInch)
+            } else if (nmPerInch >= 1.0) {
+                String.format(Locale.US, "1\"≈%.1f NM", nmPerInch)
+            } else {
+                val feetPerInch = (nmPerInch * 6076.12).toInt()
+                "1\"≈$feetPerInch ft"
+            }
+        }
+    }
 
     var enabledZoneTypes by remember {
         mutableStateOf(
@@ -424,17 +464,20 @@ fun MapScreen(
                     // Dynamic Extent Listener: Re-queries SQLite whenever pan/scroll/zoom extent changes
                     addMapListener(object : MapListener {
                         override fun onScroll(event: ScrollEvent?): Boolean {
+                            updateZoomAndScale(this@apply)
                             renderExtentOverlays(this@apply, helper, enabledZoneTypes)
                             return true
                         }
 
                         override fun onZoom(event: ZoomEvent?): Boolean {
+                            updateZoomAndScale(this@apply)
                             renderExtentOverlays(this@apply, helper, enabledZoneTypes)
                             return true
                         }
                     })
 
                     post {
+                        updateZoomAndScale(this)
                         renderExtentOverlays(this, helper, enabledZoneTypes)
                     }
                 }
@@ -461,12 +504,12 @@ fun MapScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Center-Left Vertical Zoom Controls (Optimized for thumb reach on DJI RC Pro Enterprise landscape canvas)
+        // Center-Left Vertical Zoom Controls & Scale Widget (Optimized for thumb reach on DJI RC Pro Enterprise landscape canvas)
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Surface(
@@ -503,6 +546,46 @@ fun MapScreen(
                         contentDescription = "Zoom Out",
                         tint = AviationAccent,
                         modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            // Current Zoom Extent & Scale Widget
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = AviationDarkCard.copy(alpha = 0.95f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "ZOOM ${String.format(Locale.US, "%.1f", currentZoomLevel)}",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = AviationAccent,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = currentExtentText,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = TextPrimary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = currentScaleText,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = TextSecondary,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     )
                 }
             }
