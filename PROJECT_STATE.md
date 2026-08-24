@@ -8,7 +8,7 @@
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
 - **Current Version**: `v1.3.33` (Build 41)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
-- **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `main`)
+- **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
 ---
 
