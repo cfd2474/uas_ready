@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.util.Log
+import com.uasready.data.repository.CtafLookupHelper
 import com.uasready.domain.model.LocationInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -130,6 +131,8 @@ class DeviceLocationManager(private val context: Context) {
         val accuracy = if (location.hasAccuracy()) location.accuracy else 5.0f
 
         val displayName = reverseGeocode(lat, lon)
+        CtafLookupHelper.initialize(context)
+        val ctafResult = CtafLookupHelper.findNearestCtaf(lat, lon)
 
         return LocationInfo(
             latitude = lat,
@@ -137,7 +140,12 @@ class DeviceLocationManager(private val context: Context) {
             elevationFt = elevationFt,
             displayName = displayName,
             accuracyMeters = accuracy,
-            isGpsDerived = true
+            isGpsDerived = true,
+            ctafFrequency = ctafResult?.frequencyMhz,
+            ctafType = ctafResult?.type,
+            nearestAirportIdent = ctafResult?.ident,
+            nearestAirportName = ctafResult?.name,
+            nearestAirportDistanceNm = ctafResult?.distanceNm
         )
     }
 

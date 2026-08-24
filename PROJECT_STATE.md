@@ -6,7 +6,7 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.33` (Build 41)
+- **Current Version**: `v1.3.34` (Build 42)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
@@ -14,9 +14,11 @@
 
 ## What Has Been Completed
 
-### 1. Temperature & Wind Caution Status Alignment on Weather Card
-- **Problem**: When ambient temperature triggered an operational caution/warning near or beyond aircraft operating limits, the "Weather & Wind" card on the Home Screen was displaying "GO" because general meteorological visibility/ceiling checks were GO.
-- **Solution**:
-  - In [WeatherRuleEvaluator.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/domain/engine/rules/WeatherRuleEvaluator.kt), integrated ambient temperature (`WX-TEMP-001..004`) and surface wind/gust limits (`WX-WIND-001..003`, `WX-GUST-001..003`) into the `WEATHER` assessment category evaluation.
-  - In [HomeScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/HomeScreen.kt), updated the "Weather & Wind" card status badge to compute the worst status among all weather, temperature, and wind rule evaluations.
-  - In [AssessmentDetailScreen.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/ui/screens/AssessmentDetailScreen.kt), added temperature threshold evaluations (`minTemp` and `maxTemp`) into `calculateForecastBlocks` so that forecast intervals accurately reflect Caution/No-Go conditions when temperature approaches or exceeds certified aircraft limits.
+### 1. Airspace-Only Map, Left-Center Zoom Controls, 30NM Disclaimer, & Local CTAF Detail
+- **Removed UAS Facility Maps**: Completely purged UAS Facility Map API queries and grid cell overlays; map rendering and inspection is now 100% focused on pure aeronautical airspace sectors (Class B/C/D/E, Restricted/Prohibited, and MOA/SUA areas).
+- **Map Disclaimer**: Added a top-center disclaimer banner stating *"Aeronautical Airspace within 30 NM radius"*.
+- **Left-Center Map Zoom Controls**: Positioned dedicated glove-friendly Zoom In (`+`) and Zoom Out (`-`) touch targets at `Alignment.CenterStart` (left center vertically) adhering to DJI RC Pro Enterprise layout constraints. Disabled OS default zoom controls.
+- **Local CTAF Detail Item**:
+  - Bundled high-performance spatial database of 3,916 US airports with CTAF and Tower frequencies in [airports_ctaf.json](file:///d:/Projects/cursor/UAS_Ready/app/src/main/assets/airports_ctaf.json).
+  - Created [CtafLookupHelper.kt](file:///d:/Projects/cursor/UAS_Ready/app/src/main/java/com/uasready/data/repository/CtafLookupHelper.kt) for instant Haversine distance spatial lookups.
+  - Displayed local CTAF frequency, nearest airport identifier, and distance on the Home Screen Location metric card and Map Screen bottom telemetry bar.

@@ -103,12 +103,12 @@ fun HomeScreen(
             )
         }
 
-        // Card 1: Location (Square Card)
+        // Card 1: Location & CTAF (Square Card)
         item {
             SquareMetricCard(
                 title = "Location",
                 primaryValue = uiState.currentLocation.displayName,
-                secondaryValue = uiState.currentLocation.formattedCoordinates,
+                secondaryValue = "${uiState.currentLocation.formattedCoordinates}\n${uiState.currentLocation.ctafDisplay}",
                 icon = Icons.Default.LocationOn,
                 onClick = onNavigateToMap
             )
@@ -139,11 +139,11 @@ fun HomeScreen(
             )
         }
 
-        // Card 3: Airspace & openAIP (Square Card)
+        // Card 3: Aeronautical Airspace (Square Card)
         item {
             val airspaceRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AIR-CTRL") || it.ruleId.startsWith("AIR-TFR") }
             SquareMetricCard(
-                title = "Airspace & openAIP",
+                title = "Airspace",
                 primaryValue = airspaceRule?.inputValueFormatted ?: "Class G (Uncontrolled)",
                 secondaryValue = airspaceRule?.thresholdFormatted ?: "No active flight restrictions",
                 status = airspaceCat?.status,
