@@ -13,8 +13,16 @@ object NasrSeedData {
     const val CURRENT_CYCLE_EXPIRE_DATE = "2026-09-10"
 
     fun populateDatabaseIfEmpty(helper: NasrDatabaseHelper) {
-        if (helper.hasNationwideAirportData()) {
+        populateDatabase(helper, force = false)
+    }
+
+    fun populateDatabase(helper: NasrDatabaseHelper, force: Boolean = false) {
+        if (!force && helper.hasNationwideAirportData()) {
             return
+        }
+
+        if (force) {
+            helper.resetDatabase()
         }
 
         // 1. Airports with authoritative CTAF / Tower frequencies
