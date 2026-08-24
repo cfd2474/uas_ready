@@ -843,7 +843,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
                     val cLon = if (polygon.isNotEmpty()) polygon.map { it.second }.average() else (cMinLon + cMaxLon) / 2.0
 
                     val labelName = listOf(proponent, branch, base, facility).filter { it.isNotBlank() }.joinToString(" - ")
-                    val desc = "FAA 14 CFR § 99.7 National Security Restriction: $reason" + if (poc.isNotBlank()) "\nPOC: $poc" else ""
+                    val desc = "FAA 14 CFR § 99.7 National Security Restriction (${if (airspaceClass.isNotBlank()) airspaceClass else "Airspace"}): $reason" + if (poc.isNotBlank()) "\nPOC: $poc" else ""
 
                     list.add(
                         AirspaceZone(

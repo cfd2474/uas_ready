@@ -120,26 +120,6 @@ class MainViewModel @JvmOverloads constructor(
 
         // Try to obtain initial GPS location silently if permission is already granted
         refreshGpsLocation(silent = true)
-
-        // Background FAA AIRAC currency check & auto-update on launch
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                delay(3000L) // Wait 3s after startup so initial screen is interactive immediately
-                val cycle = airspaceRepo.getAiracCycleInfo()
-                if (cycle.isExpired || cycle.daysUntilExpiry <= 3) {
-                    Log.i(TAG, "AIRAC cycle is expiring (${cycle.cycleName}, days left: ${cycle.daysUntilExpiry}). Checking for FAA online update...")
-                    val updateStatus = nasrUpdateManager.checkForUpdates()
-                    if (updateStatus is AiracUpdateStatus.UpdateAvailable) {
-                        Log.i(TAG, "Newer FAA AIRAC cycle available: ${updateStatus.newCycle}. Performing background update...")
-                        nasrUpdateManager.performUpdate()
-                        val updatedCycle = airspaceRepo.getAiracCycleInfo()
-                        _uiState.update { it.copy(airacCycleInfo = updatedCycle) }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Launch-time AIRAC check failed: ${e.message}")
-            }
-        }
     }
 
     fun refreshGpsLocation(silent: Boolean = false) {
@@ -220,7 +200,6 @@ class MainViewModel @JvmOverloads constructor(
 
             val cycleInfo = airspaceRepo.getAiracCycleInfo()
             val nearbyAirports = airspaceRepo.getNearbyAirports(lat, lon, radiusNm = 120.0)
-            val shouldPromptExpiry = cycleInfo.isExpired && !hasDismissedAiracWarningThisSession
 
             val assessment = assessmentEngine.assess(context)
             _uiState.update {
@@ -232,7 +211,7 @@ class MainViewModel @JvmOverloads constructor(
                     airspaceInfo = airspace,
                     estimatedGnss = gnss,
                     airacCycleInfo = cycleInfo,
-                    showAiracExpiryPrompt = shouldPromptExpiry,
+                    showAiracExpiryPrompt = false,
                     nearbyAirports = nearbyAirports,
                     lastTelemetryUpdateEpochMs = System.currentTimeMillis(),
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null

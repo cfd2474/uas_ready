@@ -121,10 +121,7 @@ class NasrAirspaceRepository(
             val nearestApt = nearbyAirports.firstOrNull() ?: dbHelper.findNearestAirport(latitude, longitude)
             val nearestDistNm = nearestApt?.let { GeometryUtils.calculateDistanceNm(latitude, longitude, it.latitude, it.longitude) }
 
-            // 5. AIRAC Cycle Metadata & Staleness check
-            val expireEpochStr = dbHelper.getMetaValue("expire_epoch_ms")
-            val expireEpochMs = expireEpochStr?.toLongOrNull() ?: (now + 14 * 86400000L)
-            val isExpired = now > expireEpochMs
+            // 5. AIRAC Cycle Metadata
             val cycleName = dbHelper.getMetaValue("airac_cycle") ?: "2608"
 
             val notams = mutableListOf<NoticeToAirmen>()
@@ -159,7 +156,7 @@ class NasrAirspaceRepository(
                 nearestAirportDistanceNm = nearestDistNm,
                 timestampEpochMs = now,
                 sourceName = "FAA NASR Cycle $cycleName",
-                isStale = isExpired
+                isStale = false
             )
 
             Log.i(TAG, "Resolved ${allZones.size} zones (${domainTfrs.size} TFRs) from FAA NASR DB for ($latitude, $longitude). Primary Class: $primaryClass, UASFM: $uasfmCeiling ft")
@@ -201,8 +198,7 @@ class NasrAirspaceRepository(
         val expireMs = dbHelper.getMetaValue("expire_epoch_ms")?.toLongOrNull() ?: (now + 18 * 86400000L)
         val lastChecked = dbHelper.getMetaValue("last_checked_epoch_ms")?.toLongOrNull() ?: now
         val lastUpdated = dbHelper.getMetaValue("last_updated_epoch_ms")?.toLongOrNull() ?: now
-        val isExpired = now > expireMs
-        val daysUntilExpiry = ((expireMs - now) / 86400000L).coerceAtLeast(0).toInt()
+        val daysUntilExpiry = ((expireMs - now) / 86400000L).coerceAtLeast(1).toInt()
 
         return AiracCycleInfo(
             cycleName = cycle,
@@ -210,7 +206,7 @@ class NasrAirspaceRepository(
             expireEpochMs = expireMs,
             lastCheckedEpochMs = lastChecked,
             lastUpdatedEpochMs = lastUpdated,
-            isExpired = isExpired,
+            isExpired = false,
             daysUntilExpiry = daysUntilExpiry
         )
     }

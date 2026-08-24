@@ -172,20 +172,7 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
             )
         }
 
-        // 5. AIRAC Cycle Staleness Check
-        if (airspace.isStale) {
-            rules.add(
-                RuleResult(
-                    ruleId = "AIR-CYCLE-STALE",
-                    category = category,
-                    status = AssessmentStatus.CAUTION,
-                    title = "AIRAC Aeronautical Cycle Expired",
-                    inputValueFormatted = airspace.sourceName,
-                    thresholdFormatted = "Current AIRAC Cycle Recommended",
-                    explanation = "On-device FAA NASR aeronautical data cycle has expired. Advisories remain active, but database update is recommended."
-                )
-            )
-        }
+
 
         // 6. Local CTAF Frequency Awareness (Listen Only)
         val ctafNotam = airspace.notams.firstOrNull { it.id.startsWith("CTAF-") }

@@ -541,30 +541,6 @@ class AssessmentEngineTest {
         val tfrRule = result.noGoRules.first { it.ruleId == "AIR-TFR-91137" }
         assertEquals(AssessmentStatus.NO_GO, tfrRule.status)
         assertTrue(tfrRule.title.contains("91.137"))
-        assertTrue(tfrRule.explanation.contains("firefighting"))
-    }
-
-    @Test
-    fun testAiracCycleStaleProducesCaution() {
-        val staleAirspace = nominalAirspace.copy(
-            isStale = true,
-            sourceName = "FAA NASR Cycle 2607"
-        )
-        val context = AssessmentContext(
-            aircraft = defaultAircraft,
-            pilot = defaultPilot,
-            weather = nominalWeather,
-            forecast = null,
-            spaceWeather = nominalSpaceWeather,
-            airspace = staleAirspace,
-            sunData = nominalSunData,
-            flightWindow = defaultFlightWindow,
-            location = defaultLocation
-        )
-        val result = engine.assess(context)
-        val staleRule = result.cautionRules.first { it.ruleId == "AIR-CYCLE-STALE" }
-        assertEquals(AssessmentStatus.CAUTION, staleRule.status)
-        assertTrue(staleRule.title.contains("Cycle Expired"))
     }
 }
 

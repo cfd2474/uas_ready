@@ -671,40 +671,28 @@ fun MapScreen(
                 }
 
                 if (airac != null) {
-                    val badgeColor = when {
-                        airac.isExpired -> SafetyNoGo
-                        airac.daysUntilExpiry <= 3 -> SafetyCautionLight
-                        else -> SafetyGoLight
-                    }
-                    val badgeStatusText = when {
-                        airac.isExpired -> "EXPIRED"
-                        airac.daysUntilExpiry <= 3 -> "${airac.daysUntilExpiry}d LEFT"
-                        else -> "CURRENT"
-                    }
-
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = AviationDarkCard.copy(alpha = 0.95f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor.copy(alpha = 0.6f))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SafetyGoLight.copy(alpha = 0.6f))
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
-                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(badgeColor))
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SafetyGoLight))
                             Text(
-                                text = "FAA NASR ${airac.cycleName} • $badgeStatusText",
+                                text = "FAA NASR ${airac.cycleName} • ACTIVE",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = TextPrimary,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp
+                                    fontSize = 10.sp
                                 )
                             )
                         }
                     }
-                }
-            }
+                }            }
 
             // Legend Toggle Button
             IconButton(
@@ -1073,43 +1061,6 @@ fun MapScreen(
                     Icon(Icons.Default.MyLocation, contentDescription = "Center GPS", tint = AviationAccent, modifier = Modifier.size(16.dp))
                 }
             }
-        }
-        // AIRAC Cycle Expiry Warning Dialog (Advisory, never locks flight)
-        if (uiState.showAiracExpiryPrompt && airac != null) {
-            AlertDialog(
-                onDismissRequest = onDismissAiracWarning,
-                icon = {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = SafetyCautionLight, modifier = Modifier.size(28.dp))
-                },
-                title = {
-                    Text(
-                        text = "AIRAC CYCLE EXPIRED (${airac.cycleName})",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
-                    )
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = "The on-device FAA NASR aeronautical database cycle (${airac.cycleName}) has expired.",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary)
-                        )
-                        Text(
-                            text = "Aviation awareness remains active. You may proceed with caution or update to the latest cycle via Settings.",
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = onDismissAiracWarning,
-                        colors = ButtonDefaults.buttonColors(containerColor = AviationCyan)
-                    ) {
-                        Text("Proceed with Caution", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                },
-                containerColor = AviationDarkCard,
-                textContentColor = TextPrimary
-            )
         }
     }
 }

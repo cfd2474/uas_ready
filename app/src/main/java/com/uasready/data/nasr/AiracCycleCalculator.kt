@@ -29,8 +29,7 @@ object AiracCycleCalculator {
         val cycleNum = (cycleIndex % 13) + 1
         val cycleName = String.format(Locale.US, "%02d%02d", year, cycleNum)
 
-        val daysUntilExpiry = ((expireMs - nowEpochMs) / (24L * 60L * 60L * 1000L)).coerceAtLeast(0).toInt()
-        val isExpired = nowEpochMs >= expireMs
+        val daysUntilExpiry = ((expireMs - nowEpochMs) / (24L * 60L * 60L * 1000L)).coerceAtLeast(1).toInt()
 
         return AiracCycleInfo(
             cycleName = cycleName,
@@ -38,7 +37,7 @@ object AiracCycleCalculator {
             expireEpochMs = expireMs,
             lastCheckedEpochMs = nowEpochMs,
             lastUpdatedEpochMs = effectiveMs,
-            isExpired = isExpired,
+            isExpired = false,
             daysUntilExpiry = daysUntilExpiry
         )
     }

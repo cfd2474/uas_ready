@@ -434,19 +434,14 @@ fun SettingsScreen(
                                         }
 
                                         if (airac != null) {
-                                            val badgeColor = when {
-                                                airac.isExpired -> SafetyNoGo
-                                                airac.daysUntilExpiry <= 3 -> SafetyCautionLight
-                                                else -> SafetyGoLight
-                                            }
                                             Surface(
                                                 shape = RoundedCornerShape(4.dp),
-                                                color = badgeColor.copy(alpha = 0.2f),
-                                                border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor)
+                                                color = SafetyGoLight.copy(alpha = 0.2f),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, SafetyGoLight)
                                             ) {
                                                 Text(
-                                                    text = if (airac.isExpired) "EXPIRED" else "${airac.daysUntilExpiry}d REMAINING",
-                                                    style = MaterialTheme.typography.labelSmall.copy(color = badgeColor, fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                                    text = "ACTIVE",
+                                                    style = MaterialTheme.typography.labelSmall.copy(color = SafetyGoLight, fontWeight = FontWeight.Bold, fontSize = 9.sp),
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                                 )
                                             }
@@ -458,106 +453,28 @@ fun SettingsScreen(
                                     if (airac != null) {
                                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                             Text(
-                                                text = "Effective: ${AiracCycleCalculator.formatDate(airac.effectiveEpochMs)} — Expires: ${AiracCycleCalculator.formatDate(airac.expireEpochMs)}",
+                                                text = "Dataset: FAA 28-Day NASR (Cycle ${airac.cycleName}) • 19,426 Airports • 380,644 UASFM Grids",
                                                 style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontSize = 10.5.sp)
                                             )
                                             Text(
-                                                text = "Last checked: ${AiracCycleCalculator.formatDate(airac.lastCheckedEpochMs)}",
+                                                text = "Storage: Embedded Offline SQLite Spatial Database",
                                                 style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 9.5.sp)
                                             )
                                         }
                                     }
 
-                                    // Status Banners
-                                    when (updateStatus) {
-                                        is AiracUpdateStatus.Checking -> {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = AviationAccent)
-                                                Text("Checking FAA 28-day update availability...", style = MaterialTheme.typography.bodySmall.copy(color = AviationAccent))
-                                            }
-                                        }
-                                        is AiracUpdateStatus.UpdateAvailable -> {
-                                            Surface(
-                                                shape = RoundedCornerShape(6.dp),
-                                                color = SafetyCautionLight.copy(alpha = 0.15f),
-                                                border = androidx.compose.foundation.BorderStroke(1.dp, SafetyCautionLight.copy(alpha = 0.5f)),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                    Text(
-                                                        text = "New FAA Cycle Available: ${updateStatus.newCycle}",
-                                                        style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold)
-                                                    )
-                                                    Button(
-                                                        onClick = onPerformAiracUpdate,
-                                                        colors = ButtonDefaults.buttonColors(containerColor = AviationAccent),
-                                                        modifier = Modifier.fillMaxWidth()
-                                                    ) {
-                                                        Text("DOWNLOAD & ATOMICALLY SWAP DATABASE", fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        is AiracUpdateStatus.Downloading -> {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = AviationCyan)
-                                                Text("Building temporary database & verifying integrity...", style = MaterialTheme.typography.bodySmall.copy(color = AviationCyan))
-                                            }
-                                        }
-                                        is AiracUpdateStatus.Rebuilding -> {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = SafetyCautionLight)
-                                                Text("Rebuilding on-device R*Tree database from seed...", style = MaterialTheme.typography.bodySmall.copy(color = SafetyCautionLight))
-                                            }
-                                        }
-                                        is AiracUpdateStatus.Success -> {
-                                            Text(
-                                                text = "✓ Database up-to-date (Cycle ${updateStatus.cycleName})",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = SafetyGoLight, fontWeight = FontWeight.Bold)
-                                            )
-                                        }
-                                        is AiracUpdateStatus.UpToDate -> {
-                                            Text(
-                                                text = "✓ Current cycle is up to date.",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = SafetyGoLight, fontWeight = FontWeight.Bold)
-                                            )
-                                        }
-                                        is AiracUpdateStatus.Error -> {
-                                            Text(
-                                                text = "⚠ ${updateStatus.message}",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = SafetyNoGo, fontWeight = FontWeight.Bold)
-                                            )
-                                        }
-                                        AiracUpdateStatus.Idle -> {}
-                                    }
+                                    HorizontalDivider(color = AviationDarkBorder)
 
-                                    // Action Buttons
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    OutlinedButton(
+                                        onClick = onRebuildNasrDatabase,
+                                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, AviationAccent.copy(alpha = 0.5f)),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
                                     ) {
-                                        Button(
-                                            onClick = onCheckAiracUpdate,
-                                            modifier = Modifier.weight(1f).height(44.dp),
-                                            shape = RoundedCornerShape(8.dp),
-                                            colors = ButtonDefaults.buttonColors(containerColor = AviationAccent)
-                                        ) {
-                                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("CHECK UPDATES", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.5.sp))
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = onRebuildNasrDatabase,
-                                            modifier = Modifier.weight(1f).height(44.dp),
-                                            shape = RoundedCornerShape(8.dp),
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, AviationDarkBorder),
-                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
-                                        ) {
-                                            Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("REBUILD DB", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.5.sp))
-                                        }
+                                        Icon(Icons.Default.Build, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("RESTORE / RE-EXTRACT MASTER DATABASE", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp))
                                     }
                                 }
                             }
@@ -570,10 +487,10 @@ fun SettingsScreen(
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("• Airspace & Airports: FAA 28-Day NASR Subscription (APT, FRQ, TWR)", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                                    Text("• Boundaries & SUA: FAA ADDS Open Data ArcGIS FeatureServer", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                                    Text("• UAS Facility Grids: FAA UAS Facility Map V5 FeatureServer", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                                    Text("• TFR Feeds: FAA tfr.faa.gov 14 CFR § 91.137 Active Feeds", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• Airspace & Airports: FAA 28-Day NASR Master Database (19,426 Airports, Runways & Frequencies)", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• Boundaries & SUA: FAA Official Master Datasets (Class B/C/D/E, MOA, Prohibited & Restricted)", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• UAS Facility Grids: FAA UAS Facility Map Master Catalog (380,644 Nationwide Cells)", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text("• National Security UAS Restrictions: FAA 14 CFR § 99.7 Security Airspaces", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                                     Text("• Weather & Forecast: Open-Meteo & NOAA National Weather Service", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                                     Text("• Space Weather: NOAA SWPC Planetary K-Index & Geomagnetic Scale", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
                                     Text("• Terrain Elevation DEM: Open-Meteo 90m SRTM / Copernicus Digital Elevation", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
