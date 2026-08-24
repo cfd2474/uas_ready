@@ -259,19 +259,19 @@ fun MapScreen(
 
                 // Execute SQLite queries on background IO dispatcher
                 val allAptsInExtent = withContext(Dispatchers.IO) {
-                    helper.queryAirportsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 500)
+                    helper.queryAirportsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 2000)
                 }
                 val airspacesInExtent = withContext(Dispatchers.IO) {
-                    helper.queryAirspaceInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 300)
+                    helper.queryAirspaceInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 1000)
                 }
                 val suaInExtent = withContext(Dispatchers.IO) {
-                    helper.querySuaInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 150)
+                    helper.querySuaInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 500)
                 }
                 val nsRestrictionsInExtent = withContext(Dispatchers.IO) {
-                    helper.queryNationalSecurityRestrictionsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 200)
+                    helper.queryNationalSecurityRestrictionsInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 500)
                 }
                 val activeTfrs = withContext(Dispatchers.IO) {
-                    helper.queryActiveTfrsInBoundingBox(minLat, maxLat, minLon, maxLon, nowMs = nowMs, limit = 50)
+                    helper.queryActiveTfrsInBoundingBox(minLat, maxLat, minLon, maxLon, nowMs = nowMs, limit = 100)
                 }
                 val uasfmInExtent = withContext(Dispatchers.IO) {
                     if (zoom >= 13.0) {
