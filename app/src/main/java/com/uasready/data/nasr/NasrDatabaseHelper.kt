@@ -669,7 +669,7 @@ class NasrDatabaseHelper(context: Context, dbName: String = DB_NAME) : SQLiteOpe
     /**
      * Queries UASFM grid squares in an arbitrary geographic bounding box across CONUS without distance clamping.
      */
-    fun queryUasfmInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 3000): List<AirspaceZone> {
+    fun queryUasfmInBoundingBox(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, limit: Int = 6000): List<AirspaceZone> {
         val db = readableDatabase
         val list = mutableListOf<AirspaceZone>()
         val sLat = minOf(minLat, maxLat)

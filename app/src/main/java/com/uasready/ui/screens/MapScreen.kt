@@ -274,8 +274,8 @@ fun MapScreen(
                     helper.queryActiveTfrsInBoundingBox(minLat, maxLat, minLon, maxLon, nowMs = nowMs, limit = 50)
                 }
                 val uasfmInExtent = withContext(Dispatchers.IO) {
-                    if (zoom >= 10.0) {
-                        helper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 3000)
+                    if (zoom >= 13.0) {
+                        helper.queryUasfmInBoundingBox(minLat, maxLat, minLon, maxLon, limit = 6000)
                     } else {
                         emptyList()
                     }
@@ -793,14 +793,16 @@ fun MapScreen(
                         }
                     )
 
-                    AirspaceLayerToggleRow(
-                        name = "UAS Facility Grid (UASFM)",
-                        color = Color(0xFF00D2FF),
-                        enabled = enabledZoneTypes.contains(AirspaceZoneType.ALTITUDE_ZONE),
-                        onToggle = { enabled ->
-                            enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.ALTITUDE_ZONE else enabledZoneTypes - AirspaceZoneType.ALTITUDE_ZONE
-                        }
-                    )
+                    if (currentZoomLevel >= 13.0) {
+                        AirspaceLayerToggleRow(
+                            name = "UAS Facility Grid (UASFM)",
+                            color = Color(0xFF00D2FF),
+                            enabled = enabledZoneTypes.contains(AirspaceZoneType.ALTITUDE_ZONE),
+                            onToggle = { enabled ->
+                                enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.ALTITUDE_ZONE else enabledZoneTypes - AirspaceZoneType.ALTITUDE_ZONE
+                            }
+                        )
+                    }
 
                     AirspaceLayerToggleRow(
                         name = "Special Use / MOA",
