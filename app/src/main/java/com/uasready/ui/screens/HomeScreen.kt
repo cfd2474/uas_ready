@@ -106,9 +106,20 @@ fun HomeScreen(
 
         // Card 1: Location & CTAF (Square Card)
         item {
+            val coords = uiState.currentLocation.formattedCoordinates
+            val locationName = uiState.currentLocation.displayName
+            val primaryText = when {
+                locationName.isNotBlank() && !locationName.startsWith("Acquiring") && coords.isNotBlank() && !coords.startsWith("Searching") ->
+                    "$locationName • $coords"
+                locationName.isNotBlank() && !locationName.startsWith("Acquiring") ->
+                    locationName
+                else ->
+                    coords
+            }
+
             SquareMetricCard(
                 title = "Location",
-                primaryValue = uiState.currentLocation.displayName,
+                primaryValue = primaryText,
                 secondaryValue = uiState.currentLocation.ctafDisplay,
                 icon = Icons.Default.LocationOn,
                 onClick = onNavigateToMap

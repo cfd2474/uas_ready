@@ -149,26 +149,45 @@ class DeviceLocationManager(private val context: Context) {
         )
     }
 
+    private fun toStateCode(stateName: String?): String? {
+        if (stateName.isNullOrBlank()) return null
+        if (stateName.length == 2) return stateName.uppercase()
+        val usStates = mapOf(
+            "alabama" to "AL", "alaska" to "AK", "arizona" to "AZ", "arkansas" to "AR", "california" to "CA",
+            "colorado" to "CO", "connecticut" to "CT", "delaware" to "DE", "florida" to "FL", "georgia" to "GA",
+            "hawaii" to "HI", "idaho" to "ID", "illinois" to "IL", "indiana" to "IN", "iowa" to "IA",
+            "kansas" to "KS", "kentucky" to "KY", "louisiana" to "LA", "maine" to "ME", "maryland" to "MD",
+            "massachusetts" to "MA", "michigan" to "MI", "minnesota" to "MN", "mississippi" to "MS", "missouri" to "MO",
+            "montana" to "MT", "nebraska" to "NE", "nevada" to "NV", "new hampshire" to "NH", "new jersey" to "NJ",
+            "new mexico" to "NM", "new york" to "NY", "north carolina" to "NC", "north dakota" to "ND", "ohio" to "OH",
+            "oklahoma" to "OK", "oregon" to "OR", "pennsylvania" to "PA", "rhode island" to "RI", "south carolina" to "SC",
+            "south dakota" to "SD", "tennessee" to "TN", "texas" to "TX", "utah" to "UT", "vermont" to "VT",
+            "virginia" to "VA", "washington" to "WA", "west virginia" to "WV", "wisconsin" to "WI", "wyoming" to "WY",
+            "district of columbia" to "DC"
+        )
+        return usStates[stateName.trim().lowercase()] ?: stateName
+    }
+
     private fun reverseGeocode(lat: Double, lon: Double): String {
         return try {
             val geocoder = Geocoder(context, Locale.getDefault())
             val addresses = geocoder.getFromLocation(lat, lon, 1)
             if (!addresses.isNullOrEmpty()) {
                 val address = addresses[0]
-                val city = address.locality ?: address.subAdminArea ?: address.adminArea
-                val state = address.adminArea
+                val city = address.locality ?: address.subAdminArea
+                val stateCode = toStateCode(address.adminArea)
                 when {
-                    city != null && state != null -> "$city, $state"
+                    city != null && stateCode != null -> "$city, $stateCode"
                     city != null -> city
-                    state != null -> state
-                    else -> String.format("%.4f, %.4f", lat, lon)
+                    stateCode != null -> stateCode
+                    else -> String.format(Locale.US, "%.4f° N, %.4f° W", lat, Math.abs(lon))
                 }
             } else {
-                String.format("%.4f, %.4f", lat, lon)
+                String.format(Locale.US, "%.4f° N, %.4f° W", lat, Math.abs(lon))
             }
         } catch (e: Exception) {
             Log.w(TAG, "Geocoder error: ${e.message}")
-            String.format("%.4f, %.4f", lat, lon)
+            String.format(Locale.US, "%.4f° N, %.4f° W", lat, Math.abs(lon))
         }
     }
 }
