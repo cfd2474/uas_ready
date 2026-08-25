@@ -40,7 +40,7 @@ data class LocationInfo(
             latitude = 33.8753,
             longitude = -117.5664,
             elevationFt = 0.0,
-            displayName = "Acquiring GPS Fix...",
+            displayName = "Corona, CA",
             accuracyMeters = 0.0f,
             isGpsDerived = false,
             ctafFrequency = "120.6",
