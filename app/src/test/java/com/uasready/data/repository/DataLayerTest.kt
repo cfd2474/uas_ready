@@ -199,5 +199,34 @@ class DataLayerTest {
         assertTrue(gnssWithCanyon.terrainOccludedSatellitesCount >= 2)
         assertTrue(gnssWithCanyon.lockedSatellitesCount < gnssWithCanyon.visibleSatellitesCount)
     }
+
+    @Test
+    fun testLiveAirspaceRepositorySanFrancisco() = kotlinx.coroutines.runBlocking {
+        val repo = LiveAirspaceRepository()
+        val sfLat = 37.7749
+        val sfLon = -122.4194
+        val result = repo.getAirspaceInfo(sfLat, sfLon)
+
+        assertTrue(result.isSuccess)
+        val airspace = result.getOrNull()
+        assertNotNull(airspace)
+        assertTrue("San Francisco should have controlled airspace polygons in 30 NM radius", airspace!!.zones.isNotEmpty())
+        assertTrue("San Francisco airspace should include Class B, C, D or E zones", airspace.zones.any { it.name.contains("CLASS", ignoreCase = true) || it.name.contains("SAN FRANCISCO", ignoreCase = true) })
+    }
+
+    @Test
+    fun testLiveAirspaceRepositoryOntarioCorona() = kotlinx.coroutines.runBlocking {
+        val repo = LiveAirspaceRepository()
+        val ontLat = 34.0560
+        val ontLon = -117.6012
+        val result = repo.getAirspaceInfo(ontLat, ontLon)
+
+        assertTrue(result.isSuccess)
+        val airspace = result.getOrNull()
+        assertNotNull(airspace)
+        assertTrue("Ontario/Corona should have controlled airspace polygons", airspace!!.zones.isNotEmpty())
+        assertTrue("Launch at KONT should require controlled airspace authorization", airspace.controlledAirspaceAuthorizationRequired)
+    }
 }
+
 
