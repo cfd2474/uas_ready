@@ -6,7 +6,7 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.39` (Build 47)
+- **Current Version**: `v1.3.40` (Build 48)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
@@ -14,7 +14,12 @@
 
 ## What Has Been Completed
 
-### 1. Nationwide Live FAA Class & Special Use Airspace Integration
+### 1. Pure Live FAA Airspace Engine (Purged All Hardcoded Sectors)
+- **Zero Hardcoded Sectors**: Completely removed `regionalFallbackSectors`, artificial circle polygons, and hardcoded regional caches.
+- **Pure Live Telemetry**: All airspace polygons, classifications, altitudes, and authorizations now derive 100% directly from live FAA OpenData servers (`Class_Airspace` and `Special_Use_Airspace`) without masking testing accuracy.
+- **Uncontrolled Default**: When no controlled or special use airspace exists within the 30 NM radius (or offline), cleanly reports pure Class G uncontrolled airspace with empty polygon arrays.
+
+### 2. Nationwide Live FAA Class & Special Use Airspace Integration
 - **Official FAA Class Airspace Integration**: Updated `AirspaceRepository.kt` to query the official FAA OpenData `Class_Airspace` FeatureServer across the entire United States via 30 NM bounding box envelope.
 - **Official FAA Special Use Airspace (SUA)**: Integrated live queries to FAA `Special_Use_Airspace` FeatureServer for Prohibited, Restricted, Warning, Alert, and Military Operations Area (MOA) boundaries nationwide.
 - **MultiPolygon & Sector Boundary Extraction**: Built robust GeoJSON parser for `Polygon` and `MultiPolygon` geometries with altitude MSL floor/ceiling attributes and launch point containment detection.

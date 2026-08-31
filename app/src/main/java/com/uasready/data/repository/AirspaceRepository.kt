@@ -230,54 +230,6 @@ class LiveAirspaceRepository : AirspaceRepository {
                 Log.w(TAG, "FAA SUA query error: ${e.message}")
             }
 
-            // 3. Fallback Offline Regional Airspace (if online queries failed completely)
-            if (zones.isEmpty()) {
-                val regionalFallbackSectors = listOf(
-                    AeronauticalSector("Ontario (KONT) Class C Surface Area", "KONT", "Ontario Intl", 34.0560, -117.6012, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KONT Class C Surface to 5,000 ft MSL"),
-                    AeronauticalSector("Riverside (KRAL) Class D Airspace", "KRAL", "Riverside Muni", 33.9519, -117.4451, 7778.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KRAL Class D Surface to 3,300 ft MSL"),
-                    AeronauticalSector("Chino (KCNO) Class D Airspace", "KCNO", "Chino Airport", 33.9747, -117.6366, 8890.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KCNO Class D Surface to 2,700 ft MSL"),
-                    AeronauticalSector("San Francisco (KSFO) Class B Surface Sector", "KSFO", "SFO Intl", 37.6188, -122.3750, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KSFO Class B Surface to 10,000 ft MSL"),
-                    AeronauticalSector("Oakland (KOAK) Class C Surface Area", "KOAK", "Oakland Intl", 37.7213, -122.2207, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KOAK Class C Surface to 4,000 ft MSL"),
-                    AeronauticalSector("San Jose (KSJC) Class C Surface Area", "KSJC", "San Jose Intl", 37.3619, -121.9290, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KSJC Class C Surface to 4,000 ft MSL"),
-                    AeronauticalSector("Los Angeles (KLAX) Class B Surface Sector", "KLAX", "LAX Intl", 33.9425, -118.4081, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KLAX Class B Surface to 10,000 ft MSL"),
-                    AeronauticalSector("San Diego (KSAN) Class B Surface Sector", "KSAN", "San Diego Intl", 32.7336, -117.1897, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KSAN Class B Surface to 10,000 ft MSL")
-                )
-
-                for (sec in regionalFallbackSectors) {
-                    val distKm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon) * 1.852
-                    if (distKm <= 55.0) {
-                        val distToCenterNm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon)
-                        val radiusNm = sec.radiusMeters * 0.000539957
-                        val poly = generateCirclePolygon(sec.lat, sec.lon, sec.radiusMeters, 24)
-
-                        if (distToCenterNm <= radiusNm && sec.type == AirspaceZoneType.AUTHORIZATION_ZONE) {
-                            authRequired = true
-                            if (primaryClassPriority(sec.airClass) > primaryClassPriority(primaryClass)) {
-                                primaryClass = sec.airClass
-                            }
-                        }
-
-                        zones.add(
-                            AirspaceZone(
-                                id = "FALLBACK-${sec.code}",
-                                name = sec.name,
-                                type = sec.type,
-                                centerLat = sec.lat,
-                                centerLon = sec.lon,
-                                radiusMeters = sec.radiusMeters,
-                                floorFt = 0.0,
-                                ceilingFt = 400.0,
-                                description = sec.desc,
-                                polygonCoordinates = poly
-                            )
-                        )
-                    }
-                }
-                if (zones.isNotEmpty()) {
-                    sourceName = "Offline Aeronautical Sector Cache"
-                }
-            }
-
             val airspace = AirspaceInfo(
                 primaryClass = primaryClass,
                 controlledAirspaceAuthorizationRequired = authRequired || isInsideRestricted,
@@ -295,11 +247,11 @@ class LiveAirspaceRepository : AirspaceRepository {
                 nearestAirportCode = null,
                 nearestAirportDistanceNm = null,
                 timestampEpochMs = now,
-                sourceName = sourceName,
+                sourceName = if (zones.isNotEmpty()) sourceName else "Uncontrolled Airspace (Class G)",
                 isStale = false
             )
 
-            Log.i(TAG, "Successfully resolved ${zones.size} airspace polygons. Primary: $primaryClass, AuthRequired: $authRequired")
+            Log.i(TAG, "Successfully resolved ${zones.size} live FAA airspace polygons. Primary: $primaryClass, AuthRequired: $authRequired")
             Result.success(airspace)
         } catch (e: Exception) {
             Log.e(TAG, "Airspace resolution error: ${e.message}", e)
@@ -371,33 +323,6 @@ class LiveAirspaceRepository : AirspaceRepository {
         }
     }
 
-    private fun generateCirclePolygon(centerLat: Double, centerLon: Double, radiusMeters: Double, numPoints: Int = 24): List<Pair<Double, Double>> {
-        val points = mutableListOf<Pair<Double, Double>>()
-        val earthRadius = 6378137.0 // in meters
-        val latRad = Math.toRadians(centerLat)
-        val lonRad = Math.toRadians(centerLon)
-        val dOverR = radiusMeters / earthRadius
-
-        for (i in 0 until numPoints) {
-            val bearing = 2 * Math.PI * i / numPoints
-            val pointLatRad = asin(sin(latRad) * cos(dOverR) + cos(latRad) * sin(dOverR) * cos(bearing))
-            val pointLonRad = lonRad + atan2(sin(bearing) * sin(dOverR) * cos(latRad), cos(dOverR) - sin(latRad) * sin(pointLatRad))
-            points.add(Pair(Math.toDegrees(pointLatRad), Math.toDegrees(pointLonRad)))
-        }
-        return points
-    }
-
-    private fun calculateDistanceNm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2) * sin(dLon / 2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        val distanceKm = 6371.0 * c
-        return distanceKm * 0.539957
-    }
-
     private fun isPointInsidePolygon(lat: Double, lon: Double, poly: List<Pair<Double, Double>>): Boolean {
         if (poly.size < 3) return false
         var inside = false
@@ -414,18 +339,6 @@ class LiveAirspaceRepository : AirspaceRepository {
         }
         return inside
     }
-
-    private data class AeronauticalSector(
-        val name: String,
-        val code: String,
-        val airportName: String,
-        val lat: Double,
-        val lon: Double,
-        val radiusMeters: Double,
-        val type: AirspaceZoneType,
-        val airClass: AirspaceClass,
-        val desc: String
-    )
 }
 
 
