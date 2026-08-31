@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 import kotlin.math.*
 
 interface AirspaceRepository {
@@ -16,6 +17,15 @@ interface AirspaceRepository {
 
 class LiveAirspaceRepository : AirspaceRepository {
 
+    companion object {
+        private const val TAG = "AirspaceRepo"
+        private const val FAA_CLASS_AIRSPACE_URL =
+            "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Class_Airspace/FeatureServer/0/query"
+        private const val FAA_SUA_URL =
+            "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query"
+        private const val SEARCH_RADIUS_DEG = 0.55 // ~30-33 Nautical Miles (55-60 km)
+    }
+
     override suspend fun getAirspaceInfo(
         latitude: Double,
         longitude: Double
@@ -23,246 +33,207 @@ class LiveAirspaceRepository : AirspaceRepository {
         try {
             val now = System.currentTimeMillis()
             val zones = mutableListOf<AirspaceZone>()
-            var sourceName = "Aeronautical Airspace Service"
+            var sourceName = "FAA Aeronautical Airspace Service"
             var primaryClass: AirspaceClass = AirspaceClass.CLASS_G
-            var authRequired: Boolean = false
-            var uasfmCeiling: Double? = 400.0
+            var authRequired = false
+            var isInsideRestricted = false
 
-            // 1. Query openAIP Airspaces API for controlled and restricted airspace
+            val minLon = longitude - SEARCH_RADIUS_DEG
+            val minLat = latitude - SEARCH_RADIUS_DEG
+            val maxLon = longitude + SEARCH_RADIUS_DEG
+            val maxLat = latitude + SEARCH_RADIUS_DEG
+
+            // 1. Query Official FAA Live Class Airspace FeatureServer (Class B, C, D, E)
             try {
-                val distMeters = 55560 // 30 NM radius
-                val openAipUrl = "https://api.core.openaip.net/api/airspaces?page=1&limit=100&pos=$longitude,$latitude&dist=$distMeters"
-                val conn = (URL(openAipUrl).openConnection() as HttpURLConnection).apply {
+                val classQueryUrl = String.format(
+                    Locale.US,
+                    "%s?where=CLASS+IN+('B','C','D','E')&geometry=%.5f,%.5f,%.5f,%.5f&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=OBJECTID,NAME,CLASS,LOCAL_TYPE,SECTOR,UPPER_VAL,UPPER_UOM,LOWER_VAL,LOWER_UOM&returnGeometry=true&f=geojson",
+                    FAA_CLASS_AIRSPACE_URL, minLon, minLat, maxLon, maxLat
+                )
+
+                val conn = (URL(classQueryUrl).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
-                    connectTimeout = 3000
-                    readTimeout = 3000
+                    connectTimeout = 6000
+                    readTimeout = 6000
                     setRequestProperty("Accept", "application/json")
-                    setRequestProperty("User-Agent", "UASReady-App/1.0")
+                    setRequestProperty("User-Agent", "UASReady-Android-App/1.0")
                 }
 
                 if (conn.responseCode == 200) {
                     val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(responseText)
-                    val items = json.optJSONArray("items") ?: JSONArray()
+                    val geoJson = JSONObject(responseText)
+                    val features = geoJson.optJSONArray("features") ?: JSONArray()
 
-                    for (i in 0 until items.length()) {
-                        val item = items.optJSONObject(i) ?: continue
-                        val name = item.optString("name", "Airspace Zone")
-                        val icaoClassInt = item.optInt("icaoClass", -1)
-                        val typeInt = item.optInt("type", -1)
-                        
-                        val geometry = item.optJSONObject("geometry")
-                        val coordinates = geometry?.optJSONArray("coordinates")
-                        val polyPoints = mutableListOf<Pair<Double, Double>>()
+                    for (i in 0 until features.length()) {
+                        val feature = features.optJSONObject(i) ?: continue
+                        val props = feature.optJSONObject("properties") ?: JSONObject()
+                        val rawName = props.optString("NAME", "Controlled Airspace")
+                        val airClassStr = props.optString("CLASS", "").uppercase()
+                        val localType = props.optString("LOCAL_TYPE", "")
+                        val sector = props.optString("SECTOR", "")
+                        val lowerVal = props.optDouble("LOWER_VAL", 0.0)
+                        val upperVal = props.optDouble("UPPER_VAL", 0.0)
+                        val lowerUom = props.optString("LOWER_UOM", "FT")
+                        val upperUom = props.optString("UPPER_UOM", "FT")
+                        val objectId = props.optInt("OBJECTID", i)
 
-                        val zoneType = when {
-                            typeInt in listOf(0, 1, 2) -> AirspaceZoneType.RESTRICTED_ZONE
-                            icaoClassInt in listOf(1, 2, 3) || typeInt in listOf(3, 4) -> AirspaceZoneType.AUTHORIZATION_ZONE
-                            icaoClassInt == 4 -> AirspaceZoneType.WARNING_ZONE
-                            else -> AirspaceZoneType.AUTHORIZATION_ZONE
+                        val isSurfaceE = airClassStr == "E" && (lowerVal <= 0.0 || localType.contains("E2", true) || localType.contains("E3", true) || localType.contains("E4", true) || localType.contains("SURFACE", true))
+
+                        val (zoneType, airClass) = when {
+                            airClassStr.contains("B") -> Pair(AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B)
+                            airClassStr.contains("C") -> Pair(AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C)
+                            airClassStr.contains("D") -> Pair(AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D)
+                            isSurfaceE -> Pair(AirspaceZoneType.WARNING_ZONE, AirspaceClass.CLASS_E_SURFACE)
+                            airClassStr.contains("E") -> Pair(AirspaceZoneType.WARNING_ZONE, AirspaceClass.CLASS_E)
+                            else -> Pair(AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D)
                         }
 
-                        var centerLat = latitude
-                        var centerLon = longitude
-                        if (coordinates != null && coordinates.length() > 0) {
-                            val outerRing = coordinates.optJSONArray(0)
-                            if (outerRing != null && outerRing.length() > 0) {
-                                var sumLat = 0.0
-                                var sumLon = 0.0
-                                for (p in 0 until outerRing.length()) {
-                                    val pt = outerRing.optJSONArray(p)
-                                    if (pt != null && pt.length() >= 2) {
-                                        val pLon = pt.optDouble(0, longitude)
-                                        val pLat = pt.optDouble(1, latitude)
-                                        polyPoints.add(Pair(pLat, pLon))
-                                        sumLon += pLon
-                                        sumLat += pLat
-                                    }
-                                }
-                                if (outerRing.length() > 0) {
-                                    centerLat = sumLat / outerRing.length()
-                                    centerLon = sumLon / outerRing.length()
-                                }
-                            }
+                        val formattedName = when {
+                            sector.isNotBlank() && sector != "null" -> "$rawName - $sector (Class $airClassStr)"
+                            else -> "$rawName (Class $airClassStr)"
                         }
 
-                        if (polyPoints.isNotEmpty() && isPointInsidePolygon(latitude, longitude, polyPoints)) {
-                            if (zoneType == AirspaceZoneType.AUTHORIZATION_ZONE || zoneType == AirspaceZoneType.RESTRICTED_ZONE) {
-                                authRequired = true
-                                primaryClass = when (icaoClassInt) {
-                                    1 -> AirspaceClass.CLASS_B
-                                    2 -> AirspaceClass.CLASS_C
-                                    3 -> AirspaceClass.CLASS_D
-                                    4 -> AirspaceClass.CLASS_E_SURFACE
-                                    else -> AirspaceClass.CLASS_D
-                                }
-                            }
+                        val altDescription = when {
+                            lowerVal > 0.0 && upperVal > 0.0 -> String.format(Locale.US, "Altitudes: %.0f %s to %.0f %s MSL", lowerVal, lowerUom, upperVal, upperUom)
+                            upperVal > 0.0 -> String.format(Locale.US, "Altitudes: Surface to %.0f %s MSL", upperVal, upperUom)
+                            else -> "FAA Controlled Airspace Sector"
                         }
 
-                        zones.add(
-                            AirspaceZone(
-                                id = "OPENAIP-${item.optString("_id", i.toString())}",
-                                name = name,
-                                type = zoneType,
-                                centerLat = centerLat,
-                                centerLon = centerLon,
-                                radiusMeters = 4500.0,
-                                floorFt = 0.0,
-                                ceilingFt = 400.0,
-                                description = "Aeronautical Airspace: $name",
-                                polygonCoordinates = polyPoints
-                            )
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                Log.d("AirspaceRepo", "openAIP query skipped: ${e.message}")
-            }
-
-            // 2. If openAIP had no results, query official FAA ArcGIS Aeronautical GeoJSON API
-            if (zones.isEmpty()) {
-                try {
-                    val faaUrl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/Airspace_Boundary/FeatureServer/0/query?where=1%3D1&geometry=$longitude,$latitude&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=55560&units=esriSRUnit_Meter&outFields=NAME,CLASS,LOCAL_TYPE,LOW_ALT,HIGH_ALT&returnGeometry=true&f=geojson"
-                    val conn = (URL(faaUrl).openConnection() as HttpURLConnection).apply {
-                        requestMethod = "GET"
-                        connectTimeout = 4000
-                        readTimeout = 4000
-                        setRequestProperty("Accept", "application/json")
-                        setRequestProperty("User-Agent", "UASReady-App/1.0")
-                    }
-
-                    if (conn.responseCode == 200) {
-                        val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                        val geoJson = JSONObject(responseText)
-                        val features = geoJson.optJSONArray("features") ?: JSONArray()
-
-                        for (i in 0 until features.length()) {
-                            val feature = features.optJSONObject(i) ?: continue
-                            val props = feature.optJSONObject("properties") ?: JSONObject()
-                            val name = props.optString("NAME", "Controlled Airspace")
-                            val airClassStr = props.optString("CLASS", "").uppercase()
-                            
-                            val geom = feature.optJSONObject("geometry")
-                            val geomType = geom?.optString("type", "")
-                            val coords = geom?.optJSONArray("coordinates")
-                            val polyPoints = mutableListOf<Pair<Double, Double>>()
-
-                            val zoneType = when {
-                                airClassStr.contains("B") || airClassStr.contains("C") || airClassStr.contains("D") -> AirspaceZoneType.AUTHORIZATION_ZONE
-                                airClassStr.contains("E") -> AirspaceZoneType.WARNING_ZONE
-                                name.contains("RESTRICTED", true) || name.contains("PROHIBITED", true) -> AirspaceZoneType.RESTRICTED_ZONE
-                                else -> AirspaceZoneType.AUTHORIZATION_ZONE
-                            }
-
-                            if (geomType == "Polygon" && coords != null && coords.length() > 0) {
-                                val ring = coords.optJSONArray(0)
-                                if (ring != null) {
-                                    for (p in 0 until ring.length()) {
-                                        val pt = ring.optJSONArray(p)
-                                        if (pt != null && pt.length() >= 2) {
-                                            polyPoints.add(Pair(pt.optDouble(1), pt.optDouble(0)))
-                                        }
-                                    }
-                                }
-                            } else if (geomType == "MultiPolygon" && coords != null && coords.length() > 0) {
-                                val poly = coords.optJSONArray(0)
-                                val ring = poly?.optJSONArray(0)
-                                if (ring != null) {
-                                    for (p in 0 until ring.length()) {
-                                        val pt = ring.optJSONArray(p)
-                                        if (pt != null && pt.length() >= 2) {
-                                            polyPoints.add(Pair(pt.optDouble(1), pt.optDouble(0)))
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (polyPoints.isNotEmpty()) {
-                                if (isPointInsidePolygon(latitude, longitude, polyPoints)) {
+                        val polygons = extractPolygonsFromFeature(feature)
+                        for ((polyIdx, polyPoints) in polygons.withIndex()) {
+                            if (polyPoints.size >= 3) {
+                                val isLaunchInZone = isPointInsidePolygon(latitude, longitude, polyPoints)
+                                if (isLaunchInZone) {
                                     authRequired = true
-                                    primaryClass = when {
-                                        airClassStr.contains("B") -> AirspaceClass.CLASS_B
-                                        airClassStr.contains("C") -> AirspaceClass.CLASS_C
-                                        airClassStr.contains("D") -> AirspaceClass.CLASS_D
-                                        airClassStr.contains("E") -> AirspaceClass.CLASS_E_SURFACE
-                                        else -> AirspaceClass.CLASS_D
+                                    // Set primary class prioritizing B > C > D > Surface E > E
+                                    if (primaryClassPriority(airClass) > primaryClassPriority(primaryClass)) {
+                                        primaryClass = airClass
                                     }
                                 }
+
+                                val centerLat = polyPoints.map { it.first }.average()
+                                val centerLon = polyPoints.map { it.second }.average()
 
                                 zones.add(
                                     AirspaceZone(
-                                        id = "FAA-ARC-$i",
-                                        name = name,
+                                        id = "FAA-CLASS-$objectId-$polyIdx",
+                                        name = formattedName,
                                         type = zoneType,
-                                        centerLat = polyPoints.map { it.first }.average(),
-                                        centerLon = polyPoints.map { it.second }.average(),
+                                        centerLat = centerLat,
+                                        centerLon = centerLon,
                                         radiusMeters = 5000.0,
-                                        floorFt = 0.0,
-                                        ceilingFt = 400.0,
-                                        description = "FAA Live Airspace: $name ($airClassStr)",
+                                        floorFt = max(0.0, lowerVal),
+                                        ceilingFt = if (upperVal > 0.0) upperVal else 400.0,
+                                        description = "$formattedName: $altDescription",
                                         polygonCoordinates = polyPoints
                                     )
                                 )
                             }
                         }
-                        if (zones.isNotEmpty()) {
-                            sourceName = "FAA ArcGIS Aeronautical Service"
-                        }
                     }
-                } catch (e: Exception) {
-                    Log.d("AirspaceRepo", "FAA ArcGIS query skipped: ${e.message}")
+                    Log.i(TAG, "Loaded ${zones.size} controlled airspace sectors from FAA Class_Airspace")
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "FAA Class Airspace query error: ${e.message}")
             }
 
-            // 3. Fallback Aeronautical Airspace Sectors within map view radius (30 NM / 55 km)
-            val regionalAeronauticalSectors = listOf(
-                AeronauticalSector("Ontario (KONT) Class C Surface Area", "KONT", "Ontario Intl", 34.0560, -117.6012, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KONT Class C Surface to 5,000 ft MSL"),
-                AeronauticalSector("Riverside (KRAL) Class D Airspace", "KRAL", "Riverside Muni", 33.9519, -117.4451, 7778.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KRAL Class D Surface to 3,300 ft MSL"),
-                AeronauticalSector("Chino (KCNO) Class D Airspace", "KCNO", "Chino Airport", 33.9747, -117.6366, 8890.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KCNO Class D Surface to 2,700 ft MSL"),
-                AeronauticalSector("March ARB (KRIV) Class C Airspace", "KRIV", "March ARB", 33.8807, -117.2592, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KRIV Class C Surface to 5,000 ft MSL"),
-                AeronauticalSector("Fullerton (KFUL) Class D Airspace", "KFUL", "Fullerton Muni", 33.8720, -117.9799, 7408.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KFUL Class D Surface to 2,600 ft MSL"),
-                AeronauticalSector("John Wayne (KSNA) Class C Airspace", "KSNA", "John Wayne", 33.6757, -117.8682, 9260.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_C, "KSNA Class C Surface to 5,400 ft MSL"),
-                AeronauticalSector("Long Beach (KLGB) Class D Airspace", "KLGB", "Long Beach", 33.8177, -118.1516, 8148.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_D, "KLGB Class D Surface to 3,000 ft MSL"),
-                AeronauticalSector("Los Angeles (KLAX) Class B Surface Sector", "KLAX", "LAX Intl", 33.9425, -118.4081, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KLAX Class B Surface to 10,000 ft MSL"),
-                AeronauticalSector("San Diego (KSAN) Class B Surface Sector", "KSAN", "San Diego Intl", 32.7336, -117.1897, 11112.0, AirspaceZoneType.AUTHORIZATION_ZONE, AirspaceClass.CLASS_B, "KSAN Class B Surface to 10,000 ft MSL"),
-                AeronauticalSector("Prado Dam Wildlife Sensitive Area", "PRADO", "Prado Basin", 33.8920, -117.6350, 4500.0, AirspaceZoneType.WARNING_ZONE, AirspaceClass.CLASS_G, "Environmental / Wildlife Warning Area")
-            )
+            // 2. Query Official FAA Live Special Use Airspace FeatureServer (Prohibited, Restricted, Warning, Alert, MOA)
+            try {
+                val suaQueryUrl = String.format(
+                    Locale.US,
+                    "%s?where=1%%3D1&geometry=%.5f,%.5f,%.5f,%.5f&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=OBJECTID,NAME,TYPE_CODE,CLASS,UPPER_VAL,UPPER_UOM,LOWER_VAL,LOWER_UOM&returnGeometry=true&f=geojson",
+                    FAA_SUA_URL, minLon, minLat, maxLon, maxLat
+                )
 
-            for (sec in regionalAeronauticalSectors) {
-                val distKm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon) * 1.852
-                if (distKm <= 55.0) { // 30 NM radius
-                    val distToCenterNm = calculateDistanceNm(latitude, longitude, sec.lat, sec.lon)
-                    val radiusNm = sec.radiusMeters * 0.000539957
+                val conn = (URL(suaQueryUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 6000
+                    readTimeout = 6000
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", "UASReady-Android-App/1.0")
+                }
 
-                    if (zones.none { it.id == "AERO-${sec.name.replace(" ", "_")}" }) {
-                        val poly = generateCirclePolygon(sec.lat, sec.lon, sec.radiusMeters, 24)
-                        if (distToCenterNm <= radiusNm && sec.type == AirspaceZoneType.AUTHORIZATION_ZONE) {
-                            authRequired = true
-                            primaryClass = sec.airClass
+                if (conn.responseCode == 200) {
+                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                    val geoJson = JSONObject(responseText)
+                    val features = geoJson.optJSONArray("features") ?: JSONArray()
+
+                    for (i in 0 until features.length()) {
+                        val feature = features.optJSONObject(i) ?: continue
+                        val props = feature.optJSONObject("properties") ?: JSONObject()
+                        val rawName = props.optString("NAME", "Special Use Airspace")
+                        val typeCode = props.optString("TYPE_CODE", "").uppercase()
+                        val lowerVal = props.optDouble("LOWER_VAL", 0.0)
+                        val upperVal = props.optDouble("UPPER_VAL", 0.0)
+                        val lowerUom = props.optString("LOWER_UOM", "FT")
+                        val upperUom = props.optString("UPPER_UOM", "FT")
+                        val objectId = props.optInt("OBJECTID", i)
+
+                        val isProhibitedOrRestricted = typeCode == "P" || typeCode == "R" ||
+                                rawName.contains("PROHIBITED", true) || rawName.contains("RESTRICTED", true)
+
+                        val zoneType = when {
+                            isProhibitedOrRestricted -> AirspaceZoneType.RESTRICTED_ZONE
+                            else -> AirspaceZoneType.SPECIAL_USE
                         }
 
-                        zones.add(
-                            AirspaceZone(
-                                id = "AERO-${sec.name.replace(" ", "_")}",
-                                name = sec.name,
-                                type = sec.type,
-                                centerLat = sec.lat,
-                                centerLon = sec.lon,
-                                radiusMeters = sec.radiusMeters,
-                                floorFt = 0.0,
-                                ceilingFt = 400.0,
-                                description = sec.desc,
-                                polygonCoordinates = poly
-                            )
-                        )
+                        val typeLabel = when (typeCode) {
+                            "P" -> "Prohibited Area"
+                            "R" -> "Restricted Area"
+                            "W" -> "Warning Area"
+                            "A" -> "Alert Area"
+                            "MOA" -> "Military Operations Area (MOA)"
+                            else -> "Special Use Airspace ($typeCode)"
+                        }
+
+                        val formattedName = "$rawName ($typeLabel)"
+                        val altDescription = when {
+                            lowerVal > 0.0 && upperVal > 0.0 -> String.format(Locale.US, "Altitudes: %.0f %s to %.0f %s MSL", lowerVal, lowerUom, upperVal, upperUom)
+                            upperVal > 0.0 -> String.format(Locale.US, "Altitudes: Surface to %.0f %s MSL", upperVal, upperUom)
+                            else -> "Special Use Airspace: Active Military/Government Operations"
+                        }
+
+                        val polygons = extractPolygonsFromFeature(feature)
+                        for ((polyIdx, polyPoints) in polygons.withIndex()) {
+                            if (polyPoints.size >= 3) {
+                                val isLaunchInZone = isPointInsidePolygon(latitude, longitude, polyPoints)
+                                if (isLaunchInZone) {
+                                    if (isProhibitedOrRestricted) {
+                                        isInsideRestricted = true
+                                        primaryClass = AirspaceClass.SPECIAL_USE
+                                    }
+                                }
+
+                                val centerLat = polyPoints.map { it.first }.average()
+                                val centerLon = polyPoints.map { it.second }.average()
+
+                                zones.add(
+                                    AirspaceZone(
+                                        id = "FAA-SUA-$objectId-$polyIdx",
+                                        name = formattedName,
+                                        type = zoneType,
+                                        centerLat = centerLat,
+                                        centerLon = centerLon,
+                                        radiusMeters = 5000.0,
+                                        floorFt = max(0.0, lowerVal),
+                                        ceilingFt = if (upperVal > 0.0) upperVal else 400.0,
+                                        description = "$formattedName: $altDescription",
+                                        polygonCoordinates = polyPoints
+                                    )
+                                )
+                            }
+                        }
                     }
+                    Log.i(TAG, "Total combined airspace zones loaded: ${zones.size}")
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "FAA SUA query error: ${e.message}")
             }
 
             val airspace = AirspaceInfo(
                 primaryClass = primaryClass,
-                controlledAirspaceAuthorizationRequired = authRequired,
-                uasFacilityMapMaxAltitudeFt = uasfmCeiling,
+                controlledAirspaceAuthorizationRequired = authRequired || isInsideRestricted,
+                uasFacilityMapMaxAltitudeFt = 400.0,
                 activeTfrs = emptyList(),
                 zones = zones,
                 notams = listOf(
@@ -272,100 +243,84 @@ class LiveAirspaceRepository : AirspaceRepository {
                         issuedEpochMs = now - 24 * 3600 * 1000L
                     )
                 ),
-                specialUseAirspaceActive = false,
+                specialUseAirspaceActive = isInsideRestricted,
                 nearestAirportCode = null,
                 nearestAirportDistanceNm = null,
                 timestampEpochMs = now,
-                sourceName = sourceName,
+                sourceName = if (zones.isNotEmpty()) sourceName else "Uncontrolled Airspace (Class G)",
                 isStale = false
             )
 
-            Log.i("AirspaceRepo", "Loaded ${zones.size} airspace zones from $sourceName")
+            Log.i(TAG, "Successfully resolved ${zones.size} live FAA airspace polygons. Primary: $primaryClass, AuthRequired: $authRequired")
             Result.success(airspace)
         } catch (e: Exception) {
-            Log.e("AirspaceRepo", "Airspace resolution error: ${e.message}")
+            Log.e(TAG, "Airspace resolution error: ${e.message}", e)
             Result.failure(e)
         }
     }
 
-    private fun generateCirclePolygon(centerLat: Double, centerLon: Double, radiusMeters: Double, numPoints: Int = 24): List<Pair<Double, Double>> {
-        val points = mutableListOf<Pair<Double, Double>>()
-        val earthRadius = 6378137.0 // in meters
-        val latRad = Math.toRadians(centerLat)
-        val lonRad = Math.toRadians(centerLon)
-        val dOverR = radiusMeters / earthRadius
+    private fun extractPolygonsFromFeature(feature: JSONObject): List<List<Pair<Double, Double>>> {
+        val result = mutableListOf<List<Pair<Double, Double>>>()
+        val geometry = feature.optJSONObject("geometry") ?: return result
+        val geomType = geometry.optString("type", "")
+        val coords = geometry.optJSONArray("coordinates") ?: return result
 
-        for (i in 0 until numPoints) {
-            val bearing = 2 * Math.PI * i / numPoints
-            val pointLatRad = asin(sin(latRad) * cos(dOverR) + cos(latRad) * sin(dOverR) * cos(bearing))
-            val pointLonRad = lonRad + atan2(sin(bearing) * sin(dOverR) * cos(latRad), cos(dOverR) - sin(latRad) * sin(pointLatRad))
-            points.add(Pair(Math.toDegrees(pointLatRad), Math.toDegrees(pointLonRad)))
-        }
-        return points
-    }
-
-    private fun calculateDistanceNm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2) * sin(dLon / 2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        val distanceKm = 6371.0 * c
-        return distanceKm * 0.539957
-    }
-
-    private fun generateUasfmGridCells(
-        airportCode: String,
-        airportName: String,
-        centerLat: Double,
-        centerLon: Double
-    ): List<AirspaceZone> {
-        val gridZones = mutableListOf<AirspaceZone>()
-        val cellLatDeg = 0.013 // ~0.78 NM
-        val cellLonDeg = 0.016 // ~0.80 NM
-
-        for (row in -2..2) {
-            for (col in -2..2) {
-                val distCells = max(abs(row), abs(col))
-                val ceiling = when (distCells) {
-                    0 -> 0.0 // Center runway cell: 0 ft AGL
-                    1 -> if (abs(row) == 1 && abs(col) == 1) 200.0 else 100.0 // Inner approach: 100-200 ft AGL
-                    2 -> if (abs(row) == 2 && abs(col) == 2) 400.0 else 300.0 // Outer ring: 300-400 ft AGL
-                    else -> 400.0
+        try {
+            when (geomType) {
+                "Polygon" -> {
+                    // coords = [ [ [lon, lat], ... ], ... ] (Outer ring is index 0)
+                    if (coords.length() > 0) {
+                        val outerRing = coords.optJSONArray(0)
+                        if (outerRing != null) {
+                            val pts = mutableListOf<Pair<Double, Double>>()
+                            for (p in 0 until outerRing.length()) {
+                                val pt = outerRing.optJSONArray(p)
+                                if (pt != null && pt.length() >= 2) {
+                                    val pLon = pt.optDouble(0)
+                                    val pLat = pt.optDouble(1)
+                                    pts.add(Pair(pLat, pLon))
+                                }
+                            }
+                            if (pts.size >= 3) result.add(pts)
+                        }
+                    }
                 }
-
-                val minLat = centerLat + (row - 0.5) * cellLatDeg
-                val maxLat = centerLat + (row + 0.5) * cellLatDeg
-                val minLon = centerLon + (col - 0.5) * cellLonDeg
-                val maxLon = centerLon + (col + 0.5) * cellLonDeg
-
-                val poly = listOf(
-                    Pair(minLat, minLon),
-                    Pair(minLat, maxLon),
-                    Pair(maxLat, maxLon),
-                    Pair(maxLat, minLon),
-                    Pair(minLat, minLon)
-                )
-
-                val cellName = "$airportCode UASFM Grid [${row + 3},${col + 3}] (${ceiling.toInt()} ft)"
-                gridZones.add(
-                    AirspaceZone(
-                        id = "UASFM-${airportCode}-${row + 3}-${col + 3}",
-                        name = cellName,
-                        type = AirspaceZoneType.ALTITUDE_ZONE,
-                        centerLat = (minLat + maxLat) / 2.0,
-                        centerLon = (minLon + maxLon) / 2.0,
-                        radiusMeters = 1200.0,
-                        floorFt = 0.0,
-                        ceilingFt = ceiling,
-                        description = "$airportName UAS Facility Map: Max auto-approved LAANC ceiling is ${ceiling.toInt()} ft AGL.",
-                        polygonCoordinates = poly
-                    )
-                )
+                "MultiPolygon" -> {
+                    // coords = [ [ [ [lon, lat], ... ] ] ]
+                    for (polyIdx in 0 until coords.length()) {
+                        val poly = coords.optJSONArray(polyIdx) ?: continue
+                        if (poly.length() > 0) {
+                            val outerRing = poly.optJSONArray(0) ?: continue
+                            val pts = mutableListOf<Pair<Double, Double>>()
+                            for (p in 0 until outerRing.length()) {
+                                val pt = outerRing.optJSONArray(p)
+                                if (pt != null && pt.length() >= 2) {
+                                    val pLon = pt.optDouble(0)
+                                    val pLat = pt.optDouble(1)
+                                    pts.add(Pair(pLat, pLon))
+                                }
+                            }
+                            if (pts.size >= 3) result.add(pts)
+                        }
+                    }
+                }
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error extracting polygon geometry: ${e.message}")
         }
-        return gridZones
+        return result
+    }
+
+    private fun primaryClassPriority(airClass: AirspaceClass): Int {
+        return when (airClass) {
+            AirspaceClass.SPECIAL_USE -> 6
+            AirspaceClass.CLASS_B -> 5
+            AirspaceClass.CLASS_C -> 4
+            AirspaceClass.CLASS_D -> 3
+            AirspaceClass.CLASS_E_SURFACE -> 2
+            AirspaceClass.CLASS_E -> 1
+            AirspaceClass.CLASS_G -> 0
+        }
     }
 
     private fun isPointInsidePolygon(lat: Double, lon: Double, poly: List<Pair<Double, Double>>): Boolean {
@@ -384,17 +339,6 @@ class LiveAirspaceRepository : AirspaceRepository {
         }
         return inside
     }
-
-    private data class AeronauticalSector(
-        val name: String,
-        val code: String,
-        val airportName: String,
-        val lat: Double,
-        val lon: Double,
-        val radiusMeters: Double,
-        val type: AirspaceZoneType,
-        val airClass: AirspaceClass,
-        val desc: String
-    )
 }
+
 
