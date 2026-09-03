@@ -212,6 +212,9 @@ class DataLayerTest {
         assertNotNull(airspace)
         assertTrue("San Francisco should have controlled airspace polygons in 30 NM radius", airspace!!.zones.isNotEmpty())
         assertTrue("San Francisco airspace should include Class B, C, D or E zones", airspace.zones.any { it.name.contains("CLASS", ignoreCase = true) || it.name.contains("SAN FRANCISCO", ignoreCase = true) })
+        // Verify non-surface Class E5/E6 transition areas are completely excluded
+        assertFalse("Class E5 (700ft/1200ft) transition areas should be excluded", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
+        assertFalse("Class E6 enroute areas should be excluded", airspace.zones.any { it.name.contains("CLASS E6", ignoreCase = true) })
     }
 
     @Test
@@ -226,6 +229,7 @@ class DataLayerTest {
         assertNotNull(airspace)
         assertTrue("Ontario/Corona should have controlled airspace polygons", airspace!!.zones.isNotEmpty())
         assertTrue("Launch at KONT should require controlled airspace authorization", airspace.controlledAirspaceAuthorizationRequired)
+        assertFalse("Class E5 transition areas should be excluded in Ontario/Corona", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
     }
 }
 
