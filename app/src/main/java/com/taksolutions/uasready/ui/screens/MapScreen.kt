@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.taksolutions.uasready.data.repository.AirportCtafResult
+import com.taksolutions.uasready.domain.model.AirportWarningZone
 import com.taksolutions.uasready.domain.model.AirspaceZone
 import com.taksolutions.uasready.domain.model.AirspaceZoneType
 import com.taksolutions.uasready.ui.theme.*
@@ -53,7 +54,8 @@ enum class BasemapType(val displayName: String) {
 
 data class AirspaceInspection(
     val point: GeoPoint,
-    val zones: List<AirspaceZone>
+    val zones: List<AirspaceZone>,
+    val warningZones: List<AirportWarningZone> = emptyList()
 )
 
 // Google Street NO-POIs
@@ -125,6 +127,7 @@ fun MapScreen(
     var inspectionResult by remember { mutableStateOf<AirspaceInspection?>(null) }
     var selectedAirport by remember { mutableStateOf<AirportCtafResult?>(null) }
     var showAirportsLayer by remember { mutableStateOf(true) }
+    var showAirportWarningZones by remember { mutableStateOf(true) }
     var shouldRecenterMap by remember { mutableStateOf(false) }
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
@@ -209,7 +212,10 @@ fun MapScreen(
                         selectedAirport = null
                         val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
                         val overlapping = activeZones.filter { isPointInZone(p.latitude, p.longitude, it) }
-                        inspectionResult = AirspaceInspection(p, overlapping)
+                        val overlappingWarnings = if (showAirportWarningZones) {
+                            uiState.airportWarningZones.filter { isPointInPolygon(p.latitude, p.longitude, it.polygonCoordinates) }
+                        } else emptyList()
+                        inspectionResult = AirspaceInspection(p, overlapping, overlappingWarnings)
                         return true
                     }
 
@@ -219,7 +225,45 @@ fun MapScreen(
                 })
                 mapView.overlays.add(0, mapEventsOverlay)
 
-                // Filter zones based on active category toggles
+                // 1. Render 30 NM Airport Custom Warning Zones (DJI GEO 2.0 Bow-Tie & Buffer)
+                if (showAirportWarningZones) {
+                    uiState.airportWarningZones.forEach { zone ->
+                        if (zone.polygonCoordinates.size >= 3) {
+                            val pts = zone.polygonCoordinates.map { GeoPoint(it.first, it.second) }
+                            val warningPolygon = Polygon(mapView).apply {
+                                points = pts
+                                title = "${zone.ident} - ${zone.name}"
+                                snippet = "DJI ${zone.zoneName} (${zone.ringRadiusMeters}m runway buffer + 15km approach bow-tie)"
+
+                                if (zone.level == 3) {
+                                    // Enhanced Warning (Orange #EE8815)
+                                    fillPaint.color = AndroidColor.argb(35, 238, 136, 21)
+                                    outlinePaint.color = AndroidColor.argb(220, 238, 136, 21)
+                                    outlinePaint.strokeWidth = 2.0f
+                                } else {
+                                    // Warning (Yellow #FFCC00)
+                                    fillPaint.color = AndroidColor.argb(25, 255, 204, 0)
+                                    outlinePaint.color = AndroidColor.argb(200, 255, 204, 0)
+                                    outlinePaint.strokeWidth = 1.5f
+                                }
+
+                                setOnClickListener { _, _, clickPoint ->
+                                    selectedAirport = null
+                                    val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
+                                    val overlapping = activeZones.filter { isPointInZone(clickPoint.latitude, clickPoint.longitude, it) }
+                                    val overlappingWarnings = if (showAirportWarningZones) {
+                                        uiState.airportWarningZones.filter { isPointInPolygon(clickPoint.latitude, clickPoint.longitude, it.polygonCoordinates) }
+                                    } else emptyList()
+                                    inspectionResult = AirspaceInspection(clickPoint, overlapping, overlappingWarnings)
+                                    true
+                                }
+                            }
+                            mapView.overlays.add(warningPolygon)
+                        }
+                    }
+                }
+
+                // 2. Filter and render live airspace zones based on active category toggles
                 val filteredZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
 
                 filteredZones.forEach { zone ->
@@ -267,7 +311,10 @@ fun MapScreen(
                             selectedAirport = null
                             val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
                             val overlapping = activeZones.filter { isPointInZone(clickPoint.latitude, clickPoint.longitude, it) }
-                            inspectionResult = AirspaceInspection(clickPoint, overlapping)
+                            val overlappingWarnings = if (showAirportWarningZones) {
+                                uiState.airportWarningZones.filter { isPointInPolygon(clickPoint.latitude, clickPoint.longitude, it.polygonCoordinates) }
+                            } else emptyList()
+                            inspectionResult = AirspaceInspection(clickPoint, overlapping, overlappingWarnings)
                             true
                         }
                     }
@@ -515,6 +562,13 @@ fun MapScreen(
                         enabled = showAirportsLayer,
                         onToggle = { showAirportsLayer = it }
                     )
+
+                    AirspaceLayerToggleRow(
+                        name = "Airport Warning Zones (DJI)",
+                        color = Color(0xFFEE8815),
+                        enabled = showAirportWarningZones,
+                        onToggle = { showAirportWarningZones = it }
+                    )
                 }
             }
         }
@@ -641,8 +695,9 @@ fun MapScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Icon(Icons.Default.Info, contentDescription = null, tint = AviationAccent, modifier = Modifier.size(13.dp))
+                            val totalLayers = inspect.zones.size + inspect.warningZones.size
                             Text(
-                                text = if (inspect.zones.isNotEmpty()) "AIRSPACE INTERSECTIONS (${inspect.zones.size} LAYERS)" else "UNCONTROLLED AIRSPACE",
+                                text = if (totalLayers > 0) "AIRSPACE & WARNING ZONES ($totalLayers LAYERS)" else "UNCONTROLLED AIRSPACE",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 10.sp)
                             )
                             Text(
@@ -660,7 +715,7 @@ fun MapScreen(
 
                     HorizontalDivider(color = AviationDarkBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 3.dp))
 
-                    if (inspect.zones.isEmpty()) {
+                    if (inspect.zones.isEmpty() && inspect.warningZones.isEmpty()) {
                         Row(
                             modifier = Modifier.padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -726,6 +781,60 @@ fun MapScreen(
                                             Text(
                                                 text = zone.description,
                                                 style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 8.5.sp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            items(inspect.warningZones) { wZone ->
+                                val badgeColor = if (wZone.level == 3) Color(0xFFEE8815) else Color(0xFFFFCC00)
+                                val badgeText = if (wZone.level == 3) "DJI ENHANCED WARNING" else "DJI WARNING"
+
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = AviationDarkSurface,
+                                    border = androidx.compose.foundation.BorderStroke(0.5.dp, badgeColor.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(badgeColor)
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${wZone.ident} - ${wZone.name}",
+                                                    style = MaterialTheme.typography.bodySmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 9.5.sp)
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(2.dp),
+                                                    color = badgeColor.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        text = badgeText,
+                                                        style = MaterialTheme.typography.labelSmall.copy(color = badgeColor, fontSize = 7.5.sp, fontWeight = FontWeight.Bold),
+                                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                text = "${wZone.zoneName} • ${wZone.ringRadiusMeters}m runway buffer + 15km approach corridor",
+                                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 8.5.sp)
+                                            )
+                                            Text(
+                                                text = "Advisory: Manufacturer warning zone; monitor local traffic",
+                                                style = MaterialTheme.typography.bodySmall.copy(color = badgeColor, fontSize = 8.sp, fontWeight = FontWeight.Medium)
                                             )
                                         }
                                     }

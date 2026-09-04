@@ -38,7 +38,8 @@ data class MainUiState(
     val selectedCategoryFilter: AssessmentCategory? = null,
     val scrollToForecastOnDetail: Boolean = false,
     val lastTelemetryUpdateEpochMs: Long = System.currentTimeMillis(),
-    val nearbyAirports: List<AirportCtafResult> = emptyList()
+    val nearbyAirports: List<AirportCtafResult> = emptyList(),
+    val airportWarningZones: List<AirportWarningZone> = emptyList()
 )
 
 class MainViewModel @JvmOverloads constructor(
@@ -51,7 +52,8 @@ class MainViewModel @JvmOverloads constructor(
     private val aircraftRepo: AircraftRepository = PersistentAircraftRepository(application),
     private val pilotRepo: PilotRepository = InMemoryPilotRepository(),
     private val assessmentEngine: AssessmentEngine = AssessmentEngine(),
-    private val locationManager: DeviceLocationManager = DeviceLocationManager(application)
+    private val locationManager: DeviceLocationManager = DeviceLocationManager(application),
+    private val airportWarningRepo: AirportWarningZoneRepository = LiveAirportWarningZoneRepository(application)
 ) : AndroidViewModel(application) {
 
     private val setupPrefs = application.getSharedPreferences("uas_ready_setup_prefs", android.content.Context.MODE_PRIVATE)
@@ -108,9 +110,11 @@ class MainViewModel @JvmOverloads constructor(
 
         // Try to obtain initial GPS location silently if permission is already granted
         refreshGpsLocation(silent = true)
-        val initialAirports = CtafLookupHelper.findAirportsWithinRadius(_uiState.value.currentLocation.latitude, _uiState.value.currentLocation.longitude, 30.0)
-        if (initialAirports.isNotEmpty()) {
-            _uiState.update { it.copy(nearbyAirports = initialAirports) }
+        val defaultLoc = _uiState.value.currentLocation
+        val initialAirports = CtafLookupHelper.findAirportsWithinRadius(defaultLoc.latitude, defaultLoc.longitude, 30.0)
+        val initialWarnings = airportWarningRepo.getWarningZones(defaultLoc.latitude, defaultLoc.longitude, 0.55)
+        if (initialAirports.isNotEmpty() || initialWarnings.isNotEmpty()) {
+            _uiState.update { it.copy(nearbyAirports = initialAirports, airportWarningZones = initialWarnings) }
         }
     }
 
@@ -121,7 +125,8 @@ class MainViewModel @JvmOverloads constructor(
                 if (gpsLoc != null) {
                     Log.i(TAG, "GPS location acquired: ${gpsLoc.formattedCoordinates} (${gpsLoc.displayName})")
                     val airports = CtafLookupHelper.findAirportsWithinRadius(gpsLoc.latitude, gpsLoc.longitude, 30.0)
-                    _uiState.update { it.copy(currentLocation = gpsLoc, nearbyAirports = airports) }
+                    val warningZones = airportWarningRepo.getWarningZones(gpsLoc.latitude, gpsLoc.longitude, 0.55)
+                    _uiState.update { it.copy(currentLocation = gpsLoc, nearbyAirports = airports, airportWarningZones = warningZones) }
                     if (!_uiState.value.isPilotSelectionPending) {
                         fetchLiveData()
                     }
@@ -148,6 +153,7 @@ class MainViewModel @JvmOverloads constructor(
             val lat = state.currentLocation.latitude
             val lon = state.currentLocation.longitude
             val airports = CtafLookupHelper.findAirportsWithinRadius(lat, lon, 30.0)
+            val warningZones = airportWarningRepo.getWarningZones(lat, lon, 0.55)
 
             val weatherResult = weatherRepo.getWeatherData(lat, lon)
             val spaceResult = spaceWeatherRepo.getSpaceWeather()
@@ -201,6 +207,7 @@ class MainViewModel @JvmOverloads constructor(
                     weatherForecast = weatherPair?.second,
                     airspaceInfo = airspace,
                     nearbyAirports = airports,
+                    airportWarningZones = warningZones,
                     estimatedGnss = gnss,
                     lastTelemetryUpdateEpochMs = System.currentTimeMillis(),
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
@@ -258,7 +265,8 @@ class MainViewModel @JvmOverloads constructor(
             location
         }
         val airports = com.taksolutions.uasready.data.repository.CtafLookupHelper.findAirportsWithinRadius(updatedLoc.latitude, updatedLoc.longitude, 30.0)
-        _uiState.update { it.copy(currentLocation = updatedLoc, nearbyAirports = airports) }
+        val warningZones = airportWarningRepo.getWarningZones(updatedLoc.latitude, updatedLoc.longitude, 0.55)
+        _uiState.update { it.copy(currentLocation = updatedLoc, nearbyAirports = airports, airportWarningZones = warningZones) }
         if (!_uiState.value.isPilotSelectionPending) {
             fetchLiveData()
         }
