@@ -266,6 +266,128 @@ class DataLayerTest {
             assertTrue(airports30Nm[i].lon != 0.0)
         }
     }
+
+    @Test
+    fun testAirportWarningZonesDatabaseQueryCoronaOntario() {
+        val dbFile = java.io.File("src/main/assets/airport_warning_zones.db").takeIf { it.exists() }
+            ?: java.io.File("app/src/main/assets/airport_warning_zones.db")
+        assertTrue("airport_warning_zones.db should exist in assets", dbFile.exists())
+
+        // Connect via JDBC SQLite to test the bundled database directly
+        val conn = java.sql.DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
+        try {
+            val coronaLat = 33.8753
+            val coronaLon = -117.5664
+            val radiusDeg = 0.55
+
+            val minLat = coronaLat - radiusDeg
+            val maxLat = coronaLat + radiusDeg
+            val minLon = coronaLon - radiusDeg
+            val maxLon = coronaLon + radiusDeg
+
+            val query = """
+                SELECT ident, name, level, ring_m, color, lat, lon, geometry
+                FROM airport_warning_zones
+                WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
+            """.trimIndent()
+
+            val stmt = conn.prepareStatement(query)
+            stmt.setDouble(1, maxLat)
+            stmt.setDouble(2, minLat)
+            stmt.setDouble(3, maxLon)
+            stmt.setDouble(4, minLon)
+
+            val rs = stmt.executeQuery()
+            val zones = mutableListOf<com.taksolutions.uasready.domain.model.AirportWarningZone>()
+
+            while (rs.next()) {
+                val ident = rs.getString("ident")
+                val name = rs.getString("name")
+                val level = rs.getInt("level")
+                val ringM = rs.getInt("ring_m")
+                val color = rs.getString("color")
+                val cLat = rs.getDouble("lat")
+                val cLon = rs.getDouble("lon")
+                val geomBytes = rs.getBytes("geometry")
+
+                val coords = LiveAirportWarningZoneRepository.unpackCoordinates(geomBytes)
+                assertTrue("Polygon coordinates for $ident should have >= 3 points", coords.size >= 3)
+
+                zones.add(
+                    com.taksolutions.uasready.domain.model.AirportWarningZone(
+                        ident = ident,
+                        name = name,
+                        level = level,
+                        zoneName = if (level == 3) "Enhanced Warning" else "Warning",
+                        ringRadiusMeters = ringM,
+                        colorHex = color,
+                        centerLat = cLat,
+                        centerLon = cLon,
+                        polygonCoordinates = coords
+                    )
+                )
+            }
+
+            assertTrue("Should find airport warning zones near Corona/Ontario", zones.isNotEmpty())
+            val ontZones = zones.filter { it.ident == "KONT" }
+            assertTrue("Should include Ontario International (KONT) warning zones", ontZones.isNotEmpty())
+            assertTrue("KONT should have Level 3 Enhanced Warning", ontZones.any { it.level == 3 && it.ringRadiusMeters == 4000 })
+            assertTrue("KONT should have Level 0 Warning", ontZones.any { it.level == 0 && it.ringRadiusMeters == 6000 })
+        } finally {
+            conn.close()
+        }
+    }
+
+    @Test
+    fun testAirportWarningZonesSanFrancisco() {
+        val dbFile = java.io.File("src/main/assets/airport_warning_zones.db").takeIf { it.exists() }
+            ?: java.io.File("app/src/main/assets/airport_warning_zones.db")
+        assertTrue("airport_warning_zones.db should exist in assets", dbFile.exists())
+
+        val conn = java.sql.DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}")
+        try {
+            val sfLat = 37.7749
+            val sfLon = -122.4194
+            val radiusDeg = 0.55
+
+            val minLat = sfLat - radiusDeg
+            val maxLat = sfLat + radiusDeg
+            val minLon = sfLon - radiusDeg
+            val maxLon = sfLon + radiusDeg
+
+            val query = """
+                SELECT ident, name, level, ring_m, color, lat, lon, geometry
+                FROM airport_warning_zones
+                WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
+            """.trimIndent()
+
+            val stmt = conn.prepareStatement(query)
+            stmt.setDouble(1, maxLat)
+            stmt.setDouble(2, minLat)
+            stmt.setDouble(3, maxLon)
+            stmt.setDouble(4, minLon)
+
+            val rs = stmt.executeQuery()
+            var count = 0
+            var foundSfo = false
+
+            while (rs.next()) {
+                val ident = rs.getString("ident")
+                val geomBytes = rs.getBytes("geometry")
+                val coords = LiveAirportWarningZoneRepository.unpackCoordinates(geomBytes)
+                assertTrue("Coordinates for $ident must unpack properly", coords.size >= 3)
+                if (ident == "KSFO") {
+                    foundSfo = true
+                }
+                count++
+            }
+
+            assertTrue("Should find multiple airport warning zones in San Francisco Bay Area", count >= 5)
+            assertTrue("Should include San Francisco Intl (KSFO)", foundSfo)
+        } finally {
+            conn.close()
+        }
+    }
 }
 
 
