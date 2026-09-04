@@ -2,8 +2,9 @@
 *.apk
 *.aab
 
-# Don't ignore release APKs in the releases folder!
+# Don't ignore release APKs in the releases folder or bundles in bundle folder!
 !releases/**/*.apk
+!bundle/**/*.aab
 
 # Gradle files
 .gradle/
