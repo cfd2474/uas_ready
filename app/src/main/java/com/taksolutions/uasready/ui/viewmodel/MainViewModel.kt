@@ -37,7 +37,8 @@ data class MainUiState(
     val estimatedGnss: GnssEstimation? = null,
     val selectedCategoryFilter: AssessmentCategory? = null,
     val scrollToForecastOnDetail: Boolean = false,
-    val lastTelemetryUpdateEpochMs: Long = System.currentTimeMillis()
+    val lastTelemetryUpdateEpochMs: Long = System.currentTimeMillis(),
+    val nearbyAirports: List<AirportCtafResult> = emptyList()
 )
 
 class MainViewModel @JvmOverloads constructor(
@@ -107,6 +108,10 @@ class MainViewModel @JvmOverloads constructor(
 
         // Try to obtain initial GPS location silently if permission is already granted
         refreshGpsLocation(silent = true)
+        val initialAirports = CtafLookupHelper.findAirportsWithinRadius(_uiState.value.currentLocation.latitude, _uiState.value.currentLocation.longitude, 30.0)
+        if (initialAirports.isNotEmpty()) {
+            _uiState.update { it.copy(nearbyAirports = initialAirports) }
+        }
     }
 
     fun refreshGpsLocation(silent: Boolean = false) {
@@ -115,7 +120,8 @@ class MainViewModel @JvmOverloads constructor(
                 val gpsLoc = locationManager.getCurrentLocation()
                 if (gpsLoc != null) {
                     Log.i(TAG, "GPS location acquired: ${gpsLoc.formattedCoordinates} (${gpsLoc.displayName})")
-                    _uiState.update { it.copy(currentLocation = gpsLoc) }
+                    val airports = CtafLookupHelper.findAirportsWithinRadius(gpsLoc.latitude, gpsLoc.longitude, 30.0)
+                    _uiState.update { it.copy(currentLocation = gpsLoc, nearbyAirports = airports) }
                     if (!_uiState.value.isPilotSelectionPending) {
                         fetchLiveData()
                     }
@@ -141,6 +147,7 @@ class MainViewModel @JvmOverloads constructor(
             val state = _uiState.value
             val lat = state.currentLocation.latitude
             val lon = state.currentLocation.longitude
+            val airports = CtafLookupHelper.findAirportsWithinRadius(lat, lon, 30.0)
 
             val weatherResult = weatherRepo.getWeatherData(lat, lon)
             val spaceResult = spaceWeatherRepo.getSpaceWeather()
@@ -193,6 +200,7 @@ class MainViewModel @JvmOverloads constructor(
                     weatherObservation = weatherPair?.first,
                     weatherForecast = weatherPair?.second,
                     airspaceInfo = airspace,
+                    nearbyAirports = airports,
                     estimatedGnss = gnss,
                     lastTelemetryUpdateEpochMs = System.currentTimeMillis(),
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
@@ -249,7 +257,8 @@ class MainViewModel @JvmOverloads constructor(
         } else {
             location
         }
-        _uiState.update { it.copy(currentLocation = updatedLoc) }
+        val airports = com.taksolutions.uasready.data.repository.CtafLookupHelper.findAirportsWithinRadius(updatedLoc.latitude, updatedLoc.longitude, 30.0)
+        _uiState.update { it.copy(currentLocation = updatedLoc, nearbyAirports = airports) }
         if (!_uiState.value.isPilotSelectionPending) {
             fetchLiveData()
         }

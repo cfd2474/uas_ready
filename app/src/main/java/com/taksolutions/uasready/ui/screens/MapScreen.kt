@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.taksolutions.uasready.data.repository.AirportCtafResult
 import com.taksolutions.uasready.domain.model.AirspaceZone
 import com.taksolutions.uasready.domain.model.AirspaceZoneType
 import com.taksolutions.uasready.ui.theme.*
@@ -122,6 +123,8 @@ fun MapScreen(
     var showLegend by remember { mutableStateOf(false) }
     var selectedBasemap by remember { mutableStateOf(BasemapType.STREET) }
     var inspectionResult by remember { mutableStateOf<AirspaceInspection?>(null) }
+    var selectedAirport by remember { mutableStateOf<AirportCtafResult?>(null) }
+    var showAirportsLayer by remember { mutableStateOf(true) }
     var shouldRecenterMap by remember { mutableStateOf(false) }
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
@@ -197,12 +200,13 @@ fun MapScreen(
                     userMarker.snippet = "Coordinates: ${loc.formattedCoordinates}"
                 }
 
-                // Clear previous airspace polygons and events
-                mapView.overlays.removeAll { it is Polygon || it is MapEventsOverlay }
+                // Clear previous airspace polygons, events, and airport markers
+                mapView.overlays.removeAll { it is Polygon || it is MapEventsOverlay || (it is Marker && it.id != "USER_MARKER") }
 
                 // Map Touch Receiver: Handles clicks across all overlapping polygons
                 val mapEventsOverlay = MapEventsOverlay(object : MapEventsReceiver {
                     override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                        selectedAirport = null
                         val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
                         val overlapping = activeZones.filter { isPointInZone(p.latitude, p.longitude, it) }
                         inspectionResult = AirspaceInspection(p, overlapping)
@@ -260,6 +264,7 @@ fun MapScreen(
 
                         // Forward polygon clicks to multi-layer inspection
                         setOnClickListener { _, _, clickPoint ->
+                            selectedAirport = null
                             val activeZones = liveAirspaceZones.filter { it.type in enabledZoneTypes }
                             val overlapping = activeZones.filter { isPointInZone(clickPoint.latitude, clickPoint.longitude, it) }
                             inspectionResult = AirspaceInspection(clickPoint, overlapping)
@@ -267,6 +272,26 @@ fun MapScreen(
                         }
                     }
                     mapView.overlays.add(polygon)
+                }
+
+                // Render 30 NM Airport & CTAF Frequency Markers (On top of polygons)
+                if (showAirportsLayer) {
+                    uiState.nearbyAirports.forEach { airport ->
+                        val airportMarker = Marker(mapView).apply {
+                            id = "AIRPORT_${airport.ident}"
+                            position = GeoPoint(airport.lat, airport.lon)
+                            title = "${airport.ident} - ${airport.name}"
+                            snippet = "CTAF/FREQ: ${airport.frequencyMhz} MHz (${airport.type}) • ${String.format(java.util.Locale.US, "%.1f NM", airport.distanceNm)}"
+                            icon = createAirportMarkerDrawable(mapView.context, airport.ident, airport.frequencyMhz)
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            setOnMarkerClickListener { _, _ ->
+                                inspectionResult = null
+                                selectedAirport = airport
+                                true
+                            }
+                        }
+                        mapView.overlays.add(airportMarker)
+                    }
                 }
 
                 mapView.postInvalidate()
@@ -481,12 +506,122 @@ fun MapScreen(
                             enabledZoneTypes = if (enabled) enabledZoneTypes + AirspaceZoneType.SPECIAL_USE else enabledZoneTypes - AirspaceZoneType.SPECIAL_USE
                         }
                     )
+
+                    HorizontalDivider(color = AviationDarkBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 2.dp))
+
+                    AirspaceLayerToggleRow(
+                        name = "Airports & Comms (30 NM)",
+                        color = AviationCyan,
+                        enabled = showAirportsLayer,
+                        onToggle = { showAirportsLayer = it }
+                    )
+                }
+            }
+        }
+
+        // Airport Comms Callout Card (Shows CTAF frequency, service type, distance, coordinates)
+        selectedAirport?.let { airport ->
+            Card(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 54.dp, start = 8.dp, end = 8.dp)
+                    .fillMaxWidth()
+                    .heightIn(max = 160.dp),
+                colors = CardDefaults.cardColors(containerColor = AviationDarkCard.copy(alpha = 0.98f)),
+                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationCyan)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    // Header with airport ident, name, and dismiss button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Flight, contentDescription = null, tint = AviationCyan, modifier = Modifier.size(15.dp))
+                            Text(
+                                text = "${airport.ident} — ${airport.name}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 11.sp),
+                                maxLines = 1
+                            )
+                        }
+                        IconButton(
+                            onClick = { selectedAirport = null },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        }
+                    }
+
+                    HorizontalDivider(color = AviationDarkBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Body: Frequency details & distance
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "COMMUNICATION FREQUENCY",
+                                style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "${airport.frequencyMhz} MHz",
+                                    style = MaterialTheme.typography.titleMedium.copy(color = AviationCyan, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = AviationDarkSurface,
+                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, AviationCyan.copy(alpha = 0.6f))
+                                ) {
+                                    Text(
+                                        text = airport.type,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "DISTANCE",
+                                style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = String.format(java.util.Locale.US, "%.1f NM", airport.distanceNm),
+                                style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Coordinates & Advisory
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = String.format(java.util.Locale.US, "Coord: %.4f°N, %.4f°W", airport.lat, abs(airport.lon)),
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 8.5.sp)
+                        )
+                        Text(
+                            text = "Monitor frequency for manned traffic",
+                            style = MaterialTheme.typography.bodySmall.copy(color = SafetyCautionLight, fontSize = 8.5.sp, fontWeight = FontWeight.Medium)
+                        )
+                    }
                 }
             }
         }
 
         // Multi-Layer Airspace Inspector Popup (Shows all overlapping polygons at tapped location)
-        inspectionResult?.let { inspect ->
+        if (selectedAirport == null) {
+            inspectionResult?.let { inspect ->
             Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -600,6 +735,7 @@ fun MapScreen(
                     }
                 }
             }
+        }
         }
 
         // Bottom Telemetry Bar (640x360 Landscape Optimized with CTAF)
@@ -778,6 +914,65 @@ private fun createSmallRedPinDrawable(context: Context): BitmapDrawable {
     canvas.drawPath(path, pinPaint)
     canvas.drawPath(path, borderPaint)
     canvas.drawCircle(width / 2f, radius, radius * 0.4f, dotPaint)
+
+    return BitmapDrawable(context.resources, bitmap)
+}
+
+// High-Contrast Outdoor-Readable Airport & CTAF Frequency Marker Pill
+private fun createAirportMarkerDrawable(context: Context, ident: String, freqMhz: String): BitmapDrawable {
+    val density = context.resources.displayMetrics.density
+    val labelText = "$ident $freqMhz"
+
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        textSize = 9.5f * density
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+    }
+
+    val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.rgb(56, 189, 248) // Aviation Sky Cyan
+        textSize = 9.5f * density
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+    }
+
+    val iconStr = "✈ "
+    val iconWidth = iconPaint.measureText(iconStr)
+    val textWidth = textPaint.measureText(labelText)
+    val totalContentWidth = iconWidth + textWidth
+
+    val fontMetrics = textPaint.fontMetrics
+    val textHeight = fontMetrics.descent - fontMetrics.ascent
+
+    val padH = 6f * density
+    val padV = 3f * density
+    val width = (totalContentWidth + padH * 2).toInt().coerceAtLeast((36 * density).toInt())
+    val height = (textHeight + padV * 2).toInt().coerceAtLeast((18 * density).toInt())
+
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    val rect = android.graphics.RectF(0.6f * density, 0.6f * density, width - 0.6f * density, height - 0.6f * density)
+    val cornerRadius = 4f * density
+
+    // Background fill (Deep Slate / Aviation Dark)
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.rgb(15, 23, 42) // Slate 900
+        style = Paint.Style.FILL
+    }
+    // Border stroke (Vivid Sky Cyan)
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.rgb(56, 189, 248) // Sky 400
+        style = Paint.Style.STROKE
+        strokeWidth = 1.2f * density
+    }
+
+    canvas.drawRoundRect(rect, cornerRadius, cornerRadius, bgPaint)
+    canvas.drawRoundRect(rect, cornerRadius, cornerRadius, borderPaint)
+
+    // Draw Icon and Text
+    val textY = padV - fontMetrics.ascent
+    canvas.drawText(iconStr, padH, textY, iconPaint)
+    canvas.drawText(labelText, padH + iconWidth, textY, textPaint)
 
     return BitmapDrawable(context.resources, bitmap)
 }

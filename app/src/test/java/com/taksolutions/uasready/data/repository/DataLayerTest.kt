@@ -231,6 +231,41 @@ class DataLayerTest {
         assertTrue("Launch at KONT should require controlled airspace authorization", airspace.controlledAirspaceAuthorizationRequired)
         assertFalse("Class E5 transition areas should be excluded in Ontario/Corona", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
     }
+
+    @Test
+    fun testAirportsWithinRadiusCoronaOntario() {
+        if (!CtafLookupHelper.isInitialized()) {
+            val file = java.io.File("src/main/assets/airports_ctaf.json").takeIf { it.exists() }
+                ?: java.io.File("app/src/main/assets/airports_ctaf.json")
+            assertTrue("airports_ctaf.json should exist", file.exists())
+            CtafLookupHelper.initializeFromJson(file.readText())
+        }
+
+        val coronaLat = 33.8753
+        val coronaLon = -117.5664
+
+        // 1. Find nearest airport/CTAF
+        val nearest = CtafLookupHelper.findNearestCtaf(coronaLat, coronaLon)
+        assertNotNull(nearest)
+        assertTrue(nearest!!.distanceNm <= 15.0)
+
+        // 2. Find all airports within 30 NM radius
+        val airports30Nm = CtafLookupHelper.findAirportsWithinRadius(coronaLat, coronaLon, 30.0)
+        assertTrue("Should have multiple airports within 30 NM of Corona/Ontario", airports30Nm.size >= 5)
+
+        // Check that Ontario (KONT), Chino (CNO), or Riverside (RAL) is included
+        val hasRegionalAirports = airports30Nm.any { it.ident.contains("ONT") || it.ident.contains("CNO") || it.ident.contains("RAL") }
+        assertTrue("Should include major regional airports (KONT, CNO, or KRAL)", hasRegionalAirports)
+
+        // Verify all returned airports are within 30.0 NM and sorted ascending
+        for (i in 0 until airports30Nm.size - 1) {
+            assertTrue("Distance should be <= 30 NM", airports30Nm[i].distanceNm <= 30.0)
+            assertTrue("List should be sorted ascending by distance", airports30Nm[i].distanceNm <= airports30Nm[i + 1].distanceNm)
+            assertNotNull(airports30Nm[i].frequencyMhz)
+            assertTrue(airports30Nm[i].lat != 0.0)
+            assertTrue(airports30Nm[i].lon != 0.0)
+        }
+    }
 }
 
 
