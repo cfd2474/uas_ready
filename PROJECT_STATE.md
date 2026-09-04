@@ -6,7 +6,7 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.42` (Build 50)
+- **Current Version**: `v1.3.43` (Build 51)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
@@ -14,9 +14,15 @@
 
 ## What Has Been Completed
 
-### 1. Application Bundle Compilation (`.aab`)
+### 1. Google Play Target API 36 Compliance (v1.3.43, Build 51)
+- **Target & Compile SDK 36**: Updated `compileSdk = 36` and `targetSdk = 36` in `app/build.gradle.kts` to satisfy Google Play's requirement for target API level 36.
+- **Gradle Properties**: Added `android.suppressUnsupportedCompileSdk=36` to suppress legacy AGP compileSdk warning.
+- **Version Bump**: Bumped to `VERSION_CODE=51`, `VERSION_NAME=1.3.43` so Google Play accepts the replacement bundle upload.
+- **Artifacts**: Compiled signed release bundle `bundle/UASReady-v1.3.43.aab` and signed release APK `releases/current/UASReady-v1.3.43.apk`.
+
+### 2. Application Bundle Compilation (`.aab`)
 - **Bundle Generation**: Compiled signed release Android App Bundle using `./gradlew bundleRelease` with release signing keystore.
-- **Dedicated Bundle Directory**: Created `bundle/` folder in repo root with versioned bundle `bundle/UASReady-v1.3.42.aab`.
+- **Dedicated Bundle Directory**: Created `bundle/` folder in repo root with versioned bundle `bundle/UASReady-v1.3.43.aab`.
 - **Git Tracking**: Updated `.gitignore` to track release `.aab` bundles in the `bundle/` directory.
 
 ### 2. Full Package Refactor to `com.taksolutions.uasready` (v1.3.42, Build 50)
