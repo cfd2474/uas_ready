@@ -16,7 +16,7 @@
 
 ### 1. Application Bundle Compilation (`.aab`)
 - **Bundle Generation**: Compiled signed release Android App Bundle using `./gradlew bundleRelease` with release signing keystore.
-- **Dedicated Bundle Directory**: Created `bundle/` folder in repo root and populated with `bundle/UASReady-v1.3.42.aab` and `bundle/app-release.aab`.
+- **Dedicated Bundle Directory**: Created `bundle/` folder in repo root with versioned bundle `bundle/UASReady-v1.3.42.aab`.
 - **Git Tracking**: Updated `.gitignore` to track release `.aab` bundles in the `bundle/` directory.
 
 ### 2. Full Package Refactor to `com.taksolutions.uasready` (v1.3.42, Build 50)
