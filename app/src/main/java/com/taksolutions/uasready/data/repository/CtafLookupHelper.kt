@@ -19,7 +19,9 @@ data class AirportCtafResult(
     val name: String,
     val frequencyMhz: String,
     val type: String,
-    val distanceNm: Double
+    val distanceNm: Double,
+    val lat: Double = 0.0,
+    val lon: Double = 0.0
 )
 
 object CtafLookupHelper {
@@ -32,27 +34,35 @@ object CtafLookupHelper {
         try {
             val start = System.currentTimeMillis()
             val jsonText = context.assets.open("airports_ctaf.json").bufferedReader().use { it.readText() }
-            val array = JSONArray(jsonText)
-            val list = ArrayList<AirportCtaf>(array.length())
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                list.add(
-                    AirportCtaf(
-                        ident = obj.getString("id"),
-                        name = obj.getString("name"),
-                        lat = obj.getDouble("lat"),
-                        lon = obj.getDouble("lon"),
-                        frequencyMhz = obj.getString("freq"),
-                        type = obj.getString("type")
-                    )
-                )
-            }
-            cachedAirports = list
-            Log.i(TAG, "Loaded ${list.size} airports with CTAF/TWR frequencies in ${System.currentTimeMillis() - start} ms")
+            initializeFromJson(jsonText)
+            Log.i(TAG, "Loaded ${cachedAirports?.size} airports with CTAF/TWR frequencies in ${System.currentTimeMillis() - start} ms")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load airports_ctaf.json: ${e.message}", e)
         }
     }
+
+    @Synchronized
+    fun initializeFromJson(jsonText: String) {
+        if (cachedAirports != null) return
+        val array = JSONArray(jsonText)
+        val list = ArrayList<AirportCtaf>(array.length())
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            list.add(
+                AirportCtaf(
+                    ident = obj.getString("id"),
+                    name = obj.getString("name"),
+                    lat = obj.getDouble("lat"),
+                    lon = obj.getDouble("lon"),
+                    frequencyMhz = obj.getString("freq"),
+                    type = obj.getString("type")
+                )
+            )
+        }
+        cachedAirports = list
+    }
+
+    fun isInitialized(): Boolean = cachedAirports != null
 
     fun findNearestCtaf(lat: Double, lon: Double): AirportCtafResult? {
         val airports = cachedAirports ?: return null
@@ -80,8 +90,39 @@ object CtafLookupHelper {
                 name = it.name,
                 frequencyMhz = it.frequencyMhz,
                 type = it.type,
-                distanceNm = minDistanceNm
+                distanceNm = minDistanceNm,
+                lat = it.lat,
+                lon = it.lon
             )
         }
+    }
+
+    fun findAirportsWithinRadius(lat: Double, lon: Double, radiusNm: Double = 30.0): List<AirportCtafResult> {
+        val airports = cachedAirports ?: return emptyList()
+        if (airports.isEmpty() || (lat == 0.0 && lon == 0.0)) return emptyList()
+
+        val results = ArrayList<AirportCtafResult>()
+        for (apt in airports) {
+            val dLat = Math.toRadians(apt.lat - lat)
+            val dLon = Math.toRadians(apt.lon - lon)
+            val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(lat)) * cos(Math.toRadians(apt.lat)) * sin(dLon / 2).pow(2)
+            val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+            val distNm = 3440.065 * c
+
+            if (distNm <= radiusNm) {
+                results.add(
+                    AirportCtafResult(
+                        ident = apt.ident,
+                        name = apt.name,
+                        frequencyMhz = apt.frequencyMhz,
+                        type = apt.type,
+                        distanceNm = distNm,
+                        lat = apt.lat,
+                        lon = apt.lon
+                    )
+                )
+            }
+        }
+        return results.sortedBy { it.distanceNm }
     }
 }
