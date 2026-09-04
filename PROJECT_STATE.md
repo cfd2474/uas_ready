@@ -14,7 +14,12 @@
 
 ## What Has Been Completed
 
-### 1. Full Package Refactor to `com.taksolutions.uasready` (v1.3.42, Build 50)
+### 1. Application Bundle Compilation (`.aab`)
+- **Bundle Generation**: Compiled signed release Android App Bundle using `./gradlew bundleRelease` with release signing keystore.
+- **Dedicated Bundle Directory**: Created `bundle/` folder in repo root and populated with `bundle/UASReady-v1.3.42.aab` and `bundle/app-release.aab`.
+- **Git Tracking**: Updated `.gitignore` to track release `.aab` bundles in the `bundle/` directory.
+
+### 2. Full Package Refactor to `com.taksolutions.uasready` (v1.3.42, Build 50)
 - **Official Application ID & Namespace**: Updated `applicationId = "com.taksolutions.uasready"` and `namespace = "com.taksolutions.uasready"` in `app/build.gradle.kts`.
 - **Directory Hierarchy Migration**: Moved all source packages and classes from `app/src/main/java/com/uasready/` to `app/src/main/java/com/taksolutions/uasready/` and test suites to `app/src/test/java/com/taksolutions/uasready/`.
 - **Full Codebase Refactor**: Migrated package declarations and import references across all 52 Kotlin and XML source/test files to `com.taksolutions.uasready`.
