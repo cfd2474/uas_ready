@@ -18,11 +18,11 @@ val appVersionCode = versionProps.getProperty("VERSION_CODE", "1").toInt()
 val appVersionName = versionProps.getProperty("VERSION_NAME", "1.0.0")
 
 android {
-    namespace = "com.uasready"
+    namespace = "com.taksolutions.uasready"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.uasready"
+        applicationId = "com.taksolutions.uasready"
         minSdk = 26
         targetSdk = 34
         versionCode = appVersionCode
