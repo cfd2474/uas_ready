@@ -835,7 +835,7 @@ fun MapScreen(
                                             }
                                             Text(
                                                 text = if (isHighRisk) {
-                                                    "Runway approach/departure corridor • 7.5km extent"
+                                                    "Runway approach/departure corridor • 5.25km extent"
                                                 } else {
                                                     "Airport runway centerline buffer • 3km radius"
                                                 },

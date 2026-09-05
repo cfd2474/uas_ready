@@ -6,20 +6,36 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.46` (Build 54)
+- **Current Version**: `v1.3.47` (Build 55)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
 ---
 
 ## What Is In Progress
-- [ ] Awaiting operator validation of Chunk 3 (High Risk Zone Bowtie & 3km Runway Buffer) on DJI RC Pro Enterprise.
+- [ ] Awaiting operator validation of Chunk 4 (High Risk Zone Bowtie 5.25km Extent) on DJI RC Pro Enterprise.
 
 ---
 
 ## What Has Been Completed
 
-### 1. High Risk Zone Bowtie (50% Length) & Separate 3km Runway Buffer (v1.3.46, Build 54)
+### 1. High Risk Zone Bowtie Additional 30% Reduction (5,250m Extent) (v1.3.47, Build 55)
+- **Bowtie Dimension Optimization**:
+  - Reduced total flare length from threshold by an additional 30%: from 7,500m to **5,250 m** (~2.83 NM).
+  - Corridor extension past runway threshold reduced from 1,500m to **1,050 m**.
+  - Flaring fan expands at 15% divergence from 1,200m corridor out to **2,460 m** full width at the 5,250m boundary.
+  - Preserved separate **3,000m (3km)** runway centerline buffer polygon.
+- **Database & UI Synchronization**:
+  - Recompiled all 9,646 CONUS records into `app/src/main/assets/airport_warning_zones.db`.
+  - Updated `MapScreen.kt` inspection card subtitle to reflect *"5.25km extent"*.
+- **Automated Verification**:
+  - All unit tests pass green (`./gradlew testDebugUnitTest`).
+- **Release Archiving Compliance**:
+  - Automated release engine (`bump_and_release.ps1`) incremented version to `v1.3.47` (Build 55).
+  - Moved `UASReady-v1.3.46.apk` to `releases/archive/` and `UASReady-v1.3.46.aab` to `bundle/archive/`.
+  - Current release folders contain strictly active artifacts: `releases/current/UASReady-v1.3.47.apk` and `bundle/UASReady-v1.3.47.aab`.
+
+### 2. High Risk Zone Bowtie (50% Length) & Separate 3km Runway Buffer (v1.3.46, Build 54)
 - **Geometry Restructuring**:
   - Removed outer 6km warning polygon and separated the runway buffer from the approach bowtie.
   - **High Risk Zone (Bowtie)**: Reduced total length by 50% (1,200m runway corridor + 1,500m constant corridor + 15% flare to 7,500m total distance from threshold).
