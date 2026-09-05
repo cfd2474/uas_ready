@@ -2,7 +2,7 @@ package com.taksolutions.uasready.domain.model
 
 /**
  * Represents an airport proximity warning zone:
- * - High Risk Zone: 50% length approach bow-tie corridor (1,200m corridor + 15% flare to 7.5km).
+ * - High Risk Zone: Approach bow-tie corridor (1,200m corridor + 15% flare to 5.25km).
  * - Runway Buffer: 3km buffer around runway centrelines.
  */
 data class AirportWarningZone(
