@@ -430,7 +430,7 @@ fun MapScreen(
                     modifier = Modifier.size(11.dp)
                 )
                 Text(
-                    text = "Aeronautical Airspace within 30 NM radius",
+                    text = "Surface to 500' Airspace within 30 NM radius",
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = TextSecondary,
                         fontSize = 9.sp,

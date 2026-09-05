@@ -153,6 +153,13 @@ class LiveAirspaceRepository : AirspaceRepository {
                         continue
                     }
 
+                    // Hide all airspaces that have a starting altitude of 500' or greater.
+                    // Only show airspace that has a lower limit of surface to < 500'
+                    val isFloor500OrGreater = lowerCode == "FL" || lowerVal >= 500.0
+                    if (isFloor500OrGreater) {
+                        continue
+                    }
+
                     // Exclude non-surface Class E airspace (e.g. 700 ft AGL / 1200 ft AGL transition areas, enroute Class E)
                     if (airClassStr == "E") {
                         val isExplicitSurface = localType in listOf("CLASS_E2", "CLASS_E3", "CLASS_E4") ||
@@ -237,7 +244,7 @@ class LiveAirspaceRepository : AirspaceRepository {
         var isInsideRestricted = false
 
         try {
-            val suaQueryUrl = "$FAA_SUA_URL?where=1=1&geometry=$minLon,$minLat,$maxLon,$maxLat&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=OBJECTID,NAME,TYPE_CODE,CLASS,UPPER_VAL,UPPER_UOM,LOWER_VAL,LOWER_UOM&maxAllowableOffset=0.001&returnGeometry=true&f=geojson"
+            val suaQueryUrl = "$FAA_SUA_URL?where=1=1&geometry=$minLon,$minLat,$maxLon,$maxLat&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=OBJECTID,NAME,TYPE_CODE,CLASS,UPPER_VAL,UPPER_UOM,LOWER_VAL,LOWER_UOM,LOWER_CODE&maxAllowableOffset=0.001&returnGeometry=true&f=geojson"
 
             val conn = (URL(suaQueryUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -261,7 +268,15 @@ class LiveAirspaceRepository : AirspaceRepository {
                     val upperVal = props.optDouble("UPPER_VAL", 0.0)
                     val lowerUom = props.optString("LOWER_UOM", "FT")
                     val upperUom = props.optString("UPPER_UOM", "FT")
+                    val lowerCode = props.optString("LOWER_CODE", "").uppercase()
                     val objectId = props.optInt("OBJECTID", i)
+
+                    // Hide all airspaces that have a starting altitude of 500' or greater.
+                    // Only show airspace that has a lower limit of surface to < 500'
+                    val isFloor500OrGreater = lowerCode == "FL" || lowerVal >= 500.0
+                    if (isFloor500OrGreater) {
+                        continue
+                    }
 
                     val isProhibitedOrRestricted = typeCode == "P" || typeCode == "R" ||
                             rawName.contains("PROHIBITED", true) || rawName.contains("RESTRICTED", true)

@@ -6,20 +6,35 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.47` (Build 55)
+- **Current Version**: `v1.3.48` (Build 56)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
 ---
 
 ## What Is In Progress
-- [ ] Awaiting operator validation of Chunk 4 (High Risk Zone Bowtie 5.25km Extent) on DJI RC Pro Enterprise.
+*No active chunk in progress. Awaiting user review/approval.*
 
 ---
 
 ## What Has Been Completed
 
-### 1. High Risk Zone Bowtie Additional 30% Reduction (5,250m Extent) (v1.3.47, Build 55)
+### 1. Airspace Floor Filtering (< 500' Lower Limit Only) (v1.3.48, Build 56)
+- **Airspace Floor Filtering Implementation**:
+  - Filtered both FAA Class Airspace (B, C, D, E) and Special Use Airspace (SUA: Prohibited, Restricted, MOA, Alert, Warning) to strictly exclude any airspace with a floor/starting altitude of 500 ft or greater (`lowerVal >= 500.0 || lowerCode == "FL"`).
+  - Only airspace sectors touching the surface or starting below 500' AGL/MSL are rendered on the map and evaluated for airspace authorization.
+  - Correctly treats drone operations below elevated shelves (e.g. Class B sectors starting at 1,500' or 3,000' MSL, Class C outer shelves at 1,200', Class E5 transition areas at 700'/1200' AGL, and high MOAs) as uncontrolled Class G operations without false authorization requirements.
+- **UI & Disclaimer Synchronization**:
+  - Updated `MapScreen.kt` top disclaimer banner to: `"Surface to 500' Airspace within 30 NM radius"`.
+- **Automated Verification**:
+  - Added unit test assertions in `DataLayerTest.kt` verifying `airspace.zones.all { it.floorFt < 500.0 }` and `airspace.zones.none { it.floorFt >= 500.0 }` across both San Francisco and Ontario/Corona scenarios.
+  - Verified 100% of unit tests pass green (`./gradlew testDebugUnitTest`).
+- **Release Archiving Compliance**:
+  - Automated release engine (`bump_and_release.ps1`) incremented version to `v1.3.48` (Build 56).
+  - Moved `UASReady-v1.3.47.apk` to `releases/archive/` and `UASReady-v1.3.47.aab` to `bundle/archive/`.
+  - Current release folders contain strictly active artifacts: `releases/current/UASReady-v1.3.48.apk` and `bundle/UASReady-v1.3.48.aab`.
+
+### 2. High Risk Zone Bowtie Additional 30% Reduction (5,250m Extent) (v1.3.47, Build 55)
 - **Bowtie Dimension Optimization**:
   - Reduced total flare length from threshold by an additional 30%: from 7,500m to **5,250 m** (~2.83 NM).
   - Corridor extension past runway threshold reduced from 1,500m to **1,050 m**.
