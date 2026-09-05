@@ -215,6 +215,9 @@ class DataLayerTest {
         // Verify non-surface Class E5/E6 transition areas are completely excluded
         assertFalse("Class E5 (700ft/1200ft) transition areas should be excluded", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
         assertFalse("Class E6 enroute areas should be excluded", airspace.zones.any { it.name.contains("CLASS E6", ignoreCase = true) })
+        // Verify 500' floor filter: all zones must have starting altitude < 500' (surface to 500')
+        assertTrue("All SF airspace zones must have floor < 500 ft", airspace.zones.all { it.floorFt < 500.0 })
+        assertFalse("No SF airspace zones should have floor >= 500 ft", airspace.zones.any { it.floorFt >= 500.0 })
     }
 
     @Test
@@ -230,6 +233,9 @@ class DataLayerTest {
         assertTrue("Ontario/Corona should have controlled airspace polygons", airspace!!.zones.isNotEmpty())
         assertTrue("Launch at KONT should require controlled airspace authorization", airspace.controlledAirspaceAuthorizationRequired)
         assertFalse("Class E5 transition areas should be excluded in Ontario/Corona", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
+        // Verify 500' floor filter: all zones must have starting altitude < 500' (surface to 500')
+        assertTrue("All Ontario airspace zones must have floor < 500 ft", airspace.zones.all { it.floorFt < 500.0 })
+        assertFalse("No Ontario airspace zones should have floor >= 500 ft", airspace.zones.any { it.floorFt >= 500.0 })
     }
 
     @Test
