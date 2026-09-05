@@ -6,20 +6,44 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.45` (Build 53)
+- **Current Version**: `v1.3.46` (Build 54)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
 ---
 
 ## What Is In Progress
-- [ ] Awaiting operator validation of Chunk 2 (Airport Warning Zones) on DJI RC Pro Enterprise.
+- [ ] Awaiting operator validation of Chunk 3 (High Risk Zone Bowtie & 3km Runway Buffer) on DJI RC Pro Enterprise.
 
 ---
 
 ## What Has Been Completed
 
-### 1. CONUS Airport Warning Zones (DJI GEO 2.0 Bow-Tie & Runway Buffer Overlay) (v1.3.45, Build 53)
+### 1. High Risk Zone Bowtie (50% Length) & Separate 3km Runway Buffer (v1.3.46, Build 54)
+- **Geometry Restructuring**:
+  - Removed outer 6km warning polygon and separated the runway buffer from the approach bowtie.
+  - **High Risk Zone (Bowtie)**: Reduced total length by 50% (1,200m runway corridor + 1,500m constant corridor + 15% flare to 7,500m total distance from threshold).
+  - **Runway Buffer (3km)**: Separate stadium/capsule buffer of 3,000m radius around runway centrelines.
+- **Database Recompilation (`airport_warning_zones.db`)**:
+  - Rebuilt spatial database for all 4,823 active CONUS airports (9,646 records).
+  - Database footprint decreased from 8.82 MB to **5.64 MB** with float32 binary packing and spatial bounding box indexes.
+- **Model & Architecture**:
+  - Updated `AirportWarningZone.kt` with `zoneType` (`HIGH_RISK_BOWTIE` vs `RUNWAY_BUFFER_3KM`) and `zoneName`.
+  - Updated `AirportWarningZoneRepository.kt` to unpack and expose distinct zone types.
+- **Tactical Map & UI (`MapScreen.kt`)**:
+  - Labeled bowtie zone as **"High Risk Zone"** with `#EE8815` orange accent.
+  - Labeled buffer zone as **"Runway Buffer (3km)"** with `#FFCC00` yellow accent.
+  - Updated advisory notice on inspection cards: *"Advisory: Airport proximity warning zone, monitor local traffic."*
+  - Updated legend toggle to *"Airport Warning / High Risk"*.
+- **Automated Verification**:
+  - Updated `DataLayerTest.kt` unit tests verifying both `HIGH_RISK_BOWTIE` and `RUNWAY_BUFFER_3KM` for Ontario (`KONT`) and San Francisco (`KSFO`).
+  - 100% of unit tests pass green (`./gradlew testDebugUnitTest`).
+- **Release Archiving Compliance**:
+  - Automated release engine (`bump_and_release.ps1`) incremented version to `v1.3.46` (Build 54).
+  - Moved `UASReady-v1.3.45.apk` to `releases/archive/` and `UASReady-v1.3.45.aab` to `bundle/archive/`.
+  - Current release folders contain strictly active artifacts: `releases/current/UASReady-v1.3.46.apk` and `bundle/UASReady-v1.3.46.aab`.
+
+### 2. CONUS Airport Warning Zones (DJI GEO 2.0 Bow-Tie & Runway Buffer Overlay) (v1.3.45, Build 53)
 - **Geometry Engine Validation & Dataset**:
   - Validated geometry engine against DJI live API fixtures (`validate_geofence.py`): Check A analytic area achieved **0.0 ppm error**; Check B IoU against live published DJI polygons achieved **up to 0.998 IoU**.
   - Generated all 9,646 CONUS warning zones (Enhanced Warning 4,000m buffer + Warning 6,000m buffer with 15km approach bow-tie corridor) from OurAirports data.

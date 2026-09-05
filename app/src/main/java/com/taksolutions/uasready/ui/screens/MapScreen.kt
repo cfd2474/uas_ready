@@ -233,15 +233,19 @@ fun MapScreen(
                             val warningPolygon = Polygon(mapView).apply {
                                 points = pts
                                 title = "${zone.ident} - ${zone.name}"
-                                snippet = "DJI ${zone.zoneName} (${zone.ringRadiusMeters}m runway buffer + 15km approach bow-tie)"
+                                snippet = if (zone.zoneType == "HIGH_RISK_BOWTIE" || zone.level == 3) {
+                                    "High Risk Zone (Runway approach/departure corridor)"
+                                } else {
+                                    "Runway Buffer (3km proximity radius)"
+                                }
 
-                                if (zone.level == 3) {
-                                    // Enhanced Warning (Orange #EE8815)
-                                    fillPaint.color = AndroidColor.argb(35, 238, 136, 21)
-                                    outlinePaint.color = AndroidColor.argb(220, 238, 136, 21)
+                                if (zone.zoneType == "HIGH_RISK_BOWTIE" || zone.level == 3) {
+                                    // High Risk Zone (Orange #EE8815)
+                                    fillPaint.color = AndroidColor.argb(40, 238, 136, 21)
+                                    outlinePaint.color = AndroidColor.argb(230, 238, 136, 21)
                                     outlinePaint.strokeWidth = 2.0f
                                 } else {
-                                    // Warning (Yellow #FFCC00)
+                                    // Runway Buffer 3km (Yellow #FFCC00)
                                     fillPaint.color = AndroidColor.argb(25, 255, 204, 0)
                                     outlinePaint.color = AndroidColor.argb(200, 255, 204, 0)
                                     outlinePaint.strokeWidth = 1.5f
@@ -564,7 +568,7 @@ fun MapScreen(
                     )
 
                     AirspaceLayerToggleRow(
-                        name = "Airport Warning Zones (DJI)",
+                        name = "Airport Warning / High Risk",
                         color = Color(0xFFEE8815),
                         enabled = showAirportWarningZones,
                         onToggle = { showAirportWarningZones = it }
@@ -788,8 +792,9 @@ fun MapScreen(
                             }
 
                             items(inspect.warningZones) { wZone ->
-                                val badgeColor = if (wZone.level == 3) Color(0xFFEE8815) else Color(0xFFFFCC00)
-                                val badgeText = if (wZone.level == 3) "DJI ENHANCED WARNING" else "DJI WARNING"
+                                val isHighRisk = wZone.zoneType == "HIGH_RISK_BOWTIE" || wZone.level == 3
+                                val badgeColor = if (isHighRisk) Color(0xFFEE8815) else Color(0xFFFFCC00)
+                                val badgeText = if (isHighRisk) "HIGH RISK ZONE" else "RUNWAY BUFFER (3KM)"
 
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
@@ -829,11 +834,15 @@ fun MapScreen(
                                                 }
                                             }
                                             Text(
-                                                text = "${wZone.zoneName} • ${wZone.ringRadiusMeters}m runway buffer + 15km approach corridor",
+                                                text = if (isHighRisk) {
+                                                    "Runway approach/departure corridor • 7.5km extent"
+                                                } else {
+                                                    "Airport runway centerline buffer • 3km radius"
+                                                },
                                                 style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 8.5.sp)
                                             )
                                             Text(
-                                                text = "Advisory: Manufacturer warning zone; monitor local traffic",
+                                                text = "Advisory: Airport proximity warning zone, monitor local traffic.",
                                                 style = MaterialTheme.typography.bodySmall.copy(color = badgeColor, fontSize = 8.sp, fontWeight = FontWeight.Medium)
                                             )
                                         }
