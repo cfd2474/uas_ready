@@ -36,10 +36,14 @@ Set-Location $ProjectRoot
 $VersionFile = Join-Path $ProjectRoot "version.properties"
 $CurrentDir = Join-Path $ProjectRoot "releases\current"
 $ArchiveDir = Join-Path $ProjectRoot "releases\archive"
+$BundleDir = Join-Path $ProjectRoot "bundle"
+$BundleArchiveDir = Join-Path $ProjectRoot "bundle\archive"
 
 # Ensure directories exist
 if (-not (Test-Path $CurrentDir)) { New-Item -ItemType Directory -Path $CurrentDir -Force | Out-Null }
 if (-not (Test-Path $ArchiveDir)) { New-Item -ItemType Directory -Path $ArchiveDir -Force | Out-Null }
+if (-not (Test-Path $BundleDir)) { New-Item -ItemType Directory -Path $BundleDir -Force | Out-Null }
+if (-not (Test-Path $BundleArchiveDir)) { New-Item -ItemType Directory -Path $BundleArchiveDir -Force | Out-Null }
 
 # Read current version
 $code = 1
@@ -109,9 +113,23 @@ foreach ($apk in $existingCurrentApks) {
     Move-Item -Path $apk.FullName -Destination $targetArchive -Force
 }
 
-# Build signed release APK
-Write-Host "`nBuilding Signed Release APK with Gradle..." -ForegroundColor Cyan
-& .\gradlew.bat assembleRelease
+# Move existing AABs in bundle/ to bundle/archive/
+$existingBundles = Get-ChildItem -Path $BundleDir -Filter "*.aab"
+foreach ($bundle in $existingBundles) {
+    $targetBundleArchive = Join-Path $BundleArchiveDir $bundle.Name
+    if (Test-Path $targetBundleArchive) {
+        $timestamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
+        $baseName = [System.IO.Path]::GetFileNameWithoutExtension($bundle.Name)
+        $ext = [System.IO.Path]::GetExtension($bundle.Name)
+        $targetBundleArchive = Join-Path $BundleArchiveDir "${baseName}_${timestamp}${ext}"
+    }
+    Write-Host "Archiving previous bundle: $($bundle.Name) -> bundle\archive\" -ForegroundColor DarkYellow
+    Move-Item -Path $bundle.FullName -Destination $targetBundleArchive -Force
+}
+
+# Build signed release APK and App Bundle
+Write-Host "`nBuilding Signed Release APK and Bundle with Gradle..." -ForegroundColor Cyan
+& .\gradlew.bat bundleRelease assembleRelease
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Gradle build failed with exit code $LASTEXITCODE"
@@ -124,13 +142,25 @@ if (-not (Test-Path $builtApk)) {
     exit 1
 }
 
+$builtBundle = Join-Path $ProjectRoot "app\build\outputs\bundle\release\app-release.aab"
+if (-not (Test-Path $builtBundle)) {
+    Write-Error "Could not find built release bundle at $builtBundle"
+    exit 1
+}
+
 # Copy to current releases folder
 $targetApkName = "UASReady-v$newName.apk"
 $targetApkPath = Join-Path $CurrentDir $targetApkName
 Copy-Item -Path $builtApk -Destination $targetApkPath -Force
 
+# Copy to bundle folder
+$targetBundleName = "UASReady-v$newName.aab"
+$targetBundlePath = Join-Path $BundleDir $targetBundleName
+Copy-Item -Path $builtBundle -Destination $targetBundlePath -Force
+
 Write-Host "`nSigned Release Created Successfully!" -ForegroundColor Green
-Write-Host "Current Release: $targetApkPath" -ForegroundColor Green
+Write-Host "Current APK:    $targetApkPath" -ForegroundColor Green
+Write-Host "Current Bundle: $targetBundlePath" -ForegroundColor Green
 
 # Git commit and push if requested
 if ($GitPush) {

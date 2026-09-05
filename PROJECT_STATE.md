@@ -37,9 +37,11 @@
 - **Automated Verification**:
   - Added unit tests `testAirportWarningZonesDatabaseQueryCoronaOntario` and `testAirportWarningZonesSanFrancisco` in `DataLayerTest.kt`.
   - Verified 100% of unit tests pass green (`./gradlew testDebugUnitTest`).
-- **Release Artifacts**:
+- **Release Artifacts & Archiving Compliance**:
   - Bumped version in `version.properties` to `VERSION_CODE=53`, `VERSION_NAME=1.3.45`.
   - Compiled signed release Android App Bundle `bundle/UASReady-v1.3.45.aab` and signed release APK `releases/current/UASReady-v1.3.45.apk`.
+  - Enforced release archiving rules: moved historic `v1.3.43` and `v1.3.44` APKs from `releases/current/` to `releases/archive/` (leaving only `v1.3.45` as current), and moved historic AABs to `bundle/archive/`.
+  - Updated `scripts/bump_and_release.ps1` to automatically build both `.apk` and `.aab` bundles and archive prior versions on future releases.
 
 ### 2. 30 NM Airport Overlay & CTAF Comms Frequency Markers (v1.3.44, Build 52)
 - **30 NM Radius Spatial Airport Query**:
