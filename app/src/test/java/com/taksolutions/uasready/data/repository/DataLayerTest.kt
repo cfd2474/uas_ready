@@ -286,7 +286,7 @@ class DataLayerTest {
             val maxLon = coronaLon + radiusDeg
 
             val query = """
-                SELECT ident, name, level, ring_m, color, lat, lon, geometry
+                SELECT ident, name, level, zone_type, zone_name, ring_m, color, lat, lon, geometry
                 FROM airport_warning_zones
                 WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
             """.trimIndent()
@@ -304,6 +304,8 @@ class DataLayerTest {
                 val ident = rs.getString("ident")
                 val name = rs.getString("name")
                 val level = rs.getInt("level")
+                val zoneType = rs.getString("zone_type")
+                val zoneName = rs.getString("zone_name")
                 val ringM = rs.getInt("ring_m")
                 val color = rs.getString("color")
                 val cLat = rs.getDouble("lat")
@@ -318,7 +320,8 @@ class DataLayerTest {
                         ident = ident,
                         name = name,
                         level = level,
-                        zoneName = if (level == 3) "Enhanced Warning" else "Warning",
+                        zoneType = zoneType,
+                        zoneName = zoneName,
                         ringRadiusMeters = ringM,
                         colorHex = color,
                         centerLat = cLat,
@@ -331,8 +334,8 @@ class DataLayerTest {
             assertTrue("Should find airport warning zones near Corona/Ontario", zones.isNotEmpty())
             val ontZones = zones.filter { it.ident == "KONT" }
             assertTrue("Should include Ontario International (KONT) warning zones", ontZones.isNotEmpty())
-            assertTrue("KONT should have Level 3 Enhanced Warning", ontZones.any { it.level == 3 && it.ringRadiusMeters == 4000 })
-            assertTrue("KONT should have Level 0 Warning", ontZones.any { it.level == 0 && it.ringRadiusMeters == 6000 })
+            assertTrue("KONT should have High Risk Zone bowtie (50% length)", ontZones.any { it.zoneType == "HIGH_RISK_BOWTIE" && it.zoneName == "High Risk Zone" && it.level == 3 })
+            assertTrue("KONT should have separate 3km Runway Buffer", ontZones.any { it.zoneType == "RUNWAY_BUFFER_3KM" && it.ringRadiusMeters == 3000 })
         } finally {
             conn.close()
         }

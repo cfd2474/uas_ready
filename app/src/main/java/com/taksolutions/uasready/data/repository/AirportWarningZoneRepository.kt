@@ -89,7 +89,7 @@ class LiveAirportWarningZoneRepository(
         val maxLon = (lon + radiusDeg).toString()
 
         val query = """
-            SELECT ident, name, level, ring_m, color, lat, lon, geometry
+            SELECT ident, name, level, zone_type, zone_name, ring_m, color, lat, lon, geometry
             FROM airport_warning_zones
             WHERE min_lat <= ? AND max_lat >= ? AND min_lon <= ? AND max_lon >= ?
         """.trimIndent()
@@ -99,6 +99,8 @@ class LiveAirportWarningZoneRepository(
                 val identIdx = cursor.getColumnIndexOrThrow("ident")
                 val nameIdx = cursor.getColumnIndexOrThrow("name")
                 val levelIdx = cursor.getColumnIndexOrThrow("level")
+                val zoneTypeIdx = cursor.getColumnIndexOrThrow("zone_type")
+                val zoneNameIdx = cursor.getColumnIndexOrThrow("zone_name")
                 val ringIdx = cursor.getColumnIndexOrThrow("ring_m")
                 val colorIdx = cursor.getColumnIndexOrThrow("color")
                 val latIdx = cursor.getColumnIndexOrThrow("lat")
@@ -109,6 +111,8 @@ class LiveAirportWarningZoneRepository(
                     val ident = cursor.getString(identIdx)
                     val name = cursor.getString(nameIdx)
                     val level = cursor.getInt(levelIdx)
+                    val zoneType = cursor.getString(zoneTypeIdx)
+                    val zoneName = cursor.getString(zoneNameIdx)
                     val ringM = cursor.getInt(ringIdx)
                     val color = cursor.getString(colorIdx)
                     val cLat = cursor.getDouble(latIdx)
@@ -122,7 +126,8 @@ class LiveAirportWarningZoneRepository(
                                 ident = ident,
                                 name = name,
                                 level = level,
-                                zoneName = if (level == 3) "Enhanced Warning" else "Warning",
+                                zoneType = zoneType,
+                                zoneName = zoneName,
                                 ringRadiusMeters = ringM,
                                 colorHex = color,
                                 centerLat = cLat,
