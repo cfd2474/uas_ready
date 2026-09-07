@@ -340,7 +340,7 @@ fun ObtainingStatusPlaceholder(
                         )
                     )
                     Text(
-                        text = if (isPilotPending) "Select pilot status in dialog to start evaluation" else "Querying openAIP, NOAA Space Weather & local METAR...",
+                        text = if (isPilotPending) "Select pilot status in dialog to start evaluation" else "Querying FAA Airspace, NOAA Space Weather & Weather...",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = TextSecondary,
                             fontSize = 11.sp
