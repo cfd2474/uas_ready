@@ -6,7 +6,7 @@
 - **Target Platform**: Android 8.0+ (API 26+)
 - **Architecture**: Jetpack Compose + Clean Architecture + MVI/MVVM StateFlow + Deterministic Aviation Safety Engine
 - **Target Device Profile**: DJI RC Pro Enterprise (5.5" IPS 1920x1080, fixed landscape canvas 640 × 360 dp)
-- **Current Version**: `v1.3.48` (Build 56)
+- **Current Version**: `v1.3.49` (Build 57)
 - **Key Store**: `D:\Code\ANDROID\APK Keys\AppSign.jks` (Key: `key0`)
 - **Remote Repo**: `https://github.com/cfd2474/UAS_Ready.git` (Branch: `dev`)
 
@@ -19,7 +19,24 @@
 
 ## What Has Been Completed
 
-### 1. Airspace Floor Filtering (< 500' Lower Limit Only) (v1.3.48, Build 56)
+### 1. Google Play Store Policy Compliance: Government Sources & Non-Affiliation Disclaimers (v1.3.49, Build 57)
+- **Policy Remediation & Store Listing (`STORE_LISTING.md`)**:
+  - Authored compliant Google Play Store Listing documentation in `STORE_LISTING.md` including Short Description (79 characters) and Full Description.
+  - Added prominent **IMPORTANT DISCLAIMER** at the very beginning of the store listing stating that UASReady is an independent application developed by Taktical Application and Knowledge Solutions, LLC, and does not represent, and is not affiliated with or endorsed by the FAA, NOAA, or any government entity.
+  - Added dedicated **SOURCES OF GOVERNMENT INFORMATION** section with official functional `.gov` URLs for FAA Aeronautical Data, FAA Open GIS ArcGIS Services, FAA 14 CFR Part 107 Small UAS Regulations, NOAA Space Weather Prediction Center (SWPC), and National Weather Service (NWS).
+- **In-App Attributions & Disclaimer UI (`SettingsScreen.kt`)**:
+  - Renamed category to **"Government Sources & Legal Notice"** with `Icons.Default.Gavel`.
+  - Added high-contrast, amber-bordered **DISCLAIMER OF NON-OFFICIAL STATUS** card detailing independent status and non-affiliation with FAA/NOAA.
+  - Implemented interactive `GovernmentSourceItem` cards providing exact `.gov` links with one-tap web browser launching via Compose `LocalUriHandler.openUri()`.
+  - Removed obsolete references to openAIP across `HomeScreen.kt` status indicator, `MainActivity.kt` navigation drawer, and `SettingsScreen.kt`.
+- **Automated Verification**:
+  - Executed `./gradlew testDebugUnitTest` verifying 100% of tests pass green.
+- **Release Archiving Compliance**:
+  - Release engine (`bump_and_release.ps1`) generated signed release APK and AAB for `v1.3.49` (Build 57).
+  - Archived `v1.3.48` artifacts to `releases/archive/` and `bundle/archive/`.
+  - Current release folders strictly hold `releases/current/UASReady-v1.3.49.apk` and `bundle/UASReady-v1.3.49.aab`.
+
+### 2. Airspace Floor Filtering (< 500' Lower Limit Only) (v1.3.48, Build 56)
 - **Airspace Floor Filtering Implementation**:
   - Filtered both FAA Class Airspace (B, C, D, E) and Special Use Airspace (SUA: Prohibited, Restricted, MOA, Alert, Warning) to strictly exclude any airspace with a floor/starting altitude of 500 ft or greater (`lowerVal >= 500.0 || lowerCode == "FL"`).
   - Only airspace sectors touching the surface or starting below 500' AGL/MSL are rendered on the map and evaluated for airspace authorization.

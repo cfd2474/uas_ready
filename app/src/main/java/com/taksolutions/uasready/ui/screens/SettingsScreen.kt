@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,7 +29,7 @@ enum class SettingsCategory(val title: String, val subtitle: String, val icon: I
     AIRCRAFT_FLEET("Aircraft Fleet Management", "Search models, filter manufacturers & build custom", Icons.Default.FlightTakeoff),
     THEME_APPEARANCE("Theme & Appearance", "Select Light, Dark, or System Auto mode", Icons.Default.Palette),
     UNIT_SYSTEM("Unit System & Telemetry", "Toggle US Aviation vs Metric units", Icons.Default.Straighten),
-    DATA_SOURCES("Authoritative Telemetry Sources", "Review openAIP, NOAA & weather feeds", Icons.Default.Sensors)
+    DATA_SOURCES("Government Sources & Legal Notice", "Review official .gov data sources & non-affiliation disclaimer", Icons.Default.Gavel)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,7 +106,7 @@ fun SettingsScreen(
                             SettingsCategory.AIRCRAFT_FLEET -> uiState.selectedAircraft.displayName
                             SettingsCategory.THEME_APPEARANCE -> uiState.themeMode.displayName
                             SettingsCategory.UNIT_SYSTEM -> if (isMetric) "Metric" else "US Aviation"
-                            SettingsCategory.DATA_SOURCES -> "openAIP API"
+                            SettingsCategory.DATA_SOURCES -> "Official Sources & Notice"
                         }
 
                         Card(
@@ -400,17 +401,134 @@ fun SettingsScreen(
                         }
 
                         SettingsCategory.DATA_SOURCES -> {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
-                                border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationAccent)),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("• Weather & Forecast: Open-Meteo & NOAA National Weather Service", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                                    Text("• Space Weather & GNSS: NOAA SWPC Planetary K-Index Feed", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                                    Text("• Terrain Elevation DEM: Open-Meteo 90m SRTM / Copernicus Digital Elevation", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                                    Text("• Solar Ephemeris: NOAA Astronomical Solar Geometry Algorithm", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
-                                    Text("• Airspace: openAIP Worldwide Aeronautical Database & API", style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                            val uriHandler = LocalUriHandler.current
+
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                // 1. Legal Disclaimer of Non-Official Status
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SafetyCaution)),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                Icons.Default.Warning,
+                                                contentDescription = null,
+                                                tint = SafetyCaution,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "DISCLAIMER OF NON-OFFICIAL STATUS",
+                                                style = MaterialTheme.typography.titleSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 0.5.sp,
+                                                    color = SafetyCaution,
+                                                    fontSize = 12.sp
+                                                )
+                                            )
+                                        }
+                                        Text(
+                                            text = "UASReady is developed and maintained independently by Taktical Application and Knowledge Solutions, LLC. UASReady does NOT represent, and is NOT affiliated with, endorsed by, authorized by, or sponsored by the Federal Aviation Administration (FAA), the National Oceanic and Atmospheric Administration (NOAA), or any other United States government agency. This application is an independent commercial flight-planning aid and does NOT provide or constitute an official government service.",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = TextPrimary,
+                                                fontSize = 11.sp,
+                                                lineHeight = 16.sp
+                                            )
+                                        )
+                                    }
+                                }
+
+                                // 2. Official Government Data Sources (.gov)
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationAccent)),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = "OFFICIAL GOVERNMENT DATA SOURCES",
+                                            style = MaterialTheme.typography.titleSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = AviationAccent,
+                                                fontSize = 12.sp,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        )
+                                        Text(
+                                            text = "UASReady references publicly accessible open data feeds from official United States government agencies:",
+                                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 11.sp)
+                                        )
+
+                                        HorizontalDivider(color = AviationDarkBorder)
+
+                                        // Source 1: FAA Aeronautical Data
+                                        GovernmentSourceItem(
+                                            title = "FAA Aeronautical Information Services",
+                                            subtitle = "Official FAA 28-day aeronautical chart & airspace data",
+                                            url = "https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/",
+                                            onOpen = { uriHandler.openUri("https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/") }
+                                        )
+
+                                        // Source 2: FAA Open GIS Feeds
+                                        GovernmentSourceItem(
+                                            title = "FAA Open Data GIS (Class Airspace & SUA)",
+                                            subtitle = "Live ArcGIS feeds for Class B/C/D/E airspace and SUA geometries",
+                                            url = "https://ais-faa.opendata.arcgis.com/",
+                                            onOpen = { uriHandler.openUri("https://ais-faa.opendata.arcgis.com/") }
+                                        )
+
+                                        // Source 3: FAA Part 107 Regulations
+                                        GovernmentSourceItem(
+                                            title = "FAA 14 CFR Part 107 Small UAS Regulations",
+                                            subtitle = "Commercial drone operating requirements and rules",
+                                            url = "https://www.faa.gov/uas/commercial_operators",
+                                            onOpen = { uriHandler.openUri("https://www.faa.gov/uas/commercial_operators") }
+                                        )
+
+                                        // Source 4: NOAA SWPC
+                                        GovernmentSourceItem(
+                                            title = "NOAA Space Weather Prediction Center (SWPC)",
+                                            subtitle = "Planetary Kp-index and geomagnetic storm monitoring",
+                                            url = "https://www.swpc.noaa.gov/",
+                                            onOpen = { uriHandler.openUri("https://www.swpc.noaa.gov/") }
+                                        )
+
+                                        // Source 5: NWS
+                                        GovernmentSourceItem(
+                                            title = "National Weather Service (NWS / NOAA)",
+                                            subtitle = "Surface observation data and aviation weather forecasts",
+                                            url = "https://www.weather.gov/",
+                                            onOpen = { uriHandler.openUri("https://www.weather.gov/") }
+                                        )
+                                    }
+                                }
+
+                                // 3. Third-Party / Open Data Providers
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = AviationDarkCard),
+                                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(AviationDarkBorder)),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(
+                                            text = "ADDITIONAL OPEN DATA PROVIDERS",
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextSecondary,
+                                                fontSize = 11.sp
+                                            )
+                                        )
+                                        Text(
+                                            text = "• Weather & Elevation DEM: Open-Meteo SRTM 90m & Copernicus DEM (https://open-meteo.com/)",
+                                            style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 10.sp)
+                                        )
+                                        Text(
+                                            text = "• Airfield Navigation & Runway Geometries: FAA 5010 Public Data via OurAirports open database",
+                                            style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 10.sp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -432,5 +550,57 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GovernmentSourceItem(
+    title: String,
+    subtitle: String,
+    url: String,
+    onOpen: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(AviationDarkSurface)
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    fontSize = 11.sp
+                )
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = TextSecondary,
+                    fontSize = 9.5.sp
+                )
+            )
+            Text(
+                text = url,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = AviationCyan,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            Icons.Default.OpenInNew,
+            contentDescription = "Open $title",
+            tint = AviationAccent,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }

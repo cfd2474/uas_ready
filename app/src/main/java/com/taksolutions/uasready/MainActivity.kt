@@ -324,7 +324,7 @@ class MainActivity : ComponentActivity() {
                                 val navItems = listOf(
                                     Triple(Screen.Home.route, "Flight Readiness", Icons.Default.Dashboard),
                                     Triple(Screen.Assessment.route, "Detailed Report", Icons.Default.Assessment),
-                                    Triple(Screen.Map.route, "Aviation Map (openAIP)", Icons.Default.Map),
+                                    Triple(Screen.Map.route, "Tactical Aviation Map", Icons.Default.Map),
                                     Triple(Screen.Reference.route, "Checklists & Emergency", Icons.AutoMirrored.Filled.MenuBook),
                                     Triple(Screen.Settings.route, "Settings & Fleet", Icons.Default.Settings)
                                 )
