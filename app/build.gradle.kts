@@ -17,6 +17,29 @@ if (versionPropsFile.exists()) {
 val appVersionCode = versionProps.getProperty("VERSION_CODE", "1").toInt()
 val appVersionName = versionProps.getProperty("VERSION_NAME", "1.0.0")
 
+// Release signing credentials: local.properties first, then environment variables.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) FileInputStream(f).use { load(it) }
+}
+fun signingProp(key: String): String? =
+    localProps.getProperty(key)?.takeIf { it.isNotBlank() } ?: System.getenv(key)?.takeIf { it.isNotBlank() }
+val releaseSigningConfigured = listOf(
+    "RELEASE_STORE_FILE", "RELEASE_STORE_PASSWORD", "RELEASE_KEY_ALIAS", "RELEASE_KEY_PASSWORD"
+).all { signingProp(it) != null }
+// Fail fast instead of silently producing an unsigned APK/AAB that Play would reject.
+gradle.taskGraph.whenReady {
+    val packagingRelease = allTasks.any { t ->
+        t.project == project && Regex("^(assemble|bundle|package)Release$").matches(t.name)
+    }
+    if (packagingRelease && !releaseSigningConfigured) {
+        throw GradleException(
+            "Release signing not configured. Set RELEASE_STORE_FILE, RELEASE_STORE_PASSWORD, " +
+                "RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD in local.properties or as environment variables."
+        )
+    }
+}
+
 android {
     namespace = "com.taksolutions.uasready"
     compileSdk = 36
@@ -35,18 +58,24 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("D:/Code/ANDROID/APK Keys/AppSign.jks")
-            storePassword = "***REMOVED_SECRET***"
-            keyAlias = "key0"
-            keyPassword = "***REMOVED_SECRET***"
+        // Release signing = Google Play UPLOAD key. Credentials live in the
+        // gitignored local.properties (or environment variables), never here.
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(signingProp("RELEASE_STORE_FILE")!!)
+                storePassword = signingProp("RELEASE_STORE_PASSWORD")
+                keyAlias = signingProp("RELEASE_KEY_ALIAS")
+                keyPassword = signingProp("RELEASE_KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

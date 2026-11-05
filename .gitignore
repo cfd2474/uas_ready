@@ -2,9 +2,10 @@
 *.apk
 *.aab
 
-# Don't ignore release APKs in the releases folder or bundles in bundle folder!
-!releases/**/*.apk
-!bundle/**/*.aab
+# Release artifacts are built locally by scripts/bump_and_release.ps1 and uploaded
+# to Google Play Console. They are NOT tracked in git (they bloated history to >1 GB).
+releases/
+bundle/
 
 # Gradle files
 .gradle/

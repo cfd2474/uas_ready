@@ -13,7 +13,24 @@
 ---
 
 ## What Is In Progress
-*No active chunk in progress. Awaiting user review/approval.*
+
+### Chunk 1 — Secrets & Repo Hygiene (owner approved 2026-11-04)
+1. Move release signing credentials out of `app/build.gradle.kts` into gitignored `local.properties` (env-var fallback); debug builds must not need them.
+2. Stop tracking release binaries: untrack `releases/**/*.apk` and `bundle/**/*.aab`, update `.gitignore`; release script keeps copying artifacts locally.
+3. Back up the full repository (mirror clone outside the working tree) before any rewrite.
+4. Rewrite history with `git filter-repo`: strip all `*.apk`/`*.aab` blobs and redact the leaked keystore password from every commit.
+5. Verify: debug build + unit tests, repo size, no password string reachable from any ref.
+6. Update this file (decisions, operational notes).
+7. STOP — owner approval required before force-pushing `dev`, `main`, and tags to GitHub. Owner must rotate the keystore password (it remains retrievable from GitHub PR refs regardless of the rewrite).
+
+### Queued — Chunk 2 — Safety & Correctness (not started; needs approval)
+- Airspace repo: network/HTTP failure must yield "data unavailable", never Class G / no-auth.
+- TFR feed not implemented (`activeTfrs = emptyList()`) despite README claim.
+- `fetchLiveData()` race (no job cancellation); parallelize independent fetches; move SQLite/CTAF lookups off main thread.
+- Fix date-dependent `testCoronaLocal1707IsDaylight` (pin date + America/Los_Angeles); isolate live-network tests.
+
+### Queued — Chunk 3 — Map Performance (not started; needs approval)
+- `MapScreen` `AndroidView.update` rebuilds all overlays/bitmaps on every recomposition; diff overlays, cache marker bitmaps.
 
 ---
 
