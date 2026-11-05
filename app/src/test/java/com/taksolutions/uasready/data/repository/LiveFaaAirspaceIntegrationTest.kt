@@ -1,5 +1,9 @@
 package com.taksolutions.uasready.data.repository
 
+import com.taksolutions.uasready.domain.engine.AirspaceClassifier
+import com.taksolutions.uasready.domain.model.AirspaceClass
+import com.taksolutions.uasready.domain.model.AltitudeReference
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -12,6 +16,8 @@ import org.junit.Test
  */
 class LiveFaaAirspaceIntegrationTest {
 
+    private val classifier = AirspaceClassifier()
+
     @Before
     fun requireLiveTestsFlag() {
         assumeTrue(
@@ -21,40 +27,27 @@ class LiveFaaAirspaceIntegrationTest {
     }
 
     @Test
-    fun testLiveAirspaceRepositorySanFrancisco() = kotlinx.coroutines.runBlocking {
-        val repo = LiveAirspaceRepository()
-        val sfLat = 37.7749
-        val sfLon = -122.4194
-        val result = repo.getAirspaceInfo(sfLat, sfLon)
+    fun testLiveAirspaceRepositorySanFrancisco() = runBlocking {
+        val snapshot = LiveAirspaceRepository().getAirspaceSnapshot(37.7749, -122.4194).getOrThrow()
 
-        assertTrue(result.isSuccess)
-        val airspace = result.getOrNull()
-        assertNotNull(airspace)
-        assertTrue("San Francisco should have controlled airspace polygons in 30 NM radius", airspace!!.zones.isNotEmpty())
-        assertTrue("San Francisco airspace should include Class B, C, D or E zones", airspace.zones.any { it.name.contains("CLASS", ignoreCase = true) || it.name.contains("SAN FRANCISCO", ignoreCase = true) })
-        // Verify non-surface Class E5/E6 transition areas are completely excluded
-        assertFalse("Class E5 (700ft/1200ft) transition areas should be excluded", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
-        assertFalse("Class E6 enroute areas should be excluded", airspace.zones.any { it.name.contains("CLASS E6", ignoreCase = true) })
-        // Verify 500' floor filter: all zones must have starting altitude < 500' (surface to 500')
-        assertTrue("All SF airspace zones must have floor < 500 ft", airspace.zones.all { it.floorFt < 500.0 })
-        assertFalse("No SF airspace zones should have floor >= 500 ft", airspace.zones.any { it.floorFt >= 500.0 })
+        assertTrue("San Francisco should have controlled airspace candidates in 30 NM", snapshot.zones.isNotEmpty())
+        assertFalse("Class E5 transition areas are never candidates", snapshot.zones.any { it.name.contains("CLASS E5", true) })
+        assertFalse("Class E6 enroute areas are never candidates", snapshot.zones.any { it.name.contains("CLASS E6", true) })
+        assertTrue("AGL candidates all have floors below 400 ft",
+            snapshot.zones.filter { it.floorReference == AltitudeReference.AGL }.all { it.floorFt < 400.0 })
+
+        // Downtown SF (ground ~50 ft) sits under the SFO Class B
+        val info = classifier.classify(snapshot, 37.7749, -122.4194, groundElevationFt = 50.0, plannedAltitudeAglFt = 400.0)
+        assertTrue("Map zones are those reachable from a 400 ft flight at this ground elevation",
+            info.zones.all { classifier.floorAglFt(it, 50.0) < 400.0 })
     }
 
     @Test
-    fun testLiveAirspaceRepositoryOntarioCorona() = kotlinx.coroutines.runBlocking {
-        val repo = LiveAirspaceRepository()
-        val ontLat = 34.0560
-        val ontLon = -117.6012
-        val result = repo.getAirspaceInfo(ontLat, ontLon)
+    fun testLiveAirspaceRepositoryOntarioCorona() = runBlocking {
+        val snapshot = LiveAirspaceRepository().getAirspaceSnapshot(34.0560, -117.6012).getOrThrow()
+        val info = classifier.classify(snapshot, 34.0560, -117.6012, groundElevationFt = 944.0, plannedAltitudeAglFt = 400.0)
 
-        assertTrue(result.isSuccess)
-        val airspace = result.getOrNull()
-        assertNotNull(airspace)
-        assertTrue("Ontario/Corona should have controlled airspace polygons", airspace!!.zones.isNotEmpty())
-        assertTrue("Launch at KONT should require controlled airspace authorization", airspace.controlledAirspaceAuthorizationRequired)
-        assertFalse("Class E5 transition areas should be excluded in Ontario/Corona", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
-        // Verify 500' floor filter: all zones must have starting altitude < 500' (surface to 500')
-        assertTrue("All Ontario airspace zones must have floor < 500 ft", airspace.zones.all { it.floorFt < 500.0 })
-        assertFalse("No Ontario airspace zones should have floor >= 500 ft", airspace.zones.any { it.floorFt >= 500.0 })
+        assertEquals("KONT surface area is Class C", AirspaceClass.CLASS_C, info.primaryClass)
+        assertTrue("Launch at KONT requires authorization", info.controlledAirspaceAuthorizationRequired)
     }
 }

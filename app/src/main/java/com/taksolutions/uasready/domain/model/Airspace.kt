@@ -22,6 +22,20 @@ enum class AirspaceZoneType {
     SPECIAL_USE            // Orange: Military Operations Areas (MOA), Alert areas
 }
 
+/** What an airspace floor value is measured from. Flight levels are converted to MSL feet. */
+@Serializable
+enum class AltitudeReference {
+    AGL, // above ground level (FAA LOWER_CODE = SFC)
+    MSL  // above mean sea level (FAA LOWER_CODE = MSL, or LOWER_UOM = FL converted ×100)
+}
+
+/** Special use airspace types that restrict flight at the launch point. */
+@Serializable
+enum class SpecialUseType {
+    PROHIBITED, // FAA TYPE_CODE P — flight prohibited (14 CFR 73.83)
+    RESTRICTED  // FAA TYPE_CODE R — flight requires controlling/using agency permission when active (14 CFR 73.13)
+}
+
 @Serializable
 data class AirspaceZone(
     val id: String,
@@ -30,10 +44,32 @@ data class AirspaceZone(
     val centerLat: Double,
     val centerLon: Double,
     val radiusMeters: Double,
+    /** Floor in feet, measured from [floorReference]. */
     val floorFt: Double = 0.0,
     val ceilingFt: Double? = null,
     val description: String = "",
-    val polygonCoordinates: List<Pair<Double, Double>> = emptyList()
+    val polygonCoordinates: List<Pair<Double, Double>> = emptyList(),
+    val floorReference: AltitudeReference = AltitudeReference.AGL,
+    /** Controlled airspace class for FAA Class_Airspace zones; null for special use zones. */
+    val airspaceClass: AirspaceClass? = null,
+    /** Set for Prohibited/Restricted special use zones; null for MOA/Alert/Warning and class zones. */
+    val specialUseType: SpecialUseType? = null
+)
+
+/**
+ * Raw airspace candidates around a point, as fetched from a source, before deciding what applies
+ * at the launch point. Classification needs ground elevation and planned altitude, which the
+ * source does not know — see AirspaceClassifier.
+ */
+@Serializable
+data class AirspaceSnapshot(
+    val centerLat: Double,
+    val centerLon: Double,
+    val zones: List<AirspaceZone>,
+    val fetchedEpochMs: Long,
+    val sourceName: String,
+    /** True when served from the on-device cache because the live source was unavailable. */
+    val isCached: Boolean = false
 )
 
 @Serializable
@@ -79,6 +115,12 @@ data class AirspaceInfo(
     val notams: List<NoticeToAirmen> = emptyList(),
     val specialUseAirspaceActive: Boolean = false,
     val specialUseName: String? = null,
+    /** Prohibited/Restricted area containing the launch point, if any. */
+    val specialUseType: SpecialUseType? = null,
+    /** Highest controlled class (B/C/D/E-surface) containing the launch point, independent of special use. */
+    val controlledClass: AirspaceClass? = null,
+    /** Ground elevation used to evaluate MSL floors; null = unknown (MSL floors treated as possibly low). */
+    val groundElevationFt: Double? = null,
     val nearestAirportCode: String? = null,
     val nearestAirportDistanceNm: Double? = null,
     val timestampEpochMs: Long = System.currentTimeMillis(),

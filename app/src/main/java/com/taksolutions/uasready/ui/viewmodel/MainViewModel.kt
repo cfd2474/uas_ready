@@ -52,7 +52,12 @@ class MainViewModel @JvmOverloads constructor(
     private val weatherRepo: WeatherRepository = LiveWeatherRepository(),
     private val spaceWeatherRepo: SpaceWeatherRepository = LiveSpaceWeatherRepository(),
     private val solarRepo: SolarRepository = AstronomicalSolarRepository(),
-    private val airspaceRepo: AirspaceRepository = LiveAirspaceRepository(),
+    private val airspaceRepo: AirspaceRepository = CachingAirspaceRepository(
+        delegate = LiveAirspaceRepository(),
+        store = FileAirspaceSnapshotStore(java.io.File(application.filesDir, "airspace_cache.json"))
+    ),
+    private val airspaceClassifier: com.taksolutions.uasready.domain.engine.AirspaceClassifier =
+        com.taksolutions.uasready.domain.engine.AirspaceClassifier(),
     private val terrainRepo: TerrainRepository = LiveTerrainRepository(),
     private val aircraftRepo: AircraftRepository = PersistentAircraftRepository(application),
     private val pilotRepo: PilotRepository = InMemoryPilotRepository(),
@@ -90,7 +95,7 @@ class MainViewModel @JvmOverloads constructor(
     private data class FetchedTelemetry(
         val weather: Result<Pair<WeatherObservation, WeatherForecast>>,
         val space: Result<SpaceWeather>,
-        val airspace: Result<AirspaceInfo>,
+        val airspace: Result<AirspaceSnapshot>,
         val terrain: Result<TerrainObstructionProfile>
     )
 
@@ -201,7 +206,7 @@ class MainViewModel @JvmOverloads constructor(
                 }
                 val weather = async { weatherRepo.getWeatherData(lat, lon) }
                 val space = async { spaceWeatherRepo.getSpaceWeather() }
-                val airspaceAsync = async { airspaceRepo.getAirspaceInfo(lat, lon) }
+                val airspaceAsync = async { airspaceRepo.getAirspaceSnapshot(lat, lon) }
                 val terrain = async { terrainRepo.getTerrainProfile(lat, lon) }
                 FetchedTelemetry(weather.await(), space.await(), airspaceAsync.await(), terrain.await())
             }
@@ -213,8 +218,24 @@ class MainViewModel @JvmOverloads constructor(
 
             val weatherPair = weatherResult.getOrNull()
             val spaceWeather = spaceResult.getOrNull()
-            val airspace = airspaceResult.getOrNull()
             val terrainProfile = terrainResult.getOrNull()
+            // Decide what airspace applies at the launch point. MSL floors need ground elevation
+            // (DEM from the terrain lookup); without it the classifier is conservative.
+            val airspace = airspaceResult.getOrNull()?.let { snapshot ->
+                airspaceClassifier.classify(
+                    snapshot = snapshot,
+                    latitude = lat,
+                    longitude = lon,
+                    groundElevationFt = terrainProfile?.launchElevationFt,
+                    plannedAltitudeAglFt = state.plannedAltitudeAglFt
+                )
+            }
+            if (airspace != null) {
+                Log.i(TAG, "Airspace classified: primary=${airspace.primaryClass} auth=${airspace.controlledAirspaceAuthorizationRequired} " +
+                    "specialUse=${airspace.specialUseType} zones=${airspace.zones.size} groundFt=${airspace.groundElevationFt?.toInt()} cached=${airspace.isStale}")
+            } else {
+                Log.w(TAG, "Airspace unavailable: ${airspaceResult.exceptionOrNull()?.message}")
+            }
 
             val gnss = spaceWeather?.let {
                 GnssEstimation.estimate(

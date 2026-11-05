@@ -37,12 +37,20 @@ Where official documentation and observation disagree, both are kept.
 | `LOWER_CODE` values: `MSL, SFC, STD`. `LOWER_UOM` values: `FT, FL`. Same semantics as Class Airspace. | ✅ 2026-11-04 |
 | **37 SUA features have FL floors with `LOWER_VAL` < 500** (FL180–FL310). Examples: R-3702C KY (FL220), R-4008 MD (FL250), R-4401D MS (FL180), W-147B TX (FL230). A filter on raw `LOWER_VAL < 500` treats them as low-level airspace. | ✅ 2026-11-04 |
 | Stacked areas are common: an FL-floor "C" or "B" sub-area usually has a surface "A" sub-area beneath it (for example R-3801C over R-3801A). | ✅ 2026-11-04 |
+| Points under an FL-floor restricted area with no low-level P/R beneath: R-5002G NJ 39.6741,-74.3048; R-4008 MD 37.9400,-76.3564; R-5107F NM 32.8683,-105.7970. Used as regression points in the survey. | ✅ 2026-11-04 |
+
+### How the app interprets these fields (v1.3.50+)
+
+- `LiveAirspaceRepository` keeps each zone's floor with its reference. `LOWER_UOM=FL` or `LOWER_CODE=STD` becomes MSL feet (value × 100). `MSL` stays MSL. `SFC` becomes AGL. AGL floors ≥ 400 ft are dropped at the source.
+- `AirspaceClassifier` counts a zone when floor AGL < planned altitude. An MSL floor is converted to AGL by subtracting the Open-Meteo DEM ground elevation at the launch point. If the ground elevation is unknown, MSL floors are assumed to be low (conservative) and the `AIR-ELEV-001` caution is raised.
+- Verified: the nationwide survey agrees 30/30 with FAA full-resolution point intersection (`docs/airspace-survey-2026-11-04-postfix.md`). ✅ 2026-11-04
 
 ## ArcGIS Online quota and error behaviour (both services)
 
 | Fact | Status |
 |---|---|
 | The org enforces **6000 request units per minute**. When exceeded, the service returns a JSON body `{"error":{"code":429,"message":"Unable to perform query. Too many requests.", "details":["API calls quota exceeded ... Retry after 60 sec."]}}`. | ✅ 2026-11-04 (observed while surveying) |
+| The app retries once (after 3 s) on a quota error. If that also fails, `CachingAirspaceRepository` serves the last snapshot taken within 5 NM and 28 days, marked cached (`AIR-CACHE-001` caution, "Cached:" on the Home card). Verified offline on the emulator. | ✅ 2026-11-04 |
 | Query errors in general come back as an `error` object in the JSON body. A client that only checks for HTTP 200 and then reads `features` gets an empty list and would wrongly conclude "no airspace". The app treats any `error` object as a failure (v1.3.50+). | ✅ behaviour observed. Exact HTTP status on quota errors not yet captured. |
 | **The quota is org-wide: one budget shared by every client of the FAA's ArcGIS organization worldwide, not one per client.** Evidence: each query reports `x-esri-query-request-units: 2`, while `x-esri-org-request-units-per-min` read `usage=4243;max=6000` and fell to 2223 over about 20 s of our own 2-unit calls. Other users' traffic set the usage. Consequence: UASReady lookups can be throttled at any time by traffic outside our control. | ✅ 2026-11-04 (response headers) |
 | Quota-exceeded responses observed with an `error.code` of 429 inside the JSON body. Normal responses are HTTP 200. | ✅ 2026-11-04 |

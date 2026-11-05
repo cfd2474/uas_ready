@@ -230,6 +230,50 @@ class AssessmentEngineTest {
     }
 
     @Test
+    fun testProhibitedAreaIsNoGo() {
+        val p56 = nominalAirspace.copy(
+            primaryClass = AirspaceClass.SPECIAL_USE, specialUseType = SpecialUseType.PROHIBITED,
+            specialUseName = "P-56 (Prohibited Area)", controlledClass = AirspaceClass.CLASS_B,
+            controlledAirspaceAuthorizationRequired = true
+        )
+        val result = engine.assess(contextWithAirspace(p56))
+
+        assertEquals(AssessmentStatus.NO_GO, result.overallStatus)
+        val rule = result.noGoRules.first { it.ruleId == "AIR-SUA-P01" }
+        assertTrue(rule.explanation.contains("LAANC cannot authorize"))
+        assertTrue("Underlying Class B still needs LAANC", result.cautionRules.any { it.ruleId == "AIR-CTRL-001" && it.title.contains("Class B") })
+    }
+
+    @Test
+    fun testRestrictedAreaIsCautionWithAgencyGuidanceNotLaancApproval() {
+        val restricted = nominalAirspace.copy(
+            primaryClass = AirspaceClass.SPECIAL_USE, specialUseType = SpecialUseType.RESTRICTED,
+            specialUseName = "R-2505 (Restricted Area)", controlledAirspaceAuthorizationRequired = true
+        )
+        val result = engine.assess(contextWithAirspace(restricted))
+
+        val rule = result.cautionRules.first { it.ruleId == "AIR-SUA-R01" }
+        assertTrue(rule.explanation.contains("controlling"))
+        assertFalse("No controlled-class LAANC rule when only inside a restricted area",
+            result.allRuleResults.any { it.ruleId == "AIR-CTRL-001" })
+    }
+
+    @Test
+    fun testCachedAirspaceRaisesCaution() {
+        val cached = nominalAirspace.copy(isStale = true, timestampEpochMs = System.currentTimeMillis() - 3 * 3_600_000L)
+        val result = engine.assess(contextWithAirspace(cached))
+        assertTrue(result.cautionRules.any { it.ruleId == "AIR-CACHE-001" })
+    }
+
+    @Test
+    fun testUnknownGroundElevationWithMslZonesRaisesCaution() {
+        val shelf = AirspaceZone("B", "Shelf", AirspaceZoneType.AUTHORIZATION_ZONE, 0.0, 0.0, 0.0,
+            floorFt = 6500.0, floorReference = AltitudeReference.MSL, airspaceClass = AirspaceClass.CLASS_B)
+        val result = engine.assess(contextWithAirspace(nominalAirspace.copy(zones = listOf(shelf), groundElevationFt = null)))
+        assertTrue(result.cautionRules.any { it.ruleId == "AIR-ELEV-001" })
+    }
+
+    @Test
     fun testSevereGeomagneticKpProducesNOGO() {
         val severeSpaceWeather = nominalSpaceWeather.copy(
             currentKpIndex = 7.0,

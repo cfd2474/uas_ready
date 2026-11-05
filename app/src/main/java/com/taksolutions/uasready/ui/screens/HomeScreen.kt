@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.taksolutions.uasready.domain.model.AirspaceClass
 import com.taksolutions.uasready.domain.model.AssessmentCategory
 import com.taksolutions.uasready.domain.model.AssessmentStatus
+import com.taksolutions.uasready.domain.model.SpecialUseType
 import com.taksolutions.uasready.ui.components.SquareMetricCard
 import com.taksolutions.uasready.ui.components.StatusBanner
 import com.taksolutions.uasready.ui.theme.*
@@ -163,7 +164,10 @@ fun HomeScreen(
                 AirspaceClass.CLASS_D -> "Class D"
                 AirspaceClass.CLASS_E_SURFACE -> "Class E Surface"
                 AirspaceClass.CLASS_E -> "Class E"
-                AirspaceClass.SPECIAL_USE -> "Special Use"
+                AirspaceClass.SPECIAL_USE -> when (airspaceInfo?.specialUseType) {
+                    SpecialUseType.PROHIBITED -> "Prohibited Area"
+                    else -> "Restricted Area"
+                }
                 AirspaceClass.CLASS_G -> "Class G"
                 null -> "Unavailable"
             }
@@ -175,11 +179,18 @@ fun HomeScreen(
                 else -> "TFRs unverified"
             }
 
-            val primaryAirspaceText = if (airspaceInfo == null) "Airspace Unavailable" else "$airspaceClassText • $tfrSummary"
+            val primaryAirspaceText = when {
+                airspaceInfo == null -> "Airspace Unavailable"
+                // Live FAA service was unavailable; the data shown is a dated on-device copy.
+                airspaceInfo.isStale -> "Cached: $airspaceClassText • $tfrSummary"
+                else -> "$airspaceClassText • $tfrSummary"
+            }
 
             val secondaryAirspaceText = when {
                 airspaceInfo == null -> "Live FAA data required"
                 tfrRule?.status == AssessmentStatus.NO_GO -> "Flight Restricted / Prohibited"
+                airspaceInfo.specialUseType == SpecialUseType.PROHIBITED -> "No flight without agency authorization"
+                airspaceInfo.specialUseType == SpecialUseType.RESTRICTED -> "Contact controlling agency"
                 ctrlRule?.status == AssessmentStatus.CAUTION -> "LAANC Approval Required"
                 airspaceInfo.tfrDataSourced -> "No flight restrictions"
                 else -> "Check TFRs before flight"

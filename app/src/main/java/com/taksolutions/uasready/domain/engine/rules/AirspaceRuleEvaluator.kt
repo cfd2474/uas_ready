@@ -77,9 +77,12 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
             )
         }
 
-        // 2. Controlled Airspace Classification & Authorization (Warning for any Non-Class G)
-        val isNonClassG = airspace.primaryClass != AirspaceClass.CLASS_G
-        val formattedClassName = when (airspace.primaryClass) {
+        // 2. Controlled Airspace Classification & Authorization (LAANC applies to B/C/D/E-surface only)
+        val controlledClass = airspace.controlledClass
+            ?: airspace.primaryClass.takeIf { it != AirspaceClass.SPECIAL_USE }
+            ?: AirspaceClass.CLASS_G
+        val isNonClassG = controlledClass != AirspaceClass.CLASS_G
+        val formattedClassName = when (controlledClass) {
             AirspaceClass.CLASS_B -> "Class B"
             AirspaceClass.CLASS_C -> "Class C"
             AirspaceClass.CLASS_D -> "Class D"
@@ -156,17 +159,63 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
             }
         }
 
-        // 4. Special Use Airspace
-        if (airspace.specialUseAirspaceActive) {
-            rules.add(
+        // 4. Prohibited / Restricted areas at the launch point. LAANC cannot authorize these.
+        val specialUseType = airspace.specialUseType
+            ?: if (airspace.primaryClass == AirspaceClass.SPECIAL_USE) SpecialUseType.RESTRICTED else null
+        val specialUseName = airspace.specialUseName ?: "Special Use Airspace"
+        when (specialUseType) {
+            SpecialUseType.PROHIBITED -> rules.add(
                 RuleResult(
-                    ruleId = "AIR-SUA-001",
+                    ruleId = "AIR-SUA-P01",
+                    category = category,
+                    status = AssessmentStatus.NO_GO,
+                    title = "Prohibited Area",
+                    inputValueFormatted = specialUseName,
+                    thresholdFormatted = "Outside Prohibited Areas",
+                    explanation = String.format("Launch point is inside %s. Flight is prohibited (14 CFR § 73.83) unless authorized by the using agency. LAANC cannot authorize flight in prohibited areas.", specialUseName)
+                )
+            )
+            SpecialUseType.RESTRICTED -> rules.add(
+                RuleResult(
+                    ruleId = "AIR-SUA-R01",
                     category = category,
                     status = AssessmentStatus.CAUTION,
-                    title = "Special Use Airspace Active",
-                    inputValueFormatted = airspace.specialUseName ?: "Active MOA / Alert Area",
-                    thresholdFormatted = "Inactive / Clear",
-                    explanation = String.format("Location intersects active Special Use Airspace (%s). Maintain extreme visual scan for high-speed military traffic.", airspace.specialUseName ?: "Active MOA")
+                    title = "Restricted Area",
+                    inputValueFormatted = specialUseName,
+                    thresholdFormatted = "Inactive or Agency Authorization",
+                    explanation = String.format("Launch point is inside %s. When the area is active, flight requires permission of the controlling/using agency (14 CFR § 73.13). Check activation times (NOTAMs / FAA SUA schedule) and contact the controlling agency before flight. LAANC cannot authorize flight in restricted areas.", specialUseName)
+                )
+            )
+            null -> Unit
+        }
+
+        // 5. Cached airspace (live FAA service unavailable)
+        if (airspace.isStale) {
+            val ageHours = ((System.currentTimeMillis() - airspace.timestampEpochMs) / 3_600_000L).coerceAtLeast(0)
+            rules.add(
+                RuleResult(
+                    ruleId = "AIR-CACHE-001",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "Cached Airspace Data",
+                    inputValueFormatted = String.format("%d h old", ageHours),
+                    thresholdFormatted = "Live FAA data",
+                    explanation = String.format("The live FAA airspace service was unavailable, so airspace from a lookup %d hours ago near this location is shown. Published airspace changes on a 28-day cycle; verify with an FAA-approved source if in doubt.", ageHours)
+                )
+            )
+        }
+
+        // 6. Ground elevation unknown → MSL-based floors assumed low (conservative)
+        if (airspace.groundElevationFt == null && airspace.zones.any { it.floorReference == AltitudeReference.MSL }) {
+            rules.add(
+                RuleResult(
+                    ruleId = "AIR-ELEV-001",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "Ground Elevation Unavailable",
+                    inputValueFormatted = "Unknown",
+                    thresholdFormatted = "Terrain elevation required",
+                    explanation = "Ground elevation could not be determined, so airspace with floors defined above sea level is treated as reaching your altitude. Some airspace shown may actually be above you."
                 )
             )
         }

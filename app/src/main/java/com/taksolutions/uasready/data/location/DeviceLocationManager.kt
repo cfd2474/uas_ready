@@ -15,6 +15,7 @@ import com.taksolutions.uasready.domain.model.LocationInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 import kotlin.coroutines.resume
 
@@ -25,6 +26,10 @@ class DeviceLocationManager(private val context: Context) {
 
     companion object {
         private const val TAG = "DeviceLocationManager"
+        /** A last-known fix older than this is not trusted as the launch point. */
+        private const val LAST_KNOWN_MAX_AGE_MS = 60_000L
+        /** Maximum wait for a fresh fix before falling back to the last-known one. */
+        private const val FRESH_FIX_TIMEOUT_MS = 20_000L
     }
 
     fun hasLocationPermission(): Boolean {
@@ -60,15 +65,16 @@ class DeviceLocationManager(private val context: Context) {
             }
         }
 
-        // If last known location is fresh (< 5 min), use it or continue to request single update
-        if (bestLocation != null && (System.currentTimeMillis() - bestLocation.time) < 300_000) {
+        // Reuse a last-known fix only if very recent: the operator may have moved to a new launch site.
+        if (bestLocation != null && (System.currentTimeMillis() - bestLocation.time) < LAST_KNOWN_MAX_AGE_MS) {
             Log.i(TAG, "Using fresh last-known location: ${bestLocation.latitude}, ${bestLocation.longitude}")
             return@withContext locationToLocationInfo(bestLocation)
         }
 
         // 2. Request a fresh single location update
         try {
-            val freshLocation = requestSingleUpdate()
+            // Bounded: without a fix (indoors, cold GNSS) an unbounded wait would stall the whole refresh.
+            val freshLocation = withTimeoutOrNull(FRESH_FIX_TIMEOUT_MS) { requestSingleUpdate() }
             if (freshLocation != null) {
                 return@withContext locationToLocationInfo(freshLocation)
             }
@@ -77,7 +83,10 @@ class DeviceLocationManager(private val context: Context) {
         }
 
         // Fallback to best last known if available
-        bestLocation?.let { locationToLocationInfo(it) }
+        bestLocation?.let {
+            Log.w(TAG, "No fresh fix within ${FRESH_FIX_TIMEOUT_MS} ms; using last-known fix aged ${(System.currentTimeMillis() - it.time) / 1000}s")
+            locationToLocationInfo(it)
+        }
     }
 
     @SuppressLint("MissingPermission")

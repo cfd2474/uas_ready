@@ -85,8 +85,10 @@ class LiveAirportWarningZoneRepository(
 
         val minLat = (lat - radiusDeg).toString()
         val maxLat = (lat + radiusDeg).toString()
-        val minLon = (lon - radiusDeg).toString()
-        val maxLon = (lon + radiusDeg).toString()
+        // Degrees of longitude shrink with latitude; widen so the box spans the same distance east-west.
+        val lonRadiusDeg = com.taksolutions.uasready.domain.geo.GeoMath.longitudeHalfWidthDeg(radiusDeg, lat)
+        val minLon = (lon - lonRadiusDeg).toString()
+        val maxLon = (lon + lonRadiusDeg).toString()
 
         val query = """
             SELECT ident, name, level, zone_type, zone_name, ring_m, color, lat, lon, geometry

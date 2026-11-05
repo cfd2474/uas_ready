@@ -1,7 +1,8 @@
 package com.taksolutions.uasready.data.repository
 
 import com.taksolutions.uasready.domain.model.AirspaceClass
-import com.taksolutions.uasready.domain.model.AirspaceInfo
+import com.taksolutions.uasready.domain.engine.AirspaceClassifier
+import com.taksolutions.uasready.domain.model.AirspaceSnapshot
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertTrue
@@ -87,27 +88,32 @@ class AirspaceAccuracySurveyTest {
 
     @Test
     fun nationwideAirspaceSurvey() = runBlocking {
+        // The app's real path: live FAA snapshot + app terrain lookup (ground) + AirspaceClassifier.
         val repo = LiveAirspaceRepository()
+        val terrain = LiveTerrainRepository()
+        val classifier = AirspaceClassifier()
         val rows = mutableListOf<String>()
         val mismatches = mutableListOf<String>()
         var appThrottled = 0
 
         for (p in points) {
             // The FAA ArcGIS quota is shared org-wide; when throttled, wait and retry (counted in the report).
-            var appResult: Result<AirspaceInfo> = Result.failure(IllegalStateException("not run"))
+            var appResult: Result<AirspaceSnapshot> = Result.failure(IllegalStateException("not run"))
             var appMs = 0L
             for (attempt in 1..4) {
                 val t0 = System.currentTimeMillis()
-                appResult = repo.getAirspaceInfo(p.lat, p.lon)
+                appResult = repo.getAirspaceSnapshot(p.lat, p.lon)
                 appMs = System.currentTimeMillis() - t0
                 if (appResult.isSuccess || appResult.exceptionOrNull()?.message?.contains("Too many requests", true) != true) break
                 appThrottled++
                 println("  throttled (app) at ${p.name}, retry $attempt in 30s")
                 Thread.sleep(30_000)
             }
-            val app = appResult.getOrNull()
+            val appGround = appTerrainGroundFt(terrain, p.lat, p.lon)
+            val app = appResult.getOrNull()?.let { classifier.classify(it, p.lat, p.lon, appGround, 400.0) }
 
-            val ground = groundElevationFt(p.lat, p.lon)
+            // Truth uses the same DEM ground value when the app got one (this survey tests airspace logic, not the DEM).
+            val ground = appGround ?: groundElevationFt(p.lat, p.lon)
             val hits = truthHits(p.lat, p.lon, ground)
             val truth = hits.filter { it.floorAglFt < 400.0 }.maxByOrNull { priority(it.cls) }?.cls ?: AirspaceClass.CLASS_G
 
@@ -130,7 +136,7 @@ class AirspaceAccuracySurveyTest {
         val report = buildString {
             appendLine("# Airspace accuracy survey")
             appendLine()
-            appendLine("App = `LiveAirspaceRepository`. Truth = FAA server-side point intersection (full resolution) + floor-vs-terrain logic, counting airspace whose floor is < 400 ft AGL.")
+            appendLine("App = `LiveAirspaceRepository` snapshot + app terrain ground elevation + `AirspaceClassifier` (the app's real path). Truth = FAA server-side point intersection (full resolution) + floor-vs-terrain logic, counting airspace whose floor is < 400 ft AGL.")
             appendLine()
             appendLine("| | Point | Region | Published | Truth | App | Published=Truth | Ground ft | App zones | App ms | Counted (floor < 400 AGL) | Ignored (floor ≥ 400 AGL) |")
             appendLine("|---|---|---|---|---|---|---|---|---|---|---|---|")
@@ -144,6 +150,16 @@ class AirspaceAccuracySurveyTest {
         println(report)
 
         assertTrue("Airspace mismatches:\n" + mismatches.joinToString("\n"), mismatches.isEmpty())
+    }
+
+    /** Ground elevation exactly as the app obtains it (LiveTerrainRepository / Open-Meteo DEM), with retries. */
+    private suspend fun appTerrainGroundFt(terrain: LiveTerrainRepository, lat: Double, lon: Double): Double? {
+        repeat(4) { attempt ->
+            terrain.getTerrainProfile(lat, lon).getOrNull()?.let { return it.launchElevationFt }
+            Thread.sleep(5000L * (attempt + 1))
+        }
+        println("  app terrain lookup failed at $lat,$lon — classifier runs with unknown ground (conservative)")
+        return null
     }
 
     // ---- Truth -------------------------------------------------------------------------------

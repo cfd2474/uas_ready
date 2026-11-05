@@ -30,6 +30,11 @@
 - Tests: 33/34 pass; the 1 failure is the pre-existing date-dependent test (Chunk 2).
 
 ## Decisions
+- **Classification separated from fetching** (2026-11-04, SOLID/SRP): `AirspaceRepository` returns raw `AirspaceSnapshot`; `AirspaceClassifier` (pure) decides relevance/class at the launch point; `CachingAirspaceRepository` decorates the live source.
+- **Unknown ground elevation → treat MSL floors as possibly low** (over-report, never under-report) + `AIR-ELEV-001` caution. Rejected: falling back to GPS altitude (code defaults to 206 m when absent; unreliable).
+- **Prohibited area = NO-GO; Restricted area = CAUTION** with agency wording (activation schedule unknown to the app). LAANC wording only for B/C/D/E-surface.
+- **Airspace cache: ≤ 28 days (NASR cycle), ≤ 5 NM from the cached lookup**, clearly marked; overall verdict still requires live telemetry.
+- **Last-known location trusted only ≤ 60 s; fresh-fix wait bounded at 20 s** (was 5 min / unbounded).
 - **Unverified TFRs are CAUTION, not GO** (2026-11-04). The live app has no TFR feed; it previously showed GO "No TFRs" — a false safety claim (and a Play "misleading claims" risk). Consequence: live assessments can no longer reach overall GO until a real TFR feed is integrated. `AirspaceInfo.tfrDataSourced` defaults to false so nothing claims coverage by accident.
 - **Airspace lookup failure → DATA_UNAVAILABLE**, never Class G. Either FAA query failing fails the whole lookup (partial airspace data would understate restrictions).
 - **Removed fabricated UASFM 400 ft ceiling** from the live repo (UASFM queries were removed in v1.3.34; the GO "conforms with UASFM ceiling" rule was unbacked).
@@ -45,6 +50,7 @@
 - **Test emulator:** AVD `uasready-rcpro` (API 30 google_apis x86_64, 1920×1080 @ 480 dpi landscape = RC Pro 640×360 dp). Start: `emulator -avd uasready-rcpro -port 5620 -no-snapshot -no-boot-anim -no-audio` → serial `emulator-5620`. Other emulators on this machine (5580, 5600) belong to other projects — leave them alone.
 - **Mock GPS on emulator:** `adb emu geo fix <lon> <lat>` only reaches the app while it has an active location request, and the app reuses any last-known fix < 5 min old. To move regions: `settings put secure location_mode 0` then `3` (clears last-known), tap Refresh, and keep sending `geo fix` until the app logs `AirspaceRepo: Successfully resolved…`. Driver: `python scripts/survey/emulator_airspace_survey.py [REGION_KEYS...]` (outputs to scripts/survey/out/, gitignored).
 - **FAA ArcGIS quota is shared org-wide** — bulk exploration scripts can be throttled by other users' traffic. Check header `x-esri-org-request-units-per-min`; pace queries; point queries are cheap (2 units).
+- Emulator driver reads `MainViewModel: Airspace classified: primary=… auth=… specialUse=… zones=… groundFt=… cached=…` (added in chunk 4). Cache test: `adb shell svc wifi disable; svc data disable` → refresh at a previously visited point → `cached=true`; re-enable after.
 - Survey: `./gradlew testDebugUnitTest -PliveTests --tests '*AirspaceAccuracySurveyTest*'` → report at `app/build/reports/airspace-survey.md` (~3 min).
 - Release signing needs these keys in `local.properties` (gitignored): `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`. After rotating the keystore password, update them there.
 - `git filter-repo` installed via `python -m pip install --user git-filter-repo`; invoke as `python -m git_filter_repo`. It deletes the `origin` remote; re-add with `git remote add origin https://github.com/cfd2474/UAS_Ready.git`.
@@ -85,7 +91,14 @@ Known before survey (verified against service data 2026-11-04): FL floors are in
 - **FAA ArcGIS quota is org-wide (6000 units/min shared with all FAA-service users worldwide; baseline 2000–4000 used by others).** Each app lookup costs 2 units, but users can be throttled at any time by others' traffic → "Airspace Unavailable" (pre-chunk-2 code showed Class G).
 - `AirspaceAccuracySurveyTest` intentionally FAILS until the FL-floor fix lands (it is the regression test for it).
 
-### Proposed — Chunk 4 — Airspace Accuracy Fixes (needs approval)
+### Chunk 4 — Airspace Accuracy Fixes (owner approved 2026-11-04) — DONE, awaiting review
+Design: repository fetches raw FAA zones (floor + reference kept); pure `AirspaceClassifier` decides relevance/class at the launch point from ground elevation (Open-Meteo DEM via terrain repo) + planned altitude; `CachingAirspaceRepository` decorator serves the last good snapshot (≤28 days, ≤5 NM) when live fails. Unknown ground elevation → MSL floors treated as possibly low (conservative, flagged CAUTION).
+Steps: (1) model + classifier with correct floor semantics (FL/SFC=AGL/MSL−ground), exceededTransferLimit = failure; (2) P → NO-GO, R → CAUTION with controlling-agency wording, no LAANC wording for SUA; Home card text; (3) 429 retry once + cache decorator + cached/elevation-unknown cautions; (4) location: last-known ≤60 s, single-update timeout (was unbounded); (5) longitude box scaled by 1/cos(lat) (airspace + warning zones); (6) unit tests, survey 30/30, emulator re-run, state + platform reference.
+**Results (2026-11-04):** JVM survey **30/30** (was 27/30); live FAA integration tests 2/2; unit tests 64 pass / 3 live skipped; emulator 16 regions all correct + offline cache verified. Report: `docs/airspace-survey-2026-11-04-postfix.md`.
+Behaviour changes a pilot will notice: Prohibited area (e.g. P-56) is now NO-GO (was CAUTION); Restricted area shows controlling-agency guidance, not "LAANC Approval Required"; FL-floor restricted areas no longer flagged; Home card shows "Prohibited Area"/"Restricted Area" and "Cached:" when serving cached airspace.
+Pre-existing issues seen during emulator runs (NOT fixed, not in scope): (a) offline, the Weather card still shows plausible values (75°F, Vis 10 SM) under a DATA_UNAVAILABLE badge; (b) header "Last update · 0m" stays green while offline; (c) pilot authority is not persisted — the pilot prompt reappears on every launch; (d) Warren Grove NJ visibility NO-GO looked like real fog on second visit (current 1.2 SM) — likely not a bug.
+Not done: polygon holes (inner rings) are still ignored — not observed to matter in 30-point survey; unverified.
+Original proposal:
 1. Floor semantics per platform reference: `LOWER_UOM='FL'` → value×100 ft MSL; `LOWER_CODE='SFC'` → AGL; `MSL` → minus ground elevation; include airspace only if floor < planned altitude AGL (400). Fixes the FL defect and makes the terrain case correct by logic.
 2. Restricted/Prohibited guidance: replace "LAANC Approval Required" (LAANC cannot authorize P/R areas) with controlling-agency guidance.
 3. Quota resilience: one retry with backoff on ArcGIS 429; cache last successful airspace per area for the NASR cycle (airspace changes on a 28/56-day cycle) so throttling degrades to "cached, dated" rather than unavailable. Longer term: consider a bundled/periodically-downloaded airspace dataset (like `airport_warning_zones.db`).

@@ -49,16 +49,17 @@ def screenshot(path):
 
 
 def wait_for_result(lat, lon, timeout_s=75):
-    pat_ok = re.compile(r"Successfully resolved (\d+) live FAA airspace polygons\. Primary: (\w+), AuthRequired: (\w+)")
-    pat_fail = re.compile(r"Airspace resolution failed; reporting DATA_UNAVAILABLE: (.*)")
+    pat_ok = re.compile(r"Airspace classified: primary=(\w+) auth=(\w+) specialUse=(\w+) zones=(\d+) groundFt=(\S+) cached=(\w+)")
+    pat_fail = re.compile(r"Airspace unavailable: (.*)")
     t0 = time.time()
     while time.time() - t0 < timeout_s:
         # The fix only reaches the framework while the app's single-update request is active, so keep sending it.
         adb("emu", "geo", "fix", str(lon), str(lat), "30")
-        log = adb("logcat", "-d", "-s", "AirspaceRepo:*")
+        log = adb("logcat", "-d", "-s", "MainViewModel:*")
         m = pat_ok.search(log)
         if m:
-            return {"status": "ok", "zones": int(m.group(1)), "primary": m.group(2), "auth": m.group(3) == "true",
+            return {"status": "ok", "primary": m.group(1), "auth": m.group(2) == "true", "specialUse": m.group(3),
+                    "zones": int(m.group(4)), "groundFt": m.group(5), "cached": m.group(6) == "true",
                     "seconds": round(time.time() - t0, 1)}
         m = pat_fail.search(log)
         if m:
@@ -76,7 +77,7 @@ for key, name, lat, lon in REGIONS:
     # Toggling location clears the framework's stale last-known fix, forcing the app to request a fresh one.
     adb("shell", "settings", "put", "secure", "location_mode", "0")
     adb("shell", "settings", "put", "secure", "location_mode", "3")
-    time.sleep(1)
+    time.sleep(5)  # let any in-flight refresh from the previous step finish logging before clearing
     adb("logcat", "-c")
     adb("shell", "input", "tap", str(REFRESH_XY[0]), str(REFRESH_XY[1]))
     r = wait_for_result(lat, lon)
