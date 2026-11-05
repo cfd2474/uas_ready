@@ -405,7 +405,8 @@ class MainActivity : ComponentActivity() {
                                 currentAircraftName = uiState.selectedAircraft.displayName,
                                 currentPilotName = if (uiState.isPilotSelectionPending) "Pending" else uiState.currentPilot.activeAuthority.displayName,
                                 isLiveLoading = uiState.isLiveLoading,
-                                lastTelemetryUpdateEpochMs = uiState.lastTelemetryUpdateEpochMs,
+                                lastLiveDataEpochMs = uiState.lastLiveDataEpochMs,
+                                telemetryFreshness = uiState.telemetryFreshness,
                                 onRefresh = { viewModel.fetchLiveData() },
                                 onOpenDrawer = { scope.launch { drawerState.open() } }
                             )
@@ -507,7 +508,8 @@ fun AviationTopStatusBar(
     currentAircraftName: String,
     currentPilotName: String,
     isLiveLoading: Boolean,
-    lastTelemetryUpdateEpochMs: Long,
+    lastLiveDataEpochMs: Long?,
+    telemetryFreshness: com.taksolutions.uasready.ui.presentation.TelemetryFreshness?,
     onRefresh: () -> Unit,
     onOpenDrawer: () -> Unit
 ) {
@@ -515,27 +517,27 @@ fun AviationTopStatusBar(
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     var currentTickerMs by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(lastTelemetryUpdateEpochMs) {
+    LaunchedEffect(lastLiveDataEpochMs, telemetryFreshness) {
         while (true) {
             currentTickerMs = System.currentTimeMillis()
             kotlinx.coroutines.delay(5000L) // tick every 5s
         }
     }
 
-    val elapsedMs = (currentTickerMs - lastTelemetryUpdateEpochMs).coerceAtLeast(0L)
-    val elapsedMinutes = (elapsedMs / (60 * 1000L)).toInt()
-
-    // Status styling: Turns Yellow at >= 5 minutes, Green when < 5 minutes
-    val isStale = elapsedMinutes >= 5
-    val chipTextColor = if (isStale) SafetyCautionLight else SafetyGoLight
-    val chipBgColor = if (isStale) SafetyCautionBg else AviationDarkCard
-    val chipBorderColor = if (isStale) SafetyCautionLight.copy(alpha = 0.8f) else AviationDarkBorder
-
-    val timeSinceText = when {
-        elapsedMinutes == 0 -> "Last update • 0m"
-        elapsedMinutes < 60 -> "Last update • ${elapsedMinutes}m"
-        else -> "Last update • ${elapsedMinutes / 60}h"
+    val minutesSinceLiveData = lastLiveDataEpochMs?.let {
+        ((currentTickerMs - it).coerceAtLeast(0L) / (60 * 1000L)).toInt()
     }
+    // Green only when the last refresh was fully live and recent; amber when partial/aging; red when offline.
+    val chip = com.taksolutions.uasready.ui.presentation.FreshnessChipText.of(telemetryFreshness, minutesSinceLiveData)
+    val (chipTextColor, chipBgColor, chipBorderColor) = when (chip.severity) {
+        com.taksolutions.uasready.ui.presentation.ChipSeverity.OK ->
+            Triple(SafetyGoLight, AviationDarkCard, AviationDarkBorder)
+        com.taksolutions.uasready.ui.presentation.ChipSeverity.CAUTION ->
+            Triple(SafetyCautionLight, SafetyCautionBg, SafetyCautionLight.copy(alpha = 0.8f))
+        com.taksolutions.uasready.ui.presentation.ChipSeverity.ALERT ->
+            Triple(SafetyNoGoLight, SafetyNoGoBg, SafetyNoGoLight.copy(alpha = 0.8f))
+    }
+    val timeSinceText = chip.text
 
     // Dynamic Live Status Chip Composable
     val liveStatusChip = @Composable {

@@ -14,7 +14,9 @@ data class LocationInfo(
     val ctafType: String? = null,
     val nearestAirportIdent: String? = null,
     val nearestAirportName: String? = null,
-    val nearestAirportDistanceNm: Double? = null
+    val nearestAirportDistanceNm: Double? = null,
+    /** Two-letter US state code from reverse geocoding; null when unknown (e.g. no geocoder / manual entry). */
+    val stateCode: String? = null
 ) {
     val formattedCoordinates: String
         get() = if (latitude == 0.0 && longitude == 0.0) {

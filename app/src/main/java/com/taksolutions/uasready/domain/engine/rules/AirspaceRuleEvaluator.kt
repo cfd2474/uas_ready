@@ -39,19 +39,22 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
 
         if (activeTfrs.isNotEmpty()) {
             val tfr = activeTfrs.first()
+            val others = if (activeTfrs.size > 1) " (+${activeTfrs.size - 1} more)" else ""
             rules.add(
                 RuleResult(
                     ruleId = "AIR-TFR-001",
                     category = category,
                     status = AssessmentStatus.NO_GO,
                     title = "Active Temporary Flight Restriction (TFR)",
-                    inputValueFormatted = tfr.id,
+                    inputValueFormatted = "TFR ${tfr.id}$others",
                     thresholdFormatted = "Zero Active TFRs in flight window",
-                    explanation = String.format("Flight location overlaps active %s TFR (%s). Flight is legally prohibited under 14 CFR § 91.137/141.", tfr.type, tfr.description)
+                    explanation = "The launch point is inside ${tfr.type} TFR ${tfr.id}, in effect during the planned flight window " +
+                        "and below your planned altitude: ${tfr.description}. Flight is prohibited unless the NOTAM's conditions are met " +
+                        "(see the NOTAM text at tfr.faa.gov)."
                 )
             )
         } else if (!airspace.tfrDataSourced) {
-            // No authoritative TFR feed: an empty list means "not checked", never "clear".
+            // No authoritative TFR feed answered: an empty list means "not checked", never "clear".
             rules.add(
                 RuleResult(
                     ruleId = "AIR-TFR-003",
@@ -60,21 +63,56 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
                     title = "Temporary Flight Restrictions Not Verified",
                     inputValueFormatted = "Not Checked",
                     thresholdFormatted = "Pilot Verification Required",
-                    explanation = "UASReady does not currently check live TFRs. Before flight, verify there are no active TFRs at this location and time using the FAA TFR list (tfr.faa.gov) or an FAA-approved B4UFLY / LAANC provider."
+                    explanation = "The FAA TFR feed could not be reached, so TFRs were not checked. Before flight, verify there are no active TFRs at this location and time using the FAA TFR list (tfr.faa.gov) or an FAA-approved B4UFLY / LAANC provider."
                 )
             )
         } else {
-            rules.add(
-                RuleResult(
-                    ruleId = "AIR-TFR-002",
-                    category = category,
-                    status = AssessmentStatus.GO,
-                    title = "Temporary Flight Restrictions",
-                    inputValueFormatted = "None Active",
-                    thresholdFormatted = "Clear",
-                    explanation = "No active or scheduled TFRs intersect the planned flight location and time window."
+            airspace.scheduledTfrsOutsideWindow.firstOrNull()?.let { tfr ->
+                rules.add(
+                    RuleResult(
+                        ruleId = "AIR-TFR-004",
+                        category = category,
+                        status = AssessmentStatus.CAUTION,
+                        title = "Scheduled TFR at Launch Point (Inactive in Window)",
+                        inputValueFormatted = "TFR ${tfr.id}",
+                        thresholdFormatted = "Outside scheduled hours",
+                        explanation = "The launch point is inside ${tfr.type} TFR ${tfr.id}, which by its published schedule is not active during " +
+                            "the planned window: ${tfr.description}. Confirm the hours in the NOTAM and do not fly into its active period."
+                    )
                 )
-            )
+            }
+            if (airspace.unmappedRegionalTfrs.isNotEmpty()) {
+                val list = airspace.unmappedRegionalTfrs
+                rules.add(
+                    RuleResult(
+                        ruleId = "AIR-TFR-005",
+                        category = category,
+                        status = AssessmentStatus.CAUTION,
+                        title = "TFR Without Mapped Boundary in This Area",
+                        inputValueFormatted = list.joinToString(", ") { "TFR ${it.id}" },
+                        thresholdFormatted = "Read NOTAM text",
+                        explanation = "The FAA publishes no boundary for these TFRs, so UASReady cannot tell whether your launch point is inside: " +
+                            list.joinToString("; ") { "${it.id} ${it.description}" } +
+                            ". Read the NOTAM text at tfr.faa.gov to confirm it does not cover your location."
+                    )
+                )
+            }
+            if (airspace.scheduledTfrsOutsideWindow.isEmpty() && airspace.unmappedRegionalTfrs.isEmpty()) {
+                val nationwide = if (airspace.unmappedNationwideTfrCount > 0)
+                    " ${airspace.unmappedNationwideTfrCount} nationwide notices have no mapped area (for example the 14 CFR § 99.7 national-security UAS sites); check B4UFLY near military or critical-infrastructure sites."
+                else ""
+                rules.add(
+                    RuleResult(
+                        ruleId = "AIR-TFR-002",
+                        category = category,
+                        status = AssessmentStatus.GO,
+                        title = "Temporary Flight Restrictions",
+                        inputValueFormatted = "None Active",
+                        thresholdFormatted = "Clear",
+                        explanation = "Checked against the live FAA TFR feed: no TFR area covers the launch point below your planned altitude during the flight window.$nationwide"
+                    )
+                )
+            }
         }
 
         // 2. Controlled Airspace Classification & Authorization (LAANC applies to B/C/D/E-surface only)

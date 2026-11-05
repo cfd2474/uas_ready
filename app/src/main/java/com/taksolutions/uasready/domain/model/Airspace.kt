@@ -111,6 +111,12 @@ data class AirspaceInfo(
      * claim TFR coverage by accident.
      */
     val tfrDataSourced: Boolean = false,
+    /** TFR areas containing the launch point whose daily schedule does not cover the flight window. */
+    val scheduledTfrsOutsideWindow: List<TemporaryFlightRestriction> = emptyList(),
+    /** TFRs with no published boundary that may apply here (same state, or launch state unknown). */
+    val unmappedRegionalTfrs: List<TemporaryFlightRestriction> = emptyList(),
+    /** Nationwide TFR notices with no boundary (e.g. 14 CFR 99.7 national-security UAS sites). */
+    val unmappedNationwideTfrCount: Int = 0,
     val zones: List<AirspaceZone> = emptyList(),
     val notams: List<NoticeToAirmen> = emptyList(),
     val specialUseAirspaceActive: Boolean = false,

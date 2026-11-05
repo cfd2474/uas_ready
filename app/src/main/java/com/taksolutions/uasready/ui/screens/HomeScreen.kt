@@ -27,6 +27,7 @@ import com.taksolutions.uasready.domain.model.AssessmentCategory
 import com.taksolutions.uasready.domain.model.AssessmentStatus
 import com.taksolutions.uasready.domain.model.SpecialUseType
 import com.taksolutions.uasready.ui.components.SquareMetricCard
+import com.taksolutions.uasready.ui.presentation.OverviewCardText
 import com.taksolutions.uasready.ui.components.StatusBanner
 import com.taksolutions.uasready.ui.theme.*
 import com.taksolutions.uasready.ui.viewmodel.MainUiState
@@ -58,7 +59,9 @@ fun HomeScreen(
     // Any failure in 0-60m window -> NO-GO; Failures in 60-120m window -> CAUTION; Otherwise -> GO
     val forecastStatus: AssessmentStatus = when {
         assessment == null -> AssessmentStatus.DATA_UNAVAILABLE
-        weatherCat?.status == AssessmentStatus.NO_GO || daylightCat?.status == AssessmentStatus.NO_GO -> AssessmentStatus.NO_GO
+        // No forecast data → never "Window Cleared"
+        weatherCat == null || weatherCat.status == AssessmentStatus.DATA_UNAVAILABLE -> AssessmentStatus.DATA_UNAVAILABLE
+        weatherCat.status == AssessmentStatus.NO_GO || daylightCat?.status == AssessmentStatus.NO_GO -> AssessmentStatus.NO_GO
         weatherCat?.status == AssessmentStatus.CAUTION || daylightCat?.status == AssessmentStatus.CAUTION -> AssessmentStatus.CAUTION
         else -> AssessmentStatus.GO
     }
@@ -132,9 +135,7 @@ fun HomeScreen(
             val tempRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-TEMP") || it.ruleId.startsWith("AC-TEMP") }
             val gustRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-GUST") || it.ruleId.startsWith("AC-GUST") }
             val windRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-WIND") || it.ruleId.startsWith("AC-WIND") }
-            val visRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("WX-VIS") }
-
-            val weatherSummary = "${gustRule?.inputValueFormatted ?: "Wind 8 MPH"} • ${visRule?.inputValueFormatted ?: "Vis 10 SM"}"
+            val weatherText = OverviewCardText.weather(assessment, uiState.weatherObservation)
             val weatherWorstStatus = listOfNotNull(
                 weatherCat?.status,
                 tempRule?.status,
@@ -144,8 +145,8 @@ fun HomeScreen(
 
             SquareMetricCard(
                 title = "Weather & Wind",
-                primaryValue = "${tempRule?.inputValueFormatted ?: "75°F"} • Wind",
-                secondaryValue = weatherSummary,
+                primaryValue = weatherText.primary,
+                secondaryValue = weatherText.secondary,
                 status = weatherWorstStatus,
                 icon = Icons.Default.Cloud,
                 onClick = { onNavigateToAssessment(AssessmentCategory.WEATHER) }
@@ -175,6 +176,7 @@ fun HomeScreen(
             // Never claim "No TFRs" unless an authoritative TFR source was actually checked.
             val tfrSummary = when {
                 tfrRule?.status == AssessmentStatus.NO_GO -> "ACTIVE TFR"
+                airspaceInfo?.tfrDataSourced == true && tfrRule?.status == AssessmentStatus.CAUTION -> "TFR nearby"
                 airspaceInfo?.tfrDataSourced == true -> "No TFRs"
                 else -> "TFRs unverified"
             }
@@ -191,6 +193,7 @@ fun HomeScreen(
                 tfrRule?.status == AssessmentStatus.NO_GO -> "Flight Restricted / Prohibited"
                 airspaceInfo.specialUseType == SpecialUseType.PROHIBITED -> "No flight without agency authorization"
                 airspaceInfo.specialUseType == SpecialUseType.RESTRICTED -> "Contact controlling agency"
+                airspaceInfo.tfrDataSourced && tfrRule?.status == AssessmentStatus.CAUTION -> "Read TFR NOTAM before flight"
                 ctrlRule?.status == AssessmentStatus.CAUTION -> "LAANC Approval Required"
                 airspaceInfo.tfrDataSourced -> "No flight restrictions"
                 else -> "Check TFRs before flight"
@@ -214,11 +217,11 @@ fun HomeScreen(
 
         // Card 4: Daylight & Solar (Square Card)
         item {
-            val sunRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("SUN-") }
+            val daylightText = OverviewCardText.daylight(assessment)
             SquareMetricCard(
                 title = "Daylight & Solar",
-                primaryValue = sunRule?.inputValueFormatted ?: "Full Daylight",
-                secondaryValue = sunRule?.explanation ?: "Flight window within daylight",
+                primaryValue = daylightText.primary,
+                secondaryValue = daylightText.secondary,
                 status = daylightCat?.status,
                 icon = Icons.Default.WbSunny,
                 onClick = { onNavigateToAssessment(AssessmentCategory.DAYLIGHT) }
@@ -229,19 +232,7 @@ fun HomeScreen(
         item {
             val satsRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-SATS" }
             val hdopRule = assessment?.allRuleResults?.firstOrNull { it.ruleId == "SP-GNSS-HDOP" }
-            val gnss = uiState.estimatedGnss
-
-            val primaryText = if (gnss != null) {
-                "~${gnss.lockedSatellitesCount} Sats Visible"
-            } else {
-                satsRule?.inputValueFormatted ?: "12+ Sats Visible"
-            }
-
-            val secondaryText = if (gnss != null) {
-                "HDOP ${gnss.estimatedHdop} • 3D Fix"
-            } else {
-                hdopRule?.inputValueFormatted ?: "HDOP <= 1.5 • Multi-GNSS"
-            }
+            val gnssText = OverviewCardText.gnss(assessment, uiState.estimatedGnss)
 
             val gnssWorstStatus = when {
                 satsRule?.status == AssessmentStatus.NO_GO || hdopRule?.status == AssessmentStatus.NO_GO -> AssessmentStatus.NO_GO
@@ -252,8 +243,8 @@ fun HomeScreen(
 
             SquareMetricCard(
                 title = "GNSS & Sats",
-                primaryValue = primaryText,
-                secondaryValue = secondaryText,
+                primaryValue = gnssText.primary,
+                secondaryValue = gnssText.secondary,
                 status = gnssWorstStatus,
                 icon = Icons.Default.Satellite,
                 onClick = { onNavigateToAssessment(AssessmentCategory.SPACE_WEATHER) }
@@ -262,12 +253,12 @@ fun HomeScreen(
 
         // Card 6: Space Weather & Geomagnetic Kp (Square Card)
         item {
-            val kpRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("SP-KP") }
+            val kpText = OverviewCardText.spaceWeather(assessment, uiState.spaceWeather)
 
             SquareMetricCard(
                 title = "Space Weather (Kp)",
-                primaryValue = kpRule?.inputValueFormatted ?: "Kp 2.0 (Nominal)",
-                secondaryValue = kpRule?.thresholdFormatted ?: "Normal solar activity",
+                primaryValue = kpText.primary,
+                secondaryValue = kpText.secondary,
                 status = spaceCat?.status,
                 icon = Icons.Default.Public,
                 onClick = { onNavigateToAssessment(AssessmentCategory.SPACE_WEATHER) }
@@ -290,7 +281,12 @@ fun HomeScreen(
         item {
             SquareMetricCard(
                 title = "120 Minute Forecast",
-                primaryValue = if (forecastStatus == AssessmentStatus.GO) "Window Cleared" else if (forecastStatus == AssessmentStatus.CAUTION) "Caution Ahead" else "Restricted",
+                primaryValue = when (forecastStatus) {
+                    AssessmentStatus.GO -> "Window Cleared"
+                    AssessmentStatus.CAUTION -> "Caution Ahead"
+                    AssessmentStatus.DATA_UNAVAILABLE -> OverviewCardText.NO_LIVE_DATA
+                    else -> "Restricted"
+                },
                 secondaryValue = "0–60m Launch • 60–120m Watch",
                 status = forecastStatus,
                 icon = Icons.Default.Schedule,

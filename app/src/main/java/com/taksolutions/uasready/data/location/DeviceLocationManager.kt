@@ -139,7 +139,7 @@ class DeviceLocationManager(private val context: Context) {
         val elevationFt = altMeters * 3.28084
         val accuracy = if (location.hasAccuracy()) location.accuracy else 5.0f
 
-        val displayName = reverseGeocode(lat, lon)
+        val (displayName, stateCode) = reverseGeocode(lat, lon)
         CtafLookupHelper.initialize(context)
         val ctafResult = CtafLookupHelper.findNearestCtaf(lat, lon)
 
@@ -154,7 +154,8 @@ class DeviceLocationManager(private val context: Context) {
             ctafType = ctafResult?.type,
             nearestAirportIdent = ctafResult?.ident,
             nearestAirportName = ctafResult?.name,
-            nearestAirportDistanceNm = ctafResult?.distanceNm
+            nearestAirportDistanceNm = ctafResult?.distanceNm,
+            stateCode = stateCode?.takeIf { it.length == 2 }
         )
     }
 
@@ -177,7 +178,9 @@ class DeviceLocationManager(private val context: Context) {
         return usStates[stateName.trim().lowercase()] ?: stateName
     }
 
-    private fun reverseGeocode(lat: Double, lon: Double): String {
+    /** Returns (display name, state code or null). */
+    private fun reverseGeocode(lat: Double, lon: Double): Pair<String, String?> {
+        val coords = String.format(Locale.US, "%.4f° N, %.4f° W", lat, Math.abs(lon))
         return try {
             val geocoder = Geocoder(context, Locale.getDefault())
             val addresses = geocoder.getFromLocation(lat, lon, 1)
@@ -185,18 +188,19 @@ class DeviceLocationManager(private val context: Context) {
                 val address = addresses[0]
                 val city = address.locality ?: address.subAdminArea
                 val stateCode = toStateCode(address.adminArea)
-                when {
+                val name = when {
                     city != null && stateCode != null -> "$city, $stateCode"
                     city != null -> city
                     stateCode != null -> stateCode
-                    else -> String.format(Locale.US, "%.4f° N, %.4f° W", lat, Math.abs(lon))
+                    else -> coords
                 }
+                name to stateCode
             } else {
-                String.format(Locale.US, "%.4f° N, %.4f° W", lat, Math.abs(lon))
+                coords to null
             }
         } catch (e: Exception) {
             Log.w(TAG, "Geocoder error: ${e.message}")
-            String.format(Locale.US, "%.4f° N, %.4f° W", lat, Math.abs(lon))
+            coords to null
         }
     }
 }

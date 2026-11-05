@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 
 import com.taksolutions.uasready.data.repository.PersistentAircraftRepository
 import com.taksolutions.uasready.domain.model.PilotAuthorityType
+import com.taksolutions.uasready.ui.presentation.TelemetryFreshness
 import com.taksolutions.uasready.ui.theme.AppThemeMode
 
 data class MainUiState(
@@ -42,7 +43,13 @@ data class MainUiState(
     val estimatedGnss: GnssEstimation? = null,
     val selectedCategoryFilter: AssessmentCategory? = null,
     val scrollToForecastOnDetail: Boolean = false,
-    val lastTelemetryUpdateEpochMs: Long = System.currentTimeMillis(),
+    /** When a refresh last brought live (not cached) data; null until one has. Drives the header age. */
+    val lastLiveDataEpochMs: Long? = null,
+    /** When a refresh last completed, successful or not. Drives the 10-minute auto-refresh. */
+    val lastRefreshAttemptEpochMs: Long = System.currentTimeMillis(),
+    /** How much of the last refresh was live; null before the first refresh completes. */
+    val telemetryFreshness: TelemetryFreshness? = null,
+    val spaceWeather: SpaceWeather? = null,
     val nearbyAirports: List<AirportCtafResult> = emptyList(),
     val airportWarningZones: List<AirportWarningZone> = emptyList()
 )
@@ -59,8 +66,13 @@ class MainViewModel @JvmOverloads constructor(
     private val airspaceClassifier: com.taksolutions.uasready.domain.engine.AirspaceClassifier =
         com.taksolutions.uasready.domain.engine.AirspaceClassifier(),
     private val terrainRepo: TerrainRepository = LiveTerrainRepository(),
+    private val tfrRepo: TfrRepository = LiveTfrRepository(
+        store = FileTfrDetailStore(java.io.File(application.filesDir, "tfr_cache.json"))
+    ),
+    private val tfrEvaluator: com.taksolutions.uasready.domain.engine.TfrEvaluator =
+        com.taksolutions.uasready.domain.engine.TfrEvaluator(),
     private val aircraftRepo: AircraftRepository = PersistentAircraftRepository(application),
-    private val pilotRepo: PilotRepository = InMemoryPilotRepository(),
+    private val pilotRepo: PilotRepository = PersistentPilotRepository(SharedPreferencesPilotAuthorityStore(application)),
     private val assessmentEngine: AssessmentEngine = AssessmentEngine(),
     private val locationManager: DeviceLocationManager = DeviceLocationManager(application),
     private val airportWarningRepo: AirportWarningZoneRepository = LiveAirportWarningZoneRepository(application)
@@ -70,7 +82,10 @@ class MainViewModel @JvmOverloads constructor(
 
     private val _uiState = MutableStateFlow(
         MainUiState(
-            showFirstTimeFleetSetup = !setupPrefs.getBoolean("has_completed_initial_setup", false)
+            showFirstTimeFleetSetup = !setupPrefs.getBoolean("has_completed_initial_setup", false),
+            // A pilot authority chosen on an earlier launch is remembered; ask only the first time.
+            isPilotSelectionPending = !pilotRepo.hasConfirmedSelection,
+            currentPilot = pilotRepo.pilotState.value
         )
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -96,7 +111,8 @@ class MainViewModel @JvmOverloads constructor(
         val weather: Result<Pair<WeatherObservation, WeatherForecast>>,
         val space: Result<SpaceWeather>,
         val airspace: Result<AirspaceSnapshot>,
-        val terrain: Result<TerrainObstructionProfile>
+        val terrain: Result<TerrainObstructionProfile>,
+        val tfr: Result<TfrSnapshot>
     )
 
     /** CTAF spatial scan + SQLite warning-zone query. Disk/CPU bound, so never on the main thread. */
@@ -145,7 +161,7 @@ class MainViewModel @JvmOverloads constructor(
                 delay(10_000L)
                 val state = _uiState.value
                 if (!state.isPilotSelectionPending && !state.showFirstTimeFleetSetup && !state.isLiveLoading) {
-                    val elapsed = System.currentTimeMillis() - state.lastTelemetryUpdateEpochMs
+                    val elapsed = System.currentTimeMillis() - state.lastRefreshAttemptEpochMs
                     if (elapsed >= 10 * 60 * 1000L) {
                         Log.i(TAG, "Telemetry age exceeded 10m ($elapsed ms). Performing auto-refresh.")
                         fetchLiveData()
@@ -157,8 +173,15 @@ class MainViewModel @JvmOverloads constructor(
         // Try to obtain initial GPS location silently if permission is already granted
         val defaultLoc = _uiState.value.currentLocation
         refreshNearbyAviation(defaultLoc.latitude, defaultLoc.longitude)
-        refreshGpsLocation(silent = true)
+        if (isReadyToAssess()) {
+            fetchLiveData() // pilot authority remembered: start the evaluation straight away (includes a GPS fix)
+        } else {
+            refreshGpsLocation(silent = true)
+        }
     }
+
+    private fun isReadyToAssess(): Boolean =
+        !_uiState.value.isPilotSelectionPending && !_uiState.value.showFirstTimeFleetSetup
 
     fun refreshGpsLocation(silent: Boolean = false) {
         viewModelScope.launch {
@@ -208,7 +231,8 @@ class MainViewModel @JvmOverloads constructor(
                 val space = async { spaceWeatherRepo.getSpaceWeather() }
                 val airspaceAsync = async { airspaceRepo.getAirspaceSnapshot(lat, lon) }
                 val terrain = async { terrainRepo.getTerrainProfile(lat, lon) }
-                FetchedTelemetry(weather.await(), space.await(), airspaceAsync.await(), terrain.await())
+                val tfr = async { tfrRepo.getTfrSnapshot() }
+                FetchedTelemetry(weather.await(), space.await(), airspaceAsync.await(), terrain.await(), tfr.await())
             }
             val weatherResult = fetched.weather
             val spaceResult = fetched.space
@@ -221,7 +245,13 @@ class MainViewModel @JvmOverloads constructor(
             val terrainProfile = terrainResult.getOrNull()
             // Decide what airspace applies at the launch point. MSL floors need ground elevation
             // (DEM from the terrain lookup); without it the classifier is conservative.
-            val airspace = airspaceResult.getOrNull()?.let { snapshot ->
+            val now = System.currentTimeMillis()
+            val activeFlightWindow = if (state.flightWindow.startEpochMs < now - 60_000L) {
+                FlightWindow.defaultTwoHours(now)
+            } else {
+                state.flightWindow
+            }
+            val classified = airspaceResult.getOrNull()?.let { snapshot ->
                 airspaceClassifier.classify(
                     snapshot = snapshot,
                     latitude = lat,
@@ -229,6 +259,32 @@ class MainViewModel @JvmOverloads constructor(
                     groundElevationFt = terrainProfile?.launchElevationFt,
                     plannedAltitudeAglFt = state.plannedAltitudeAglFt
                 )
+            }
+            // TFRs: only an answer from the live FAA feed may set tfrDataSourced.
+            val tfrSnapshot = fetched.tfr.getOrNull()
+            val airspace = if (classified != null && tfrSnapshot != null) {
+                val tfr = tfrEvaluator.evaluate(
+                    snapshot = tfrSnapshot,
+                    latitude = lat,
+                    longitude = lon,
+                    groundElevationFt = terrainProfile?.launchElevationFt,
+                    plannedAltitudeAglFt = state.plannedAltitudeAglFt,
+                    window = activeFlightWindow,
+                    launchStateCode = state.currentLocation.stateCode
+                )
+                Log.i(TAG, "TFRs evaluated: active=${tfr.active.map { it.id }} scheduled=${tfr.scheduledOutsideWindow.map { it.id }} " +
+                    "unmappedRegional=${tfr.unmappedRegional.map { it.id }} nationwide=${tfr.unmappedNationwideCount} mapZones=${tfr.mapZones.size} state=${state.currentLocation.stateCode}")
+                classified.copy(
+                    activeTfrs = tfr.active,
+                    tfrDataSourced = true,
+                    scheduledTfrsOutsideWindow = tfr.scheduledOutsideWindow,
+                    unmappedRegionalTfrs = tfr.unmappedRegional,
+                    unmappedNationwideTfrCount = tfr.unmappedNationwideCount,
+                    zones = classified.zones + tfr.mapZones
+                )
+            } else {
+                if (tfrSnapshot == null) Log.w(TAG, "TFRs unverified: ${fetched.tfr.exceptionOrNull()?.message}")
+                classified
             }
             if (airspace != null) {
                 Log.i(TAG, "Airspace classified: primary=${airspace.primaryClass} auth=${airspace.controlledAirspaceAuthorizationRequired} " +
@@ -246,12 +302,15 @@ class MainViewModel @JvmOverloads constructor(
                 )
             }
 
-            val now = System.currentTimeMillis()
-            val activeFlightWindow = if (state.flightWindow.startEpochMs < now - 60_000L) {
-                FlightWindow.defaultTwoHours(now)
-            } else {
-                state.flightWindow
-            }
+            val freshness = TelemetryFreshness.of(
+                listOf(
+                    weatherResult.isSuccess,
+                    spaceResult.isSuccess,
+                    airspace != null && !airspace.isStale, // cached airspace is not live
+                    terrainResult.isSuccess,
+                    fetched.tfr.isSuccess
+                )
+            )
 
             val context = AssessmentContext(
                 aircraft = state.selectedAircraft,
@@ -278,7 +337,10 @@ class MainViewModel @JvmOverloads constructor(
                     weatherForecast = weatherPair?.second,
                     airspaceInfo = airspace,
                     estimatedGnss = gnss,
-                    lastTelemetryUpdateEpochMs = System.currentTimeMillis(),
+                    spaceWeather = spaceWeather,
+                    telemetryFreshness = freshness,
+                    lastRefreshAttemptEpochMs = now,
+                    lastLiveDataEpochMs = if (freshness == TelemetryFreshness.OFFLINE) it.lastLiveDataEpochMs else now,
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
                 )
             }
@@ -354,6 +416,7 @@ class MainViewModel @JvmOverloads constructor(
 
     fun completeFirstTimeFleetSetup() {
         _uiState.update { it.copy(showFirstTimeFleetSetup = false) }
+        if (isReadyToAssess()) fetchLiveData()
     }
 
     fun setPilotAuthority(authority: PilotAuthorityType) {

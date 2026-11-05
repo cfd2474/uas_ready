@@ -35,6 +35,10 @@
 - **Prohibited area = NO-GO; Restricted area = CAUTION** with agency wording (activation schedule unknown to the app). LAANC wording only for B/C/D/E-surface.
 - **Airspace cache: ≤ 28 days (NASR cycle), ≤ 5 NM from the cached lookup**, clearly marked; overall verdict still requires live telemetry.
 - **Last-known location trusted only ≤ 60 s; fresh-fix wait bounded at 20 s** (was 5 min / unbounded).
+- **TFR source = tfr.faa.gov list + detail XML** (2026-11-05). Rejected: the WFS layer (no times or altitudes, drops some areas) and the FAA NOTAM API (needs credentials). Snapshot is all-or-nothing; per-NOTAM details cached by `mod_abs_time`. Ambiguities resolve conservatively: unknown ground → MSL floor treated as surface; non-Daily day codes → active all window; open-ended dates → in effect.
+- **Pilot authority persisted** (2026-11-05, owner request): asked once, remembered in SharedPreferences (`uas_ready_pilot_prefs`), changeable in Settings/Pilot screens.
+- **Header freshness = live data only** (2026-11-05): age counts from the last refresh that brought live data; OFFLINE red, PARTIAL amber (cached airspace counts as not live). Auto-refresh timing uses the last attempt.
+- **Home cards show "No live data"** instead of fallback values when a source is missing.
 - **Unverified TFRs are CAUTION, not GO** (2026-11-04). The live app has no TFR feed; it previously showed GO "No TFRs" — a false safety claim (and a Play "misleading claims" risk). Consequence: live assessments can no longer reach overall GO until a real TFR feed is integrated. `AirspaceInfo.tfrDataSourced` defaults to false so nothing claims coverage by accident.
 - **Airspace lookup failure → DATA_UNAVAILABLE**, never Class G. Either FAA query failing fails the whole lookup (partial airspace data would understate restrictions).
 - **Removed fabricated UASFM 400 ft ceiling** from the live repo (UASFM queries were removed in v1.3.34; the GO "conforms with UASFM ceiling" rule was unbacked).
@@ -52,6 +56,8 @@
 - **FAA ArcGIS quota is shared org-wide** — bulk exploration scripts can be throttled by other users' traffic. Check header `x-esri-org-request-units-per-min`; pace queries; point queries are cheap (2 units).
 - Emulator driver reads `MainViewModel: Airspace classified: primary=… auth=… specialUse=… zones=… groundFt=… cached=…` (added in chunk 4). Cache test: `adb shell svc wifi disable; svc data disable` → refresh at a previously visited point → `cached=true`; re-enable after.
 - Survey: `./gradlew testDebugUnitTest -PliveTests --tests '*AirspaceAccuracySurveyTest*'` → report at `app/build/reports/airspace-survey.md` (~3 min).
+- TFR feed logs: `TfrRepo: TFR feed: N current TFRs (M mapped), K details downloaded` and `MainViewModel: TFRs evaluated: active=[…] scheduled=[…] unmappedRegional=[…] …`. TFR detail cache: app files dir `tfr_cache.json`. `pm clear` wipes it (and the saved pilot) → next refresh re-downloads all details.
+- Git Bash + adb: set `MSYS_NO_PATHCONV=1`, or `/sdcard/...` paths are rewritten to `C:/Program Files/Git/sdcard/...`.
 - Release signing needs these keys in `local.properties` (gitignored): `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`. After rotating the keystore password, update them there.
 - `git filter-repo` installed via `python -m pip install --user git-filter-repo`; invoke as `python -m git_filter_repo`. It deletes the `origin` remote; re-add with `git remote add origin https://github.com/cfd2474/UAS_Ready.git`.
 - After the rewrite, `dev` has no upstream; first push must be `git push --force-with-lease -u origin dev`.
@@ -107,7 +113,21 @@ Original proposal:
 6. Re-run JVM survey + emulator regions; survey must reach 30/30.
 Also observed, not investigated: Warren Grove NJ weather card showed NO-GO "forecast visibility 0.2 SM" while current visibility read 10.0 SM — check visibility units/forecast parsing.
 
-### Queued — Chunk 5 — Map Performance (not started; needs approval)
+### Chunk 5 — Offline Honesty, Pilot Persistence, Live TFR Feed (owner approved 2026-11-05) — DONE, awaiting review
+1. Home cards never show invented values: pure presenter for card text; no live data → "No live data" (remove fabricated fallbacks 75°F / Wind 8 MPH / Vis 10 SM / Kp 2.0 / 12+ Sats / HDOP / Full Daylight). Unit tests.
+2. Header freshness chip reflects real data: pure `TelemetryFreshness` (LIVE / PARTIAL / OFFLINE) from source results; "last update" time only advances when live data arrived; chip turns amber/red with "Partial"/"Offline". Auto-refresh scheduled on attempt time. Unit tests.
+3. Persist pilot authority (SharedPreferences behind `PilotRepository`); skip the start-up prompt when a choice is saved; still changeable in Settings / Pilot screen. Unit tests with a fake store.
+4. Live TFR feed: research + verify an official FAA source, record it in `docs/PLATFORM_REFERENCE.md`; `TfrRepository` (fetch/parse) + pure evaluation at the launch point (active in the flight window, floor below planned altitude); TFR rules use it (`tfrDataSourced=true` only when the feed answered). Feed failure → stays "TFRs unverified" CAUTION.
+5. Tests: MockWebServer TFR parsing/failure, evaluation, rules; opt-in live test.
+6. Emulator check: offline cards/chip, pilot choice survives restart, a point inside a current TFR.
+7. Update this file; STOP for owner review (release v1.4.0 still blocked on keystore password).
+
+**Results (2026-11-05):** unit tests 94 pass / 4 live skipped; live TFR test 1/1 (65 notices, 50 mapped; active TFR 6/5156 NH detected at its centroid). Emulator: NH TFR → NO-GO "Class G • ACTIVE TFR"; Kansas → "Class G • No TFRs"; offline → chip "Offline • live data 0m ago" (red), Weather/GNSS/Kp/120-min cards "No live data", Airspace "Cached: Class G • TFRs unverified"; pilot prompt did not reappear after force-stop + relaunch, nor after `install -r`.
+Extra fix found during the emulator check: the 120 Minute Forecast card showed "Window Cleared" (GO) with no weather data; it now shows "No live data".
+TFR design: list + per-NOTAM detail XML (cached on device by `mod_abs_time`); pure `TfrEvaluator`; mapped TFR areas also appear on the map as RESTRICTED / TFR zones. Details in `docs/PLATFORM_REFERENCE.md` "FAA TFR feed".
+Known limits: (a) regional TFRs without a boundary (US–Mexico border TX/AZ, DC 5/7224) give CAUTION statewide in that state, so every TX/AZ/DC assessment is CAUTION while they last. A border-distance check would fix this. (b) 14 CFR 99.7 national-security UAS sites (nationwide NOTAM 6/3366) are not evaluated. The FAA ArcGIS layer `DoD_Mar_13` (2,291 polygons, surface–400 ft) could cover them and is proposed next. (c) First refresh after install downloads ~65 detail files (~37 s on the emulator); later refreshes fetch the list only. (d) Manual location entry has no state code, so unmapped regional TFRs give CAUTION.
+
+### Queued — Chunk 6 — Map Performance (not started; needs approval)
 - `MapScreen` `AndroidView.update` rebuilds all overlays/bitmaps on every recomposition; diff overlays, cache marker bitmaps.
 
 ---
