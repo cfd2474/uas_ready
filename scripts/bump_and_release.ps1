@@ -97,7 +97,9 @@ Write-Host "New:      v$newName (Build $newCode)" -ForegroundColor Green
 
 # Write new version.properties
 $newProps = "VERSION_CODE=$newCode`r`nVERSION_NAME=$newName`r`n"
-[System.IO.File]::WriteAllText($VersionFile, $newProps, [System.Text.Encoding]::UTF8)
+# No BOM: Gradle reads this with java.util.Properties (ISO-8859-1), so a BOM becomes part of the
+# first key, VERSION_CODE is not found, and every build silently got versionCode 1.
+[System.IO.File]::WriteAllText($VersionFile, $newProps, (New-Object System.Text.UTF8Encoding $false))
 
 # Move existing APKs in releases/current/ to releases/archive/
 $existingCurrentApks = Get-ChildItem -Path $CurrentDir -Filter "*.apk"

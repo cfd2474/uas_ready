@@ -14,8 +14,11 @@ if (versionPropsFile.exists()) {
     versionProps.load(FileInputStream(versionPropsFile))
 }
 
-val appVersionCode = versionProps.getProperty("VERSION_CODE", "1").toInt()
-val appVersionName = versionProps.getProperty("VERSION_NAME", "1.0.0")
+// No defaults: a missing key (e.g. hidden behind a UTF-8 BOM) must fail the build, not ship versionCode 1.
+val appVersionCode = versionProps.getProperty("VERSION_CODE")?.trim()?.toIntOrNull()
+    ?: throw GradleException("version.properties: VERSION_CODE missing or not a number (file must be saved without a BOM)")
+val appVersionName = versionProps.getProperty("VERSION_NAME")?.trim()?.takeIf { it.isNotEmpty() }
+    ?: throw GradleException("version.properties: VERSION_NAME missing (file must be saved without a BOM)")
 
 // Release signing credentials: local.properties first, then environment variables.
 val localProps = Properties().apply {

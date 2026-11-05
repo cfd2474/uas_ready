@@ -29,7 +29,7 @@
 - Pre-rewrite backup: `D:\Projects\cursor\UAS_Ready_backup_2026-11-04.git` (mirror, all 25 refs). Keep until GitHub push is confirmed good.
 - Tests: 33/34 pass; the 1 failure is the pre-existing date-dependent test (Chunk 2).
 
-### Chunk 8 — Release v1.4.0 (owner requested 2026-11-05) — DONE (UNSIGNED BUNDLE)
+### Chunk 8 — Release v1.4.0 (owner requested 2026-11-05) — DONE (SIGNED WITH NEW UPLOAD KEY; AWAITING PLAY RESET)
 1. Check the keystore opens with the password in `local.properties` (keytool, password via env var, never printed). **Result: wrong password** (`AppSign.jks` modified 2026-10-26) — same blocker as v1.3.50.
 2. Release notes `docs/RELEASE_NOTES.md` (user-facing, `## v1.4.0 — date`) + Play "What's new" text (≤ 500 chars) + test that the newest section equals `version.properties`.
 3. Check in-app source disclosures and `PRIVACY_POLICY.md` / `STORE_LISTING.md` against the new data sources (tfr.faa.gov, FAA national-security and Boundary_Airspace layers).
@@ -43,7 +43,9 @@
 - Step 3 (committed): Settings → Government Sources lists FAA TFR (tfr.faa.gov) and FAA UAS Data Delivery System (udds-faa.opendata.arcgis.com); `STORE_LISTING.md` lists both and the new capabilities (full description trimmed to 3,922 / 4,000 chars); `PRIVACY_POLICY.md` "Last Updated" Nov 5 2026, purposes include TFR and national-security checks, and states the TFR list is fetched without location. The owner must paste the store text and republish the privacy policy where it is hosted.
 
 - **Outcome (2026-11-05):** the owner confirmed the password in `local.properties` is the one they have; a real `packageRelease` still fails ("keystore password was incorrect"), and `APK Keys\backup-20261026\AppSign.jks` is byte-identical with the same result. Owner chose to go through Play upload-key handling and asked for a bundle only. Steps 4–5 replaced by: version bumped by hand to 1.4.0 / Build 58; `:app:packageReleaseBundle` (the unsigned intermediary bundle, does not trip the fail-fast signing check); repacked deflated (AGP's final sign step normally does this) → `bundle/UASReady-v1.4.0.aab` (15.0 MB, 231 entries, manifest 1.4.0, **no signature**); v1.3.49 bundle moved to `bundle/archive/`. No APK built, no emulator smoke test of a release build. Tests: 119 run, 0 fail, 8 skipped. Commit + tag `v1.4.0` on `dev`, not pushed.
-- **Owner must sign before upload:** Play Console rejects unsigned bundles. Either sign with the upload key (`jarsigner -keystore <jks> UASReady-v1.4.0.aab key0`) or, after a Play upload-key reset, with the new upload key.
+- **Upload-key reset (owner, 2026-11-05):** new upload keystore `D:\Code\ANDROID\APK Keys\UASReady-upload-2026-11-05.jks` (PKCS12, alias `upload`, RSA 4096, valid to 2054; random 24-char password, store = key, only in `local.properties`, never printed). Certificate for the Play reset request: `APK Keys\UASReady-upload-certificate-2026-11-05.pem`, SHA-256 `27:D5:A4:A1:C4:0B:D0:5C:0F:91:CC:99:09:4D:86:40:34:1B:42:96:64:A1:D1:4D:7D:61:AD:94:70:D5:16:65`. Old `local.properties` saved as `APK Keys\local.properties.before-upload-reset-2026-11-05`; `AppSign.jks` untouched. The signed v1.4.0 bundle can only be uploaded after Google approves the reset.
+- **versionCode bug found and fixed:** every shipped build was versionCode 1. `version.properties` was written with a UTF-8 BOM (since 2026-09-04, by `bump_and_release.ps1`), so `Properties` saw a key "ï»¿VERSION_CODE" and Gradle fell back to its default `"1"` (archived APKs before the BOM are also versionCode 1). Fixed: file without BOM, script writes UTF-8 without BOM, Gradle throws instead of defaulting, `VersionPropertiesTest` guards it. Tag `v1.4.0` moved (local, never pushed) to the fix commit.
+- **Final artifacts (signed with the new upload key, verified):** `bundle/UASReady-v1.4.0.aab` (SHA-256 2780ce35…21eb91) and `releases/current/UASReady-v1.4.0.apk` — versionCode 58 / 1.4.0 (aapt2), apksigner + keytool cert match the new key. Release APK installed on the emulator: launches to first-time setup, location and CTAF resolved, no crash. Tests: 121 run, 0 fail, 8 skipped.
 
 ## Decisions
 - **Classification separated from fetching** (2026-11-04, SOLID/SRP): `AirspaceRepository` returns raw `AirspaceSnapshot`; `AirspaceClassifier` (pure) decides relevance/class at the launch point; `CachingAirspaceRepository` decorates the live source.
@@ -90,7 +92,9 @@
 - Live FAA tests: `./gradlew testDebugUnitTest -PliveTests` (skipped otherwise).
 - `validateSigningRelease` reporting UP-TO-DATE does NOT prove the keystore opens. Only `assembleRelease`/`bundleRelease` actually decrypts the key.
 - `bump_and_release.ps1` writes the version bump BEFORE building; if the build fails, revert with `git checkout -- version.properties` and move the archived artifacts back, or the next run skips a version. Its "Previous:" line prints the already-bumped name (cosmetic bug).
-- `AppSign.jks` was modified 2026-10-26; the password from the old build file no longer opens it. The `backup-20261026` copy is byte-identical (same failure).
+- `AppSign.jks` was modified 2026-10-26; the password from the old build file no longer opens it. The `backup-20261026` copy is byte-identical (same failure). Retired: releases are signed with `UASReady-upload-2026-11-05.jks` (see Chunk 8).
+- `version.properties` must have no BOM (Gradle reads it as Latin-1 `Properties`). Check the real versionCode of a build with `build-tools/36.0.0/aapt2.exe dump badging <apk> | head -1`.
+- The debug and release builds are signed with different keys: `adb uninstall com.taksolutions.uasready` before installing the other one.
 - Unsigned bundle without touching signing config: `.\gradlew.bat :app:packageReleaseBundle` → `app/build/intermediates/intermediary_bundle/release/packageReleaseBundle/intermediary-bundle.aab` (stored uncompressed, ~50 MB; repack deflated). `app/build/outputs/bundle/release/app-release.aab` is only written by a successful signed `bundleRelease` — it may be stale.
 
 ### Chunk 2 — Safety & Correctness (owner approved 2026-11-04) — CODE DONE, RELEASE BLOCKED
