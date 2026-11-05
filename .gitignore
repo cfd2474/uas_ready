@@ -39,3 +39,4 @@ Thumbs.db
 *.swp
 *.bak
 *~
+scripts/survey/out/

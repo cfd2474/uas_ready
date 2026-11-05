@@ -42,6 +42,10 @@
 - **History rewritten with `git filter-repo`** rather than only untracking, so fresh clones are small and the password is gone from branch history.
 
 ## Operational notes
+- **Test emulator:** AVD `uasready-rcpro` (API 30 google_apis x86_64, 1920×1080 @ 480 dpi landscape = RC Pro 640×360 dp). Start: `emulator -avd uasready-rcpro -port 5620 -no-snapshot -no-boot-anim -no-audio` → serial `emulator-5620`. Other emulators on this machine (5580, 5600) belong to other projects — leave them alone.
+- **Mock GPS on emulator:** `adb emu geo fix <lon> <lat>` only reaches the app while it has an active location request, and the app reuses any last-known fix < 5 min old. To move regions: `settings put secure location_mode 0` then `3` (clears last-known), tap Refresh, and keep sending `geo fix` until the app logs `AirspaceRepo: Successfully resolved…`. Driver: `python scripts/survey/emulator_airspace_survey.py [REGION_KEYS...]` (outputs to scripts/survey/out/, gitignored).
+- **FAA ArcGIS quota is shared org-wide** — bulk exploration scripts can be throttled by other users' traffic. Check header `x-esri-org-request-units-per-min`; pace queries; point queries are cheap (2 units).
+- Survey: `./gradlew testDebugUnitTest -PliveTests --tests '*AirspaceAccuracySurveyTest*'` → report at `app/build/reports/airspace-survey.md` (~3 min).
 - Release signing needs these keys in `local.properties` (gitignored): `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`. After rotating the keystore password, update them there.
 - `git filter-repo` installed via `python -m pip install --user git-filter-repo`; invoke as `python -m git_filter_repo`. It deletes the `origin` remote; re-add with `git remote add origin https://github.com/cfd2474/UAS_Ready.git`.
 - After the rewrite, `dev` has no upstream; first push must be `git push --force-with-lease -u origin dev`.
@@ -64,7 +68,33 @@
 Step 6 BLOCKED: signed release build fails — "keystore password was incorrect". The password copied from the old build file matches byte-for-byte, but `AppSign.jks` was modified 2026-10-26 (after v1.3.49), so the keystore changed before this session. Half-run release was rolled back (version.properties back to 57 / 1.3.49; v1.3.49 artifacts restored to current). Owner must put the current keystore password in `local.properties`, then run `.\scripts\bump_and_release.ps1 -BumpType patch` → v1.3.50 (Build 58).
 Not unit-tested: ViewModel job cancellation (MainViewModel needs an Android Application; no ViewModel test harness yet).
 
-### Queued — Chunk 3 — Map Performance (not started; needs approval)
+### Chunk 3 — Airspace Accuracy Survey (owner requested 2026-11-04) — DONE, awaiting review
+Goal: verify the live FAA airspace source and the app's interpretation of it across US regions, on the JVM and on an emulator. Test + diagnose; fixes are proposed for the next chunk.
+1. Record the FAA ArcGIS service contract (fields, codes, limits) in `docs/PLATFORM_REFERENCE.md`, marked verified.
+2. Build a region matrix (~25 points): Class B/C/D/E-surface airports coast to coast, Class G rural, P/R areas, FL-floor R areas, Class B shelves over high terrain.
+3. Opt-in survey test (`-PliveTests`): run the app's `LiveAirspaceRepository` at each point and compare with an independent truth: FAA server-side point intersection at full resolution + correct floor logic (floor vs ground elevation + 400 ft AGL; FL floors excluded). Write a report.
+4. Emulator end-to-end: dedicated AVD (RC Pro profile, 1920×1080 landscape), install debug APK, mock GPS to a subset of regions, capture Airspace card/map + logs; confirm the device matches the JVM result.
+5. Update this file + platform reference with findings; STOP with discrepancy report and proposed fixes.
+Known before survey (verified against service data 2026-11-04): FL floors are in `LOWER_UOM='FL'` (code checks `LOWER_CODE=="FL"`, never true) → 37 SUA with FL180–FL310 floors treated as low-level. Floors compared as raw MSL, not AGL.
+
+**Results (2026-11-04)** — full report: `docs/airspace-survey-2026-11-04.md`; contract facts: `docs/PLATFORM_REFERENCE.md`.
+- JVM survey (`AirspaceAccuracySurveyTest`, opt-in `-PliveTests`): **27/30 agree** with FAA full-resolution truth across West, Northwest, Mountain, Southwest, Plains, Midwest, South, Southeast, Northeast, Gulf, Alaska, Hawaii; all classes B/C/D/E-surface/G/P/R incl. D-under-B-shelf, B shelf ~597 ft AGL, MOA overhead.
+- Emulator (AVD `uasready-rcpro`): 17 regions run end-to-end; device results identical to JVM (same class, same polygon counts).
+- **3/30 wrong — FL-floor defect confirmed** (R-5002G NJ, R-4008 MD, R-5107F NM): app says SPECIAL_USE + authorization required; truth Class G (floors FL200–FL250). Reproduced on device ("Special Use • LAANC Approval Required").
+- High-terrain shelves: 1,115 samples in 10 western cities, none < 400 ft AGL (closest 591). Raw-MSL filter safe today by margin, not by logic.
+- **FAA ArcGIS quota is org-wide (6000 units/min shared with all FAA-service users worldwide; baseline 2000–4000 used by others).** Each app lookup costs 2 units, but users can be throttled at any time by others' traffic → "Airspace Unavailable" (pre-chunk-2 code showed Class G).
+- `AirspaceAccuracySurveyTest` intentionally FAILS until the FL-floor fix lands (it is the regression test for it).
+
+### Proposed — Chunk 4 — Airspace Accuracy Fixes (needs approval)
+1. Floor semantics per platform reference: `LOWER_UOM='FL'` → value×100 ft MSL; `LOWER_CODE='SFC'` → AGL; `MSL` → minus ground elevation; include airspace only if floor < planned altitude AGL (400). Fixes the FL defect and makes the terrain case correct by logic.
+2. Restricted/Prohibited guidance: replace "LAANC Approval Required" (LAANC cannot authorize P/R areas) with controlling-agency guidance.
+3. Quota resilience: one retry with backoff on ArcGIS 429; cache last successful airspace per area for the NASR cycle (airspace changes on a 28/56-day cycle) so throttling degrades to "cached, dated" rather than unavailable. Longer term: consider a bundled/periodically-downloaded airspace dataset (like `airport_warning_zones.db`).
+4. Launch location staleness: `DeviceLocationManager` reuses any last-known fix < 5 min old — tighten (fresh fix, or last-known only if very recent/accurate).
+5. Search box: 0.55° longitude is only ~25 NM at 40°N / ~22 NM at 48°N vs the "30 NM" map claim — scale longitude by 1/cos(lat).
+6. Re-run JVM survey + emulator regions; survey must reach 30/30.
+Also observed, not investigated: Warren Grove NJ weather card showed NO-GO "forecast visibility 0.2 SM" while current visibility read 10.0 SM — check visibility units/forecast parsing.
+
+### Queued — Chunk 5 — Map Performance (not started; needs approval)
 - `MapScreen` `AndroidView.update` rebuilds all overlays/bitmaps on every recomposition; diff overlays, cache marker bitmaps.
 
 ---
