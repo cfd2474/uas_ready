@@ -29,6 +29,19 @@
 - Pre-rewrite backup: `D:\Projects\cursor\UAS_Ready_backup_2026-11-04.git` (mirror, all 25 refs). Keep until GitHub push is confirmed good.
 - Tests: 33/34 pass; the 1 failure is the pre-existing date-dependent test (Chunk 2).
 
+### Chunk 8 — Release v1.4.0 (owner requested 2026-11-05) — PREPARED, BLOCKED ON SIGNING
+1. Check the keystore opens with the password in `local.properties` (keytool, password via env var, never printed). **Result: wrong password** (`AppSign.jks` modified 2026-10-26) — same blocker as v1.3.50.
+2. Release notes `docs/RELEASE_NOTES.md` (user-facing, `## v1.4.0 — date`) + Play "What's new" text (≤ 500 chars) + test that the newest section equals `version.properties`.
+3. Check in-app source disclosures and `PRIVACY_POLICY.md` / `STORE_LISTING.md` against the new data sources (tfr.faa.gov, FAA national-security and Boundary_Airspace layers).
+4. When the password works: `.\scriptsump_and_release.ps1 -BumpType minor` (no `-GitPush`: it pushes to `main`) → v1.4.0 (Build 58).
+5. Verify: `apksigner verify` on APK, versionCode 58 / versionName 1.4.0 in the AAB, release APK smoke test on the emulator.
+6. Commit + annotated tag `v1.4.0` on `dev`. Push is blocked until the owner force-pushes the rewritten history (a normal push is non-fast-forward).
+7. Update this file; STOP.
+
+**Status (2026-11-05):** steps 1–3 done. Step 1 failed (wrong keystore password), so nothing is bumped or built.
+- Step 2: `docs/RELEASE_NOTES.md` (v1.4.0 section + 424-char Play "What's new") and `ReleaseNotesTest` are written but **deliberately uncommitted**: the test fails until `version.properties` says 1.4.0, so they go into the release commit together with the bump.
+- Step 3 (committed): Settings → Government Sources lists FAA TFR (tfr.faa.gov) and FAA UAS Data Delivery System (udds-faa.opendata.arcgis.com); `STORE_LISTING.md` lists both and the new capabilities (full description trimmed to 3,922 / 4,000 chars); `PRIVACY_POLICY.md` "Last Updated" Nov 5 2026, purposes include TFR and national-security checks, and states the TFR list is fetched without location. The owner must paste the store text and republish the privacy policy where it is hosted.
+
 ## Decisions
 - **Classification separated from fetching** (2026-11-04, SOLID/SRP): `AirspaceRepository` returns raw `AirspaceSnapshot`; `AirspaceClassifier` (pure) decides relevance/class at the launch point; `CachingAirspaceRepository` decorates the live source.
 - **Unknown ground elevation → treat MSL floors as possibly low** (over-report, never under-report) + `AIR-ELEV-001` caution. Rejected: falling back to GPS altitude (code defaults to 206 m when absent; unreliable).
@@ -47,6 +60,7 @@
 - **Removed fabricated UASFM 400 ft ceiling** from the live repo (UASFM queries were removed in v1.3.34; the GO "conforms with UASFM ceiling" rule was unbacked).
 - **Live-network tests are opt-in** (`-PliveTests`) so the default suite is deterministic.
 - **MockWebServer** (test-only) used for repository failure tests; JDK `com.sun.net.httpserver` is not on the Android unit-test compile classpath.
+- **Release notes in `docs/RELEASE_NOTES.md`, enforced by `ReleaseNotesTest`** (2026-11-05, CLAUDE.md §9), committed with the version bump.
 - **Keystore not rotated; repo to be made private** (owner, 2026-11-05). The leaked password stays valid; the owner accepts that, with the repository private.
 - **Keep `version.properties` + `scripts/bump_and_release.ps1`** release flow (owner, 2026-11-04). CLAUDE.md `VERSION`-file convention not adopted.
 - **App ships via Google Play Console (public).** `AppSign.jks` is the Play upload key; release builds must stay signed with it.

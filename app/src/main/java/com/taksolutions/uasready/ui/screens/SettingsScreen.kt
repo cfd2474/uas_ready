@@ -479,6 +479,22 @@ fun SettingsScreen(
                                             onOpen = { uriHandler.openUri("https://ais-faa.opendata.arcgis.com/") }
                                         )
 
+                                        // Source 2b: FAA TFR feed
+                                        GovernmentSourceItem(
+                                            title = "FAA Temporary Flight Restrictions (TFR)",
+                                            subtitle = "Current TFR list, boundaries, altitudes and schedules",
+                                            url = "https://tfr.faa.gov/",
+                                            onOpen = { uriHandler.openUri("https://tfr.faa.gov/") }
+                                        )
+
+                                        // Source 2c: FAA UAS Data Delivery System (national-security UAS restrictions, DC SFRA/FRZ)
+                                        GovernmentSourceItem(
+                                            title = "FAA UAS Data Delivery System",
+                                            subtitle = "National-security UAS flight restrictions (14 CFR 99.7) incl. the US–Mexico border, DC SFRA/FRZ",
+                                            url = "https://udds-faa.opendata.arcgis.com/",
+                                            onOpen = { uriHandler.openUri("https://udds-faa.opendata.arcgis.com/") }
+                                        )
+
                                         // Source 3: FAA Part 107 Regulations
                                         GovernmentSourceItem(
                                             title = "FAA 14 CFR Part 107 Small UAS Regulations",

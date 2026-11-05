@@ -1,7 +1,7 @@
 # Privacy Policy for UASReady
 
 **Effective Date:** September 4, 2026  
-**Last Updated:** September 4, 2026
+**Last Updated:** November 5, 2026
 
 This Privacy Policy describes how **Taktical Application and Knowledge Solutions, LLC** ("Company", "we", "us", or "our") collects, uses, processes, and protects your information when you use our mobile application, **UASReady** (the "Application" or "App"), available on the Google Play Store.
 
@@ -29,7 +29,7 @@ UASReady is a tactical preflight flight-readiness assessment tool for unmanned a
 ### A. Location Data (Precise and Approximate Location)
 - **Permissions Requested:** `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION`.
 - **Purpose & Use:** The App accesses your device's geographical coordinates (latitude and longitude) solely to:
-  1. Determine local FAA airspace boundaries, controlled sectors (Class B/C/D/E), and Special Use Airspace (SUA) within a 30 nautical mile radius of your launch location.
+  1. Determine local FAA airspace boundaries, controlled sectors (Class B/C/D/E), Special Use Airspace (SUA), and national-security UAS flight restrictions (including the Washington DC SFRA/FRZ) within a 30 nautical mile radius of your launch location, and check it against current FAA Temporary Flight Restrictions. The nationwide TFR list is downloaded without sending your location; the comparison happens on your device.
   2. Query localized surface meteorological data (wind speeds, gusts, temperature, precipitation, and cloud base ceiling).
   3. Calculate localized astronomical solar ephemeris (exact civil dawn, sunrise, sunset, and civil dusk for Part 107 daylight compliance).
   4. Identify the nearest manned airfield to resolve Common Traffic Advisory Frequencies (CTAF) and Tower frequencies.
@@ -42,7 +42,8 @@ UASReady is a tactical preflight flight-readiness assessment tool for unmanned a
 
 ### C. Network & Telemetry Queries
 To produce safety evaluations, the App connects to public, official government and scientific data providers over secure HTTPS:
-- Federal Aviation Administration (FAA) OpenData Aeronautical Services
+- Federal Aviation Administration (FAA) OpenData Aeronautical Services and UAS Data Delivery System
+- FAA Temporary Flight Restrictions service (tfr.faa.gov) — no location is sent
 - National Oceanic and Atmospheric Administration (NOAA) Space Weather Prediction Center
 - Open-Meteo Weather APIs
 - National Weather Service (NWS)

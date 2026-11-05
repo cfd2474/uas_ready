@@ -9,7 +9,7 @@ Part 107 preflight safety & airspace decision engine for commercial drone pilots
 ---
 
 ## Full Description (Max 4,000 Characters)
-*(Character Count: ~3,589 characters - strictly within Google Play's 4,000 character limit. Copy and paste the block below into the "Full description" field in Google Play Console)*
+*(Character Count: ~3,922 characters - strictly within Google Play's 4,000 character limit. Copy and paste the block below into the "Full description" field in Google Play Console)*
 
 ```
 IMPORTANT DISCLAIMER:
@@ -21,6 +21,10 @@ UASReady references public data from official US government agencies:
   https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/
 • FAA Open Data GIS (Class Airspace & SUA):
   https://ais-faa.opendata.arcgis.com/
+• FAA Temporary Flight Restrictions (TFR):
+  https://tfr.faa.gov/
+• FAA UAS Data Delivery System (National Security UAS Flight Restrictions):
+  https://udds-faa.opendata.arcgis.com/
 • FAA 14 CFR Part 107 Regulations:
   https://www.faa.gov/uas/commercial_operators
   https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107
@@ -40,14 +44,17 @@ Engineered for handheld controllers—including the DJI RC Pro Enterprise—UASR
 --------------------------------------------------
 
 🛰️ 100% DETERMINISTIC SAFETY ENGINE
-Zero probabilistic guessing. Preflight verdicts are evaluated against deterministic aviation parameters, Part 107 rules, and manufacturer limits with clear rationales.
+Verdicts come from explicit aviation rules, Part 107 and manufacturer limits, each with its reason.
 
 🗺️ LIVE FAA AIRSPACE (SURFACE TO 500')
 • Live 30 NM query from FAA open data feeds.
 • Class B, Class C, Class D, and surface Class E extensions.
 • Special Use Airspace (SUA): Prohibited, Restricted, Warning, Alert, and MOA.
-• Filtered to surface-to-500' floors to eliminate high-altitude clutter.
+• Surface-to-500' floors only, no high-altitude clutter.
 • Tap-to-inspect boundaries, floors, ceilings, and active restrictions.
+• Live FAA TFRs checked against your launch point, altitude and flight window.
+• National-security no-drone zones (14 CFR 99.7): US–Mexico border, military sites, DC FRZ/SFRA.
+• Unreachable sources show as unverified, never as clear.
 
 📻 AIRPORT OVERLAY & CTAF/TOWER FREQUENCIES
 Resolves airfields within 30 NM with active CTAF, Tower, or UNICOM frequencies and distance for enhanced situational awareness.
