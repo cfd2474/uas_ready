@@ -61,7 +61,7 @@
 7. STOP for owner review. Live TFR feed integration → proposed as its own chunk (needs FAA TFR API research + `docs/PLATFORM_REFERENCE.md` entry).
 
 **Status (2026-11-04):** steps 1–5 done and committed (no version bump). Tests: 41 pass, 2 live-FAA skipped by default; live run (`-PliveTests`) also 2/2 pass.
-Step 6 BLOCKED: signed release build fails — "keystore password was incorrect". The password copied from the old build file matches byte-for-byte, but `AppSign.jks` was modified 2026-10-26 (after v1.3.49), so the keystore changed before this session. Half-run release was rolled back (version.properties back to 57 / 1.3.49; v1.3.49 artifacts restored to current). Owner must put the current keystore password in `local.properties`, then run `.\scriptsump_and_release.ps1 -BumpType patch` → v1.3.50 (Build 58).
+Step 6 BLOCKED: signed release build fails — "keystore password was incorrect". The password copied from the old build file matches byte-for-byte, but `AppSign.jks` was modified 2026-10-26 (after v1.3.49), so the keystore changed before this session. Half-run release was rolled back (version.properties back to 57 / 1.3.49; v1.3.49 artifacts restored to current). Owner must put the current keystore password in `local.properties`, then run `.\scripts\bump_and_release.ps1 -BumpType patch` → v1.3.50 (Build 58).
 Not unit-tested: ViewModel job cancellation (MainViewModel needs an Android Application; no ViewModel test harness yet).
 
 ### Queued — Chunk 3 — Map Performance (not started; needs approval)
