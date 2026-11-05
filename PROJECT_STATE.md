@@ -23,6 +23,26 @@
 6. Update this file (decisions, operational notes).
 7. STOP — owner approval required before force-pushing `dev`, `main`, and tags to GitHub. Owner must rotate the keystore password (it remains retrievable from GitHub PR refs regardless of the rewrite).
 
+**Status: steps 1–6 done locally (2026-11-04). Awaiting owner approval for step 7. Nothing pushed.**
+- Local history rewritten (all SHAs changed). Repo ~1.53 GB → 180 MB. 0 APK/AAB blobs, 0 commits/trees containing the secret.
+- Remaining 167 MB = abandoned `nasr_airspace.db.gz`, reachable ONLY via orphan tags `v1.5.6–v1.5.8`. Dropping those tags → 13 MB. Not done (not approved).
+- Pre-rewrite backup: `D:\Projects\cursor\UAS_Ready_backup_2026-11-04.git` (mirror, all 25 refs). Keep until GitHub push is confirmed good.
+- Tests: 33/34 pass; the 1 failure is the pre-existing date-dependent test (Chunk 2).
+
+## Decisions
+- **Keep `version.properties` + `scripts/bump_and_release.ps1`** release flow (owner, 2026-11-04). CLAUDE.md `VERSION`-file convention not adopted.
+- **App ships via Google Play Console (public).** `AppSign.jks` is the Play upload key; release builds must stay signed with it.
+- **Signing secrets in `local.properties` / env vars only**; release packaging fails fast if absent (an unsigned AAB would be rejected by Play anyway — fail early and clearly).
+- **Release binaries not tracked in git** (owner approved cleanup); they live in local `releases/` and `bundle/` and are uploaded to Play.
+- **History rewritten with `git filter-repo`** rather than only untracking, so fresh clones are small and the password is gone from branch history.
+
+## Operational notes
+- Release signing needs these keys in `local.properties` (gitignored): `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`. After rotating the keystore password, update them there.
+- `git filter-repo` installed via `python -m pip install --user git-filter-repo`; invoke as `python -m git_filter_repo`. It deletes the `origin` remote; re-add with `git remote add origin https://github.com/cfd2474/UAS_Ready.git`.
+- After the rewrite, `dev` has no upstream; first push must be `git push --force-with-lease -u origin dev`.
+- `./gradlew testDebugUnitTest | tail` reports exit 0 even on failure (pipe). Check `app/build/test-results/` or the Gradle exit code directly.
+- `DataLayerTest` hits live FAA endpoints — results depend on network and current FAA data.
+
 ### Queued — Chunk 2 — Safety & Correctness (not started; needs approval)
 - Airspace repo: network/HTTP failure must yield "data unavailable", never Class G / no-auth.
 - TFR feed not implemented (`activeTfrs = emptyList()`) despite README claim.
