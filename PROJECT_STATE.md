@@ -47,6 +47,7 @@
 - **Removed fabricated UASFM 400 ft ceiling** from the live repo (UASFM queries were removed in v1.3.34; the GO "conforms with UASFM ceiling" rule was unbacked).
 - **Live-network tests are opt-in** (`-PliveTests`) so the default suite is deterministic.
 - **MockWebServer** (test-only) used for repository failure tests; JDK `com.sun.net.httpserver` is not on the Android unit-test compile classpath.
+- **Keystore not rotated; repo to be made private** (owner, 2026-11-05). The leaked password stays valid; the owner accepts that, with the repository private.
 - **Keep `version.properties` + `scripts/bump_and_release.ps1`** release flow (owner, 2026-11-04). CLAUDE.md `VERSION`-file convention not adopted.
 - **App ships via Google Play Console (public).** `AppSign.jks` is the Play upload key; release builds must stay signed with it.
 - **Signing secrets in `local.properties` / env vars only**; release packaging fails fast if absent (an unsigned AAB would be rejected by Play anyway — fail early and clearly).
@@ -62,6 +63,7 @@
 - TFR feed logs: `TfrRepo: TFR feed: N current TFRs (M mapped), K details downloaded` and `MainViewModel: TFRs evaluated: active=[…] scheduled=[…] unmappedRegional=[…] …`. TFR detail cache: app files dir `tfr_cache.json`. `pm clear` wipes it (and the saved pilot) → next refresh re-downloads all details.
 - National-security logs: `SecurityAirspace: National security: atPoint=[…] nearby=N dc=…` and `MainViewModel: National security evaluated: …` / `National security unverified: …`. Live tests: `./gradlew testDebugUnitTest -PliveTests --tests '*LiveSecurityAirspace*'` (~75 s; waits 65 s on a quota error).
 - After `adb install -r` the app is stopped; relaunch with `adb shell monkey -p com.taksolutions.uasready -c android.intent.category.LAUNCHER 1` before driving it. The first refresh after launch uses the previous location — match the expected `state=` in the log before trusting a result.
+- Map benchmark: open the map, then `python scripts/perf/map_bench.py LABEL` (gfxinfo frames + `MapOverlays: rebuilt …` counts). gfxinfo varies ±20 points between identical runs on the emulator — compare several runs, not one.
 - adb is not on PATH in Git Bash: `/c/Users/Michael/AppData/Local/Android/Sdk/platform-tools/adb.exe`.
 - Git Bash + adb: set `MSYS_NO_PATHCONV=1`, or `/sdcard/...` paths are rewritten to `C:/Program Files/Git/sdcard/...`.
 - Release signing needs these keys in `local.properties` (gitignored): `RELEASE_STORE_FILE`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`. After rotating the keystore password, update them there.
@@ -151,8 +153,25 @@ Found during the work: (1) the FAA border polygons are ≈ 0.87 NM wide in CA/AZ
 Design: `ArcGisQueryClient` (shared transport, extracted from `LiveAirspaceRepository`), `LiveSecurityAirspaceRepository` (3 queries, all-or-nothing, not cached), pure `SecurityAirspaceEvaluator`, `SecurityAirspaceRules` (AIR-NSUAS-001..004, AIR-DC-001/002), `UnmappedTfrCoverage` (which unmapped TFRs another layer covers + their states), `AirspaceCardText` presenter. TFR cache entries carry `parserVersion`; v1 entries are re-downloaded once.
 Known limits: (a) the FAA quota is org-wide; when other users exhaust it the app shows national-security restrictions as unverified (CAUTION), never clear. (b) Not cached, so offline = unverified. (c) The 1 NM proximity check uses geometry simplified to ~50 m. (d) DC SFRA conditions are shown as text; the app does not check registration/VLOS.
 
-### Queued — Chunk 7 — Map Performance (not started; needs approval)
-- `MapScreen` `AndroidView.update` rebuilds all overlays/bitmaps on every recomposition; diff overlays, cache marker bitmaps.
+### Chunk 7 — Map Performance (owner approved 2026-11-05) — DONE, awaiting review
+Problem: `MapScreen`'s `AndroidView.update` runs on every recomposition (each tap, legend toggle, loading flag) and rebuilds every polygon and airport-marker bitmap; tap listeners capture stale data. Also found: the map's bottom bar shows "12+ Sats Visible / HDOP <= 1.5" with no live data (same invented-value problem fixed on Home in chunk 5).
+1. Baseline on the emulator at a dense location (San Diego): `dumpsys gfxinfo` janky-frame % and overlay rebuild count/time while tapping, toggling layers and panning.
+2. Pure `AirspaceInspector` (what a tap point is inside) with unit tests; drop MapScreen's duplicate geometry helpers in favour of `GeoMath`.
+3. `MapOverlayController` (plain class): owns the osmdroid overlays, rebuilds a layer only when its inputs change, caches marker bitmaps, one tap handler that reads the current data.
+4. `MapScreen` delegates to the controller; `update` becomes cheap.
+5. Map bottom bar: "No live data" instead of invented GNSS values.
+6. Re-measure, emulator check (taps, layer toggles, basemap switch, recenter); tests.
+   Added after the step-1 baseline (San Diego, emulator): rebuilds cost 7–13 ms per tap, but **drawing** the airspace polygons dominates — 91 % janky frames (median 25 ms, p95 48 ms) with all layers vs 38 % (13 / 31 ms) with airspace layers off. So step 6 also measures per-frame drawing changes one at a time and keeps only what helps.
+7. Update this file; STOP for review.
+   Owner request during the chunk (2026-11-05): map cards (inspection, airport) and the location bar must not cover or sit under the layers or location buttons.
+
+**Results (2026-11-05):** unit tests 117 run / 109 pass / 8 live skipped / 0 fail.
+- Rebuilds: San Diego (110 overlays, 4,920 vertices): before, every tap/toggle/recomposition rebuilt all overlays (7–13 ms on the UI thread each; 6 in one benchmark run). After: 0 rebuilds while tapping/panning/switching basemaps; a layer toggle rebuilds only that layer (1–5 ms). Taps always inspect current data.
+- Drawing (emulator, `scripts/perf/map_bench.py`): polygon **outlines** are the dominant per-frame cost — outlines off: 40 % janky / median 14 ms vs 71–95 % / 20–28 ms with them. Fills, osmdroid downgrade mode, hairline strokes, no anti-aliasing and polyline outlines made no change beyond run-to-run noise (the unchanged build measured 71 % and 95 % in two runs). No drawing change kept. Emulator GPU (host Vulkan) is not the RC Pro's; measure on the device before choosing a drawing fix.
+- Layout: right-hand control column (layers + location buttons, 48 dp, 8 dp from the edge); cards and location bar end before it. Root cause of the buttons touching the screen edge: Material enlarges a 34 dp IconButton to its 48 dp minimum touch target, overflowing 7 dp each side. The header's menu button (MainActivity) still touches the right edge — likely the same cause, not changed.
+- Map bottom bar: "GNSS: No live data / Needs NOAA space weather" instead of "12+ Sats Visible / HDOP <= 1.5" (code change; not exercised offline on the emulator).
+Design: `ui/map/MapOverlayController` (layer ownership, identity-keyed rebuilds, single tap path), `ui/map/BitmapMarkerIcons` (cached icons behind `MarkerIconFactory`), pure `ui/presentation/AirspaceInspector`, `GeoMath.distanceMeters`; MapScreen lost its duplicate geometry helpers (1,096 → ~815 lines).
+Open: the inspection card can still cover the basemap selector and the zoom buttons on the left when it has several layers.
 
 ---
 
