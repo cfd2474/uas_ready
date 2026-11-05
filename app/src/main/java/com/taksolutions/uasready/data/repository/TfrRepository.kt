@@ -97,7 +97,8 @@ class LiveTfrRepository(
                 entries.map { entry ->
                     async {
                         val prior = cached[entry.notamId]
-                        if (prior != null && prior.modifiedStamp == entry.modified && entry.modified.isNotEmpty()) {
+                        if (prior != null && prior.modifiedStamp == entry.modified && entry.modified.isNotEmpty() &&
+                            prior.parserVersion == TfrXmlParser.VERSION) {
                             prior.copy(type = entry.type, state = entry.state, description = entry.description)
                         } else {
                             val detail = permits.withPermit {
@@ -112,7 +113,10 @@ class LiveTfrRepository(
                                 cfrSection = detail.cfrSection,
                                 effective = detail.effective,
                                 areas = detail.areas,
-                                modifiedStamp = entry.modified
+                                modifiedStamp = entry.modified,
+                                textHeader = detail.textHeader,
+                                textStates = detail.textStates,
+                                parserVersion = TfrXmlParser.VERSION
                             )
                         }
                     }

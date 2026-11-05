@@ -15,7 +15,11 @@ data class ParsedTfrDetail(
     val notamId: String,
     val cfrSection: String?,
     val effective: TimeWindow,
-    val areas: List<TfrArea>
+    val areas: List<TfrArea>,
+    /** Opening of the NOTAM text (`txtDescrUSNS`), e.g. "!FDC 6/9954 ZLA SECURITY CA, AZ..AIRSPACE …". */
+    val textHeader: String = "",
+    /** States named in the NOTAM text header. The list's single `state` can omit some (6/9954 lists only AZ). */
+    val textStates: List<String> = emptyList()
 )
 
 /**
@@ -88,7 +92,8 @@ class TfrXmlParser {
             )
         }
 
-        return ParsedTfrDetail(notamId, cfr, effective, areas)
+        val header = not.descendants("txtDescrUSNS").firstOrNull()?.textContent?.trim()?.replace(WHITESPACE, " ")?.take(HEADER_CHARS).orEmpty()
+        return ParsedTfrDetail(notamId, cfr, effective, areas, header, statesInHeader(header))
     }
 
     private data class Altitude(val ft: Double, val reference: AltitudeReference)
@@ -104,6 +109,23 @@ class TfrXmlParser {
     }
 
     companion object {
+        /** Bump when parsed fields change, so cached details from an older parser are downloaded again. */
+        const val VERSION = 2
+        private const val HEADER_CHARS = 400
+
+        private val US_STATE_CODES = setOf(
+            "AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME",
+            "MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI",
+            "SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","PR","VI","GU","AS","MP"
+        )
+        private val WHITESPACE = Regex("""\s+""")
+        private val HEADER_STATES = Regex("""^!FDC\s+\S+\s+\S+\s+.{0,40}?\b((?:[A-Z]{2},\s?)*[A-Z]{2})\.\.""")
+
+        /** "!FDC 6/9954 ZLA SECURITY CA, AZ..AIRSPACE" → [CA, AZ]. Empty when the header has no state list. */
+        fun statesInHeader(header: String): List<String> =
+            HEADER_STATES.find(header)?.groupValues?.get(1)
+                ?.split(",")?.map { it.trim() }?.filter { it in US_STATE_CODES }.orEmpty()
+
         fun parseUtc(value: String?): Long? = value?.trim()?.takeIf { it.isNotEmpty() }?.let {
             runCatching { LocalDateTime.parse(it).toInstant(ZoneOffset.UTC).toEpochMilli() }.getOrNull()
         }

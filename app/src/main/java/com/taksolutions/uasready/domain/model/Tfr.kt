@@ -44,7 +44,13 @@ data class TfrNotice(
     val effective: TimeWindow = TimeWindow(null, null),
     val areas: List<TfrArea> = emptyList(),
     /** FAA list `mod_abs_time`; a change means the NOTAM was amended. */
-    val modifiedStamp: String = ""
+    val modifiedStamp: String = "",
+    /** Opening of the NOTAM text; identifies notices evaluated through other FAA layers. */
+    val textHeader: String = "",
+    /** States named in the NOTAM text (the list `state` holds only one). */
+    val textStates: List<String> = emptyList(),
+    /** TfrXmlParser.VERSION that produced this entry; older cached entries are re-downloaded. */
+    val parserVersion: Int = 0
 ) {
     val hasGeometry: Boolean get() = areas.any { it.polygon.size >= 3 }
     val isNationwide: Boolean get() = state.equals("USA", ignoreCase = true)

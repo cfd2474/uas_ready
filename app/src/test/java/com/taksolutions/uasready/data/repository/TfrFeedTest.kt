@@ -153,6 +153,17 @@ class TfrFeedTest {
     }
 
     @Test
+    fun cachedDetailsFromAnOlderParserAreDownloadedAgain() = runBlocking {
+        val store = MemoryStore()
+        repo(store).getTfrSnapshot().getOrThrow()
+        store.saved = store.saved.map { it.copy(parserVersion = TfrXmlParser.VERSION - 1) }
+        requested.clear()
+        repo(store).getTfrSnapshot().getOrThrow()
+        assertEquals(3, requested.size) // list + both details
+        assertTrue(store.saved.all { it.parserVersion == TfrXmlParser.VERSION })
+    }
+
+    @Test
     fun unreachableFeedFails() = runBlocking {
         val r = LiveTfrRepository(MemoryStore(), baseUrl = "http://127.0.0.1:1").getTfrSnapshot()
         assertTrue(r.isFailure)
@@ -234,7 +245,8 @@ class TfrFeedTest {
 
     @Test
     fun unmappedRegionalTfrAppliesInItsStateOrWhenStateUnknown() {
-        val border = TfrNotice("6/9954", "SECURITY", "U.S. MEXICO BORDER, AZ", "AZ", areas = emptyList())
+        // A single-state notice without a boundary (no text states, no other FAA layer covers it).
+        val border = TfrNotice("6/7001", "SECURITY", "PHOENIX, AZ", "AZ", areas = emptyList())
         val nationwide = TfrNotice("6/3366", "SECURITY", "USA", "USA", areas = emptyList())
         val snap = TfrSnapshot(listOf(border, nationwide), 0L)
         val w = window("2026-11-05T12:00:00Z", "2026-11-05T14:00:00Z")

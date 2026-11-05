@@ -10,8 +10,9 @@ data class TfrEvaluation(
     /** As [active], but the area's daily schedule does not overlap the window. Still worth a caution. */
     val scheduledOutsideWindow: List<TemporaryFlightRestriction>,
     /**
-     * Regional TFRs with no published boundary (e.g. US–Mexico border) whose state matches the launch
-     * state — or every such TFR when the launch state is unknown.
+     * Regional TFRs with no published boundary that may cover the launch state (NOTAM text states, not
+     * just the list's single state) — or every such TFR when the launch state is unknown. Notices
+     * evaluated through another FAA layer are left out while that layer answers.
      */
     val unmappedRegional: List<TemporaryFlightRestriction>,
     /** Nationwide notices (state "USA") with no boundary, e.g. the 14 CFR 99.7 national-security sites notice. */
@@ -34,7 +35,9 @@ class TfrEvaluator(private val mapRadiusLatDeg: Double = 0.55) {
         groundElevationFt: Double?,
         plannedAltitudeAglFt: Double,
         window: FlightWindow,
-        launchStateCode: String?
+        launchStateCode: String?,
+        /** True when the FAA national-security and DC SFRA layers answered; see [UnmappedTfrCoverage]. */
+        securityLayersSourced: Boolean = false
     ): TfrEvaluation {
         val active = mutableListOf<TemporaryFlightRestriction>()
         val scheduled = mutableListOf<TemporaryFlightRestriction>()
@@ -62,7 +65,8 @@ class TfrEvaluator(private val mapRadiusLatDeg: Double = 0.55) {
 
         val unmapped = snapshot.notices.filter { !it.hasGeometry }
         val regional = unmapped.filter { !it.isNationwide }
-            .filter { launchStateCode == null || it.state.equals(launchStateCode, ignoreCase = true) }
+            .filter { !(securityLayersSourced && UnmappedTfrCoverage.of(it) != TfrCoverage.NONE) }
+            .filter { launchStateCode == null || launchStateCode.uppercase() in UnmappedTfrCoverage.statesOf(it) }
             .filter { notice -> windowsOf(notice, null).any { it.overlaps(window.startEpochMs, window.endEpochMs) } }
             .map { toTfr(it, null) }
 

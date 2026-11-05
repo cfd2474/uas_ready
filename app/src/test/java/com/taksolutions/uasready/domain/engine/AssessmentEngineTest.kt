@@ -62,6 +62,7 @@ class AssessmentEngineTest {
             controlledAirspaceAuthorizationRequired = false,
             activeTfrs = emptyList(),
             tfrDataSourced = true,
+            securityAirspaceSourced = true,
             timestampEpochMs = now
         )
 

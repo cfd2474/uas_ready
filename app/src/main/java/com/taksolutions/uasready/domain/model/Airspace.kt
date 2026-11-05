@@ -117,6 +117,17 @@ data class AirspaceInfo(
     val unmappedRegionalTfrs: List<TemporaryFlightRestriction> = emptyList(),
     /** Nationwide TFR notices with no boundary (e.g. 14 CFR 99.7 national-security UAS sites). */
     val unmappedNationwideTfrCount: Int = 0,
+    /**
+     * True only when the FAA national-security UAS and DC SFRA layers answered. When false the
+     * fields below mean "not checked". Defaults to false so nothing claims coverage by accident.
+     */
+    val securityAirspaceSourced: Boolean = false,
+    /** 14 CFR 99.7 sites (incl. the US–Mexico border strip) containing the launch point. */
+    val nationalSecuritySitesAtLaunch: List<NationalSecurityUasSite> = emptyList(),
+    /** Other 99.7 sites within 1 NM of the launch point. */
+    val nationalSecuritySitesNearby: List<NationalSecurityUasSite> = emptyList(),
+    /** DC SFRA / FRZ containing the launch point, if any. */
+    val dcSfraZone: DcSfraZone? = null,
     val zones: List<AirspaceZone> = emptyList(),
     val notams: List<NoticeToAirmen> = emptyList(),
     val specialUseAirspaceActive: Boolean = false,

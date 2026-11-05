@@ -85,7 +85,56 @@ Where official documentation and observation disagree, both are kept.
 - **All-or-nothing:** if the list or any changed detail fails to load or parse, TFRs are reported as *unverified* (`AIR-TFR-003`, CAUTION). The app never shows a partial "No TFRs".
 - **NO-GO (`AIR-TFR-001`):** the launch point is inside a mapped area that is in effect during the flight window and whose floor is below the planned altitude AGL. An MSL floor is converted to AGL using DEM ground elevation; if ground elevation is unknown, the floor is treated as at the surface.
 - **Daily schedules:** only `dayCode=Daily` time-of-day schedules are interpreted. A window crossing midnight is taken as end ≤ start → next day (unverified). Inside the area but outside its hours → `AIR-TFR-004` CAUTION. Any other `dayCode` is treated as active for the whole window, so it over-reports.
-- **Regional TFRs without a boundary:** CAUTION `AIR-TFR-005` when the launch state matches, or when the launch state is unknown. Nationwide notices are counted and named in the GO explanation; they are not evaluated.
+- **Regional TFRs without a boundary:** CAUTION `AIR-TFR-005` when the launch state matches, or when the launch state is unknown. ⚠️ Chunk 5 matched only the list's single state; chunk 6 uses the NOTAM text states (see below). Nationwide notices are counted and named in the GO explanation; they are not evaluated.
+
+### TFR list `state` is a single code — do not trust it for multi-state TFRs
+
+| Fact | Status |
+|---|---|
+| The list gives each NOTAM **one** state. 6/9954 (text: "SECURITY CA, AZ") is listed `AZ`; 6/9978 ("AZ, NM, TX") is listed `TX`; 5/7224 (DC SFRA, which covers parts of MD and VA) is listed `DC`. Matching only the list state misses California, New Mexico, Maryland and Virginia. The states in the `txtDescrUSNS` header (`!FDC 6/9954 ZLA SECURITY CA, AZ..AIRSPACE …`) are complete for the border notices. | ✅ 2026-11-05 |
+
+## US–Mexico border UAS TFRs (FDC 6/9954, 6/9978, 6/9956)
+
+- **Source:** NOTAM text from tfr.faa.gov detail XML; FAA newsroom "DOT, DoW, DHS Join Forces to Protect Southern Border Airspace" (2026-10-16).
+
+| Fact | Status |
+|---|---|
+| "ALL UNMANNED ACFT SYSTEM - UAS FLT OPS ARE PROHIBITED: WI 1NM INLAND FROM THE U.S. SIDE OF THE U.S./MEXICO BORDER … EXCLUDING MEXICAN AIRSPACE SFC-400FT AGL", under 14 CFR 99.7 (national defense airspace). | ✅ 2026-11-05 (NOTAM text) |
+| Segments: 6/9954 ZLA 323202N1170832W → 320619N1133034W (CA, AZ); 6/9978 ZAB 320619N1133035W → 294543N1023336W (AZ, NM, TX); 6/9956 ZHU 294543N1023336W → 255737N0970833W (TX). Together they cover the whole border. | ✅ 2026-11-05 |
+| Effective **2026-10-20 0000 UTC until 2027-10-19 2359 UTC**. Issued 2026-10-16 (press reports give the issue date as the start). | ✅ 2026-11-05 |
+| The detail XML has **no geometry**, and its vertical limits read `HEI 0 – HEI 0` (wrong; the text says SFC–400 ft AGL). The geometry is published in the FAA National Security UAS layer below. | ✅ 2026-11-05 |
+
+## FAA National Security UAS Flight Restrictions — ArcGIS FeatureServer
+
+- **Endpoint:** `https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/DoD_Mar_13/FeatureServer/0` (FAA org; same quota as the airspace services — see "ArcGIS Online quota").
+- **Used by:** `LiveSecurityAirspaceRepository` → `SecurityAirspaceEvaluator`.
+
+| Fact | Status |
+|---|---|
+| 2,291 polygons. Fields: `OBJECTID, Proponent, Branch, Base, Facility, Airspace, Reason, State, FAA_ID, POC, Floor, Ceiling, County`. Floor/Ceiling are text; **every feature is `Surface` / `400' AGL`** (group-by on 2026-11-05). | ✅ 2026-11-05 |
+| Layer last edited 2026-10-27. It now contains the three border strips: `20261016-DHS-ZLA-1` (CA, AZ), `20261016-DHS-ZAB-2` (AZ, NM, TX), `20261016-DHS-ZHU-3` (TX), proponent DHS/CBP, POC `SWBDRONEZONEWAIVERS@CBP.DHS.GOV`. Width from area/perimeter ≈ 0.9 NM, consistent with the 1 NM NOTAM. | ✅ 2026-11-05 |
+| Also: CBP ports of entry (`LPOE-…`), JTF Southern Border National Defense Areas (`NDA 2`, `NDA 3`), military bases, DNI/DOE sites. Point probes (verified interior points below): San Ysidro, Nogales, El Paso, Brownsville each lie in a border strip. | ✅ 2026-11-05 |
+| ⚠️ **Disagreement: polygon width vs NOTAM text.** The NOTAMs say "WI 1NM INLAND". Measured north–south strip widths along a meridian: San Ysidro −117.03 → 32.54242–32.55701 (0.875 NM); Nogales −110.94 → 31.33301–31.34753 (0.871 NM); El Paso −106.45 → 31.76338–31.77893 (0.93 NM); Brownsville −97.5 → 25.89705–25.91350 (0.99 NM). In CA/AZ the polygon is about one *statute* mile. Both kept: the app treats a point within 0.15 NM of a border strip as inside (NO-GO), so the NOTAM's 1 NM is honoured. | ✅ 2026-11-05 (measured) |
+| Server point intersection is exact (no buffer). An earlier probe used `distance=3000` and wrongly reported San Ysidro 32.535,-117.03 as inside; it is ≈ 0.45 NM south of the strip's southern edge (the border), i.e. in Mexico. Verified interior points: 32.550,-117.03; 31.340,-110.94; 31.771,-106.45; 25.905,-97.5. | ✅ 2026-11-05 (live test) |
+| Payload: a 0.55° envelope at Nogales returns 4 features — 303 KB / 9,709 vertices at full resolution, 57 KB / 2,662 vertices with `maxAllowableOffset=0.0005`. | ✅ 2026-11-05 |
+| Does **not** contain the DC SFRA/FRZ boundaries (only individual sites inside them). | ✅ 2026-11-05 |
+
+## DC SFRA / FRZ — FAA Boundary_Airspace FeatureServer + FDC 5/7224
+
+- **Endpoint:** `https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Boundary_Airspace/FeatureServer/0`.
+
+| Fact | Status |
+|---|---|
+| Two features named "WASHINGTON, DC METROPOLITAN AREA SPECIAL FLIGHT RULES AREA", `TYPE_CODE=SATA`, `LOCAL_TYPE=SFRA`, distinguished by `SECTOR`: `DC SFRA` (OBJECTID 51) and `DC FRZ` (OBJECTID 52). Both SFC–FL180, H24. A point at DCA is in both; 39.00,-77.10 is in both; 39.25,-77.45 in neither. | ✅ 2026-11-05 |
+| `LOCAL_TYPE=SFRA` is also used for other SFRAs, so the app filters on `SECTOR IN ('DC SFRA','DC FRZ')`. | ✅ 2026-11-05 |
+| FDC 5/7224 (permanent): "UAS OPERATIONS ARE PROHIBITED IN THE DC FRZ UNLESS SPECIFICALLY AUTHORIZED VIA THE TSA/FAA AIRSPACE WAIVER PROCESS." Recreational UAS in the SFRA: registered and marked, < 55 lb, ≤ 400 ft AGL, VLOS, VMC, not at night, no SVFR. Civil/commercial: Part 107 or exemption + COA. Public: COA or Part 107. | ✅ 2026-11-05 (NOTAM text) |
+
+### How the app interprets these (chunk 6, next release)
+
+- **NO-GO** (`AIR-NSUAS-001`): the launch point is inside a national-security polygon (server-side point intersection, full resolution), or within 0.15 NM of a border strip (see the width disagreement). **NO-GO** (`AIR-DC-001`): inside the DC FRZ.
+- **CAUTION** (`AIR-NSUAS-004`): a national-security polygon lies within 1 NM of the launch point (the aircraft can fly into it). **CAUTION** (`AIR-DC-002`): inside the DC SFRA outside the FRZ, with the 5/7224 conditions.
+- **CAUTION** (`AIR-NSUAS-002`): either query failed. Not cached: these restrictions change at short notice.
+- The border notices and 5/7224 are evaluated through these layers, so they no longer give the statewide "TFR without mapped boundary" caution while the layers answer. If the layers fail, that caution returns, matched on the states in the NOTAM text (plus MD/VA for 5/7224).
 
 ## Open-Meteo Elevation API
 

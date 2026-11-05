@@ -22,11 +22,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.taksolutions.uasready.domain.model.AirspaceClass
 import com.taksolutions.uasready.domain.model.AssessmentCategory
 import com.taksolutions.uasready.domain.model.AssessmentStatus
-import com.taksolutions.uasready.domain.model.SpecialUseType
 import com.taksolutions.uasready.ui.components.SquareMetricCard
+import com.taksolutions.uasready.ui.presentation.AirspaceCardText
 import com.taksolutions.uasready.ui.presentation.OverviewCardText
 import com.taksolutions.uasready.ui.components.StatusBanner
 import com.taksolutions.uasready.ui.theme.*
@@ -49,7 +48,6 @@ fun HomeScreen(
 
     // Extract category assessments
     val weatherCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.WEATHER }
-    val airspaceCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.AIRSPACE }
     val spaceCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.SPACE_WEATHER }
     val daylightCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.DAYLIGHT }
     val pilotCat = assessment?.categoryAssessments?.firstOrNull { it.category == AssessmentCategory.PILOT_QUALIFICATIONS }
@@ -155,61 +153,13 @@ fun HomeScreen(
 
         // Card 3: Aeronautical Airspace & TFR (Square Card)
         item {
-            val ctrlRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AIR-CTRL") }
-            val tfrRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AIR-TFR") }
-
-            val airspaceInfo = uiState.airspaceInfo
-            val airspaceClassText = when (airspaceInfo?.primaryClass) {
-                AirspaceClass.CLASS_B -> "Class B"
-                AirspaceClass.CLASS_C -> "Class C"
-                AirspaceClass.CLASS_D -> "Class D"
-                AirspaceClass.CLASS_E_SURFACE -> "Class E Surface"
-                AirspaceClass.CLASS_E -> "Class E"
-                AirspaceClass.SPECIAL_USE -> when (airspaceInfo?.specialUseType) {
-                    SpecialUseType.PROHIBITED -> "Prohibited Area"
-                    else -> "Restricted Area"
-                }
-                AirspaceClass.CLASS_G -> "Class G"
-                null -> "Unavailable"
-            }
-
-            // Never claim "No TFRs" unless an authoritative TFR source was actually checked.
-            val tfrSummary = when {
-                tfrRule?.status == AssessmentStatus.NO_GO -> "ACTIVE TFR"
-                airspaceInfo?.tfrDataSourced == true && tfrRule?.status == AssessmentStatus.CAUTION -> "TFR nearby"
-                airspaceInfo?.tfrDataSourced == true -> "No TFRs"
-                else -> "TFRs unverified"
-            }
-
-            val primaryAirspaceText = when {
-                airspaceInfo == null -> "Airspace Unavailable"
-                // Live FAA service was unavailable; the data shown is a dated on-device copy.
-                airspaceInfo.isStale -> "Cached: $airspaceClassText • $tfrSummary"
-                else -> "$airspaceClassText • $tfrSummary"
-            }
-
-            val secondaryAirspaceText = when {
-                airspaceInfo == null -> "Live FAA data required"
-                tfrRule?.status == AssessmentStatus.NO_GO -> "Flight Restricted / Prohibited"
-                airspaceInfo.specialUseType == SpecialUseType.PROHIBITED -> "No flight without agency authorization"
-                airspaceInfo.specialUseType == SpecialUseType.RESTRICTED -> "Contact controlling agency"
-                airspaceInfo.tfrDataSourced && tfrRule?.status == AssessmentStatus.CAUTION -> "Read TFR NOTAM before flight"
-                ctrlRule?.status == AssessmentStatus.CAUTION -> "LAANC Approval Required"
-                airspaceInfo.tfrDataSourced -> "No flight restrictions"
-                else -> "Check TFRs before flight"
-            }
-
-            val airspaceWorstStatus = listOfNotNull(
-                airspaceCat?.status,
-                ctrlRule?.status,
-                tfrRule?.status
-            ).maxByOrNull { it.priority } ?: airspaceCat?.status
+            val airspaceCard = AirspaceCardText.of(uiState.airspaceInfo, assessment)
 
             SquareMetricCard(
                 title = "Airspace",
-                primaryValue = primaryAirspaceText,
-                secondaryValue = secondaryAirspaceText,
-                status = airspaceWorstStatus,
+                primaryValue = airspaceCard.text.primary,
+                secondaryValue = airspaceCard.text.secondary,
+                status = airspaceCard.status,
                 icon = Icons.Default.Flight,
                 onClick = { onNavigateToAssessment(AssessmentCategory.AIRSPACE) }
             )

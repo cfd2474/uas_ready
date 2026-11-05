@@ -98,9 +98,13 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
                 )
             }
             if (airspace.scheduledTfrsOutsideWindow.isEmpty() && airspace.unmappedRegionalTfrs.isEmpty()) {
-                val nationwide = if (airspace.unmappedNationwideTfrCount > 0)
-                    " ${airspace.unmappedNationwideTfrCount} nationwide notices have no mapped area (for example the 14 CFR § 99.7 national-security UAS sites); check B4UFLY near military or critical-infrastructure sites."
-                else ""
+                val nationwide = when {
+                    airspace.unmappedNationwideTfrCount == 0 -> ""
+                    airspace.securityAirspaceSourced ->
+                        " ${airspace.unmappedNationwideTfrCount} nationwide notices have no mapped area; the 14 CFR § 99.7 national-security UAS sites among them are checked separately against the FAA national-security layer."
+                    else ->
+                        " ${airspace.unmappedNationwideTfrCount} nationwide notices have no mapped area (for example the 14 CFR § 99.7 national-security UAS sites); check B4UFLY near military or critical-infrastructure sites."
+                }
                 rules.add(
                     RuleResult(
                         ruleId = "AIR-TFR-002",
@@ -114,6 +118,9 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
                 )
             }
         }
+
+        // 1b. National-security UAS restrictions (14 CFR 99.7 sites, US–Mexico border, DC SFRA/FRZ)
+        rules += SecurityAirspaceRules.evaluate(airspace)
 
         // 2. Controlled Airspace Classification & Authorization (LAANC applies to B/C/D/E-surface only)
         val controlledClass = airspace.controlledClass

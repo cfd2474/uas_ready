@@ -71,6 +71,9 @@ class MainViewModel @JvmOverloads constructor(
     ),
     private val tfrEvaluator: com.taksolutions.uasready.domain.engine.TfrEvaluator =
         com.taksolutions.uasready.domain.engine.TfrEvaluator(),
+    private val securityRepo: SecurityAirspaceRepository = LiveSecurityAirspaceRepository(),
+    private val securityEvaluator: com.taksolutions.uasready.domain.engine.SecurityAirspaceEvaluator =
+        com.taksolutions.uasready.domain.engine.SecurityAirspaceEvaluator(),
     private val aircraftRepo: AircraftRepository = PersistentAircraftRepository(application),
     private val pilotRepo: PilotRepository = PersistentPilotRepository(SharedPreferencesPilotAuthorityStore(application)),
     private val assessmentEngine: AssessmentEngine = AssessmentEngine(),
@@ -112,7 +115,8 @@ class MainViewModel @JvmOverloads constructor(
         val space: Result<SpaceWeather>,
         val airspace: Result<AirspaceSnapshot>,
         val terrain: Result<TerrainObstructionProfile>,
-        val tfr: Result<TfrSnapshot>
+        val tfr: Result<TfrSnapshot>,
+        val security: Result<SecurityAirspaceSnapshot>
     )
 
     /** CTAF spatial scan + SQLite warning-zone query. Disk/CPU bound, so never on the main thread. */
@@ -232,7 +236,8 @@ class MainViewModel @JvmOverloads constructor(
                 val airspaceAsync = async { airspaceRepo.getAirspaceSnapshot(lat, lon) }
                 val terrain = async { terrainRepo.getTerrainProfile(lat, lon) }
                 val tfr = async { tfrRepo.getTfrSnapshot() }
-                FetchedTelemetry(weather.await(), space.await(), airspaceAsync.await(), terrain.await(), tfr.await())
+                val security = async { securityRepo.getSecurityAirspace(lat, lon) }
+                FetchedTelemetry(weather.await(), space.await(), airspaceAsync.await(), terrain.await(), tfr.await(), security.await())
             }
             val weatherResult = fetched.weather
             val spaceResult = fetched.space
@@ -260,9 +265,25 @@ class MainViewModel @JvmOverloads constructor(
                     plannedAltitudeAglFt = state.plannedAltitudeAglFt
                 )
             }
+            // National-security UAS layers: only a full answer may set securityAirspaceSourced.
+            val security = fetched.security.getOrNull()?.let { securityEvaluator.evaluate(it, lat, lon) }
+            val classifiedWithSecurity = if (classified != null && security != null) {
+                Log.i(TAG, "National security evaluated: inside=${security.sitesAtLaunchPoint.map { it.faaId }} " +
+                    "nearby=${security.sitesNearby.map { it.faaId }} dc=${security.dcSfraZone} mapZones=${security.mapZones.size}")
+                classified.copy(
+                    securityAirspaceSourced = true,
+                    nationalSecuritySitesAtLaunch = security.sitesAtLaunchPoint,
+                    nationalSecuritySitesNearby = security.sitesNearby,
+                    dcSfraZone = security.dcSfraZone,
+                    zones = classified.zones + security.mapZones
+                )
+            } else {
+                if (security == null) Log.w(TAG, "National security unverified: ${fetched.security.exceptionOrNull()?.message}")
+                classified
+            }
             // TFRs: only an answer from the live FAA feed may set tfrDataSourced.
             val tfrSnapshot = fetched.tfr.getOrNull()
-            val airspace = if (classified != null && tfrSnapshot != null) {
+            val airspace = if (classifiedWithSecurity != null && tfrSnapshot != null) {
                 val tfr = tfrEvaluator.evaluate(
                     snapshot = tfrSnapshot,
                     latitude = lat,
@@ -270,21 +291,22 @@ class MainViewModel @JvmOverloads constructor(
                     groundElevationFt = terrainProfile?.launchElevationFt,
                     plannedAltitudeAglFt = state.plannedAltitudeAglFt,
                     window = activeFlightWindow,
-                    launchStateCode = state.currentLocation.stateCode
+                    launchStateCode = state.currentLocation.stateCode,
+                    securityLayersSourced = security != null
                 )
                 Log.i(TAG, "TFRs evaluated: active=${tfr.active.map { it.id }} scheduled=${tfr.scheduledOutsideWindow.map { it.id }} " +
                     "unmappedRegional=${tfr.unmappedRegional.map { it.id }} nationwide=${tfr.unmappedNationwideCount} mapZones=${tfr.mapZones.size} state=${state.currentLocation.stateCode}")
-                classified.copy(
+                classifiedWithSecurity.copy(
                     activeTfrs = tfr.active,
                     tfrDataSourced = true,
                     scheduledTfrsOutsideWindow = tfr.scheduledOutsideWindow,
                     unmappedRegionalTfrs = tfr.unmappedRegional,
                     unmappedNationwideTfrCount = tfr.unmappedNationwideCount,
-                    zones = classified.zones + tfr.mapZones
+                    zones = classifiedWithSecurity.zones + tfr.mapZones
                 )
             } else {
                 if (tfrSnapshot == null) Log.w(TAG, "TFRs unverified: ${fetched.tfr.exceptionOrNull()?.message}")
-                classified
+                classifiedWithSecurity
             }
             if (airspace != null) {
                 Log.i(TAG, "Airspace classified: primary=${airspace.primaryClass} auth=${airspace.controlledAirspaceAuthorizationRequired} " +
@@ -308,7 +330,8 @@ class MainViewModel @JvmOverloads constructor(
                     spaceResult.isSuccess,
                     airspace != null && !airspace.isStale, // cached airspace is not live
                     terrainResult.isSuccess,
-                    fetched.tfr.isSuccess
+                    fetched.tfr.isSuccess,
+                    fetched.security.isSuccess
                 )
             )
 

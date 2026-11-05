@@ -7,22 +7,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Locale
 
 /** Source of raw airspace candidates around a point. Classification happens in AirspaceClassifier. */
 interface AirspaceRepository {
     suspend fun getAirspaceSnapshot(latitude: Double, longitude: Double): Result<AirspaceSnapshot>
 }
-
-/** The FAA ArcGIS org-wide request quota was exceeded (see docs/PLATFORM_REFERENCE.md). */
-class AirspaceQuotaExceededException(message: String) : IOException(message)
 
 /**
  * Live FAA airspace lookup (Class_Airspace + Special_Use_Airspace ArcGIS services).
@@ -37,8 +30,10 @@ class AirspaceQuotaExceededException(message: String) : IOException(message)
 class LiveAirspaceRepository(
     private val classAirspaceUrl: String = FAA_CLASS_AIRSPACE_URL,
     private val specialUseAirspaceUrl: String = FAA_SUA_URL,
-    private val quotaRetryDelayMs: Long = 3_000L
+    quotaRetryDelayMs: Long = 3_000L
 ) : AirspaceRepository {
+
+    private val client = ArcGisQueryClient(quotaRetryDelayMs)
 
     companion object {
         private const val TAG = "AirspaceRepo"
@@ -48,7 +43,6 @@ class LiveAirspaceRepository(
             "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query"
         /** Latitude half-width: 0.55° ≈ 33 NM, covering the 30 NM display radius. */
         private const val SEARCH_RADIUS_LAT_DEG = 0.55
-        private const val TIMEOUT_MS = 20_000
         /** No sUAS operation reaches an AGL floor at or above this; such zones are dropped at the source. */
         private const val MAX_RELEVANT_AGL_FLOOR_FT = 400.0
         /** Surface Class E designations. E5/E6 transition/enroute areas start at 700/1200 ft AGL. */
@@ -66,8 +60,8 @@ class LiveAirspaceRepository(
                 maxLon = longitude + lonHalf, maxLat = latitude + SEARCH_RADIUS_LAT_DEG
             )
             val zones = coroutineScope {
-                val classZones = async { retryOnQuota { fetchClassAirspace(envelope) } }
-                val suaZones = async { retryOnQuota { fetchSpecialUseAirspace(envelope) } }
+                val classZones = async { client.retryOnQuota { fetchClassAirspace(envelope) } }
+                val suaZones = async { client.retryOnQuota { fetchSpecialUseAirspace(envelope) } }
                 classZones.await() + suaZones.await()
             }
             Log.i(TAG, "Fetched ${zones.size} FAA airspace candidate zones around $latitude,$longitude")
@@ -90,47 +84,6 @@ class LiveAirspaceRepository(
 
     private data class Envelope(val minLon: Double, val minLat: Double, val maxLon: Double, val maxLat: Double) {
         fun query() = "$minLon,$minLat,$maxLon,$maxLat"
-    }
-
-    /** The quota is shared org-wide and refills continuously; one short retry often succeeds. */
-    private suspend fun <T> retryOnQuota(block: () -> T): T = try {
-        block()
-    } catch (e: AirspaceQuotaExceededException) {
-        Log.w(TAG, "FAA quota exceeded; retrying once in $quotaRetryDelayMs ms")
-        delay(quotaRetryDelayMs)
-        block()
-    }
-
-    /** GET [url] and parse the body as JSON. Throws on any transport, HTTP, ArcGIS, or parse failure. */
-    private fun fetchGeoJson(url: String, label: String): JSONObject {
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "UASReady-Android-App/1.0")
-        }
-        try {
-            val code = conn.responseCode
-            if (code == 429) throw AirspaceQuotaExceededException("$label: HTTP 429")
-            if (code != 200) throw IOException("$label query failed: HTTP $code")
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(body)
-            // ArcGIS reports query errors (including quota) as an "error" object in the body.
-            json.optJSONObject("error")?.let { err ->
-                val message = "$label query error ${err.optInt("code")}: ${err.optString("message", "unknown")}"
-                if (err.optInt("code") == 429) throw AirspaceQuotaExceededException(message)
-                throw IOException(message)
-            }
-            if (!json.has("features")) throw IOException("$label response has no features array")
-            // A truncated result would silently drop airspace; treat it as a failure.
-            val truncated = json.optBoolean("exceededTransferLimit", false) ||
-                json.optJSONObject("properties")?.optBoolean("exceededTransferLimit", false) == true
-            if (truncated) throw IOException("$label result truncated (exceededTransferLimit)")
-            return json
-        } finally {
-            conn.disconnect()
-        }
     }
 
     private data class Floor(val ft: Double, val reference: AltitudeReference)
@@ -171,7 +124,7 @@ class LiveAirspaceRepository(
             "&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects" +
             "&outFields=OBJECTID,NAME,CLASS,LOCAL_TYPE,SECTOR,UPPER_VAL,UPPER_UOM,UPPER_CODE,LOWER_VAL,LOWER_UOM,LOWER_CODE" +
             "&maxAllowableOffset=0.001&returnGeometry=true&f=geojson"
-        val features = fetchGeoJson(url, "FAA Class_Airspace").optJSONArray("features") ?: JSONArray()
+        val features = client.fetchJson(url, "FAA Class_Airspace").optJSONArray("features") ?: JSONArray()
         val zones = mutableListOf<AirspaceZone>()
 
         for (i in 0 until features.length()) {
@@ -212,7 +165,7 @@ class LiveAirspaceRepository(
             "&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects" +
             "&outFields=OBJECTID,NAME,TYPE_CODE,CLASS,UPPER_VAL,UPPER_UOM,UPPER_CODE,LOWER_VAL,LOWER_UOM,LOWER_CODE" +
             "&maxAllowableOffset=0.001&returnGeometry=true&f=geojson"
-        val features = fetchGeoJson(url, "FAA Special_Use_Airspace").optJSONArray("features") ?: JSONArray()
+        val features = client.fetchJson(url, "FAA Special_Use_Airspace").optJSONArray("features") ?: JSONArray()
         val zones = mutableListOf<AirspaceZone>()
 
         for (i in 0 until features.length()) {
@@ -248,7 +201,7 @@ class LiveAirspaceRepository(
     private fun toZones(
         feature: JSONObject, idPrefix: String, name: String, type: AirspaceZoneType, floor: Floor,
         props: JSONObject, description: String, airspaceClass: AirspaceClass?, specialUseType: SpecialUseType?
-    ): List<AirspaceZone> = extractPolygonsFromFeature(feature).withIndex().map { (idx, poly) ->
+    ): List<AirspaceZone> = ArcGisQueryClient.outerRings(feature).withIndex().map { (idx, poly) ->
         AirspaceZone(
             id = "$idPrefix-$idx",
             name = name,
@@ -264,25 +217,5 @@ class LiveAirspaceRepository(
             airspaceClass = airspaceClass,
             specialUseType = specialUseType
         )
-    }
-
-    /** Outer rings of Polygon / MultiPolygon geometry as (lat, lon) lists. */
-    private fun extractPolygonsFromFeature(feature: JSONObject): List<List<Pair<Double, Double>>> {
-        val result = mutableListOf<List<Pair<Double, Double>>>()
-        val geometry = feature.optJSONObject("geometry") ?: return result
-        val coords = geometry.optJSONArray("coordinates") ?: return result
-        val polygons: List<JSONArray> = when (geometry.optString("type", "")) {
-            "Polygon" -> listOf(coords)
-            "MultiPolygon" -> (0 until coords.length()).mapNotNull { coords.optJSONArray(it) }
-            else -> emptyList()
-        }
-        for (poly in polygons) {
-            val outerRing = poly.optJSONArray(0) ?: continue
-            val pts = (0 until outerRing.length()).mapNotNull { p ->
-                outerRing.optJSONArray(p)?.takeIf { it.length() >= 2 }?.let { Pair(it.optDouble(1), it.optDouble(0)) }
-            }
-            if (pts.size >= 3) result += pts
-        }
-        return result
     }
 }
