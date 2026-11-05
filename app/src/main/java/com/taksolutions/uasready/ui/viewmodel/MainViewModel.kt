@@ -9,10 +9,15 @@ import com.taksolutions.uasready.data.repository.*
 import com.taksolutions.uasready.domain.engine.AssessmentContext
 import com.taksolutions.uasready.domain.engine.AssessmentEngine
 import com.taksolutions.uasready.domain.model.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 import com.taksolutions.uasready.data.repository.PersistentAircraftRepository
 import com.taksolutions.uasready.domain.model.PilotAuthorityType
@@ -67,6 +72,42 @@ class MainViewModel @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "MainViewModel"
+        private const val NEARBY_RADIUS_NM = 30.0
+        private const val WARNING_ZONE_RADIUS_DEG = 0.55
+    }
+
+    /** The in-flight telemetry refresh. A newer refresh cancels it so stale results never overwrite fresh ones. */
+    private var refreshJob: Job? = null
+
+    /** The in-flight nearby-airport lookup (used when no full refresh follows a location change). */
+    private var nearbyJob: Job? = null
+
+    private data class NearbyAviation(
+        val airports: List<AirportCtafResult>,
+        val warningZones: List<AirportWarningZone>
+    )
+
+    private data class FetchedTelemetry(
+        val weather: Result<Pair<WeatherObservation, WeatherForecast>>,
+        val space: Result<SpaceWeather>,
+        val airspace: Result<AirspaceInfo>,
+        val terrain: Result<TerrainObstructionProfile>
+    )
+
+    /** CTAF spatial scan + SQLite warning-zone query. Disk/CPU bound, so never on the main thread. */
+    private suspend fun lookupNearbyAviation(lat: Double, lon: Double): NearbyAviation = withContext(Dispatchers.IO) {
+        NearbyAviation(
+            airports = CtafLookupHelper.findAirportsWithinRadius(lat, lon, NEARBY_RADIUS_NM),
+            warningZones = airportWarningRepo.getWarningZones(lat, lon, WARNING_ZONE_RADIUS_DEG)
+        )
+    }
+
+    private fun refreshNearbyAviation(lat: Double, lon: Double) {
+        nearbyJob?.cancel()
+        nearbyJob = viewModelScope.launch {
+            val nearby = lookupNearbyAviation(lat, lon)
+            _uiState.update { it.copy(nearbyAirports = nearby.airports, airportWarningZones = nearby.warningZones) }
+        }
     }
 
     init {
@@ -109,13 +150,9 @@ class MainViewModel @JvmOverloads constructor(
         }
 
         // Try to obtain initial GPS location silently if permission is already granted
-        refreshGpsLocation(silent = true)
         val defaultLoc = _uiState.value.currentLocation
-        val initialAirports = CtafLookupHelper.findAirportsWithinRadius(defaultLoc.latitude, defaultLoc.longitude, 30.0)
-        val initialWarnings = airportWarningRepo.getWarningZones(defaultLoc.latitude, defaultLoc.longitude, 0.55)
-        if (initialAirports.isNotEmpty() || initialWarnings.isNotEmpty()) {
-            _uiState.update { it.copy(nearbyAirports = initialAirports, airportWarningZones = initialWarnings) }
-        }
+        refreshNearbyAviation(defaultLoc.latitude, defaultLoc.longitude)
+        refreshGpsLocation(silent = true)
     }
 
     fun refreshGpsLocation(silent: Boolean = false) {
@@ -124,11 +161,11 @@ class MainViewModel @JvmOverloads constructor(
                 val gpsLoc = locationManager.getCurrentLocation()
                 if (gpsLoc != null) {
                     Log.i(TAG, "GPS location acquired: ${gpsLoc.formattedCoordinates} (${gpsLoc.displayName})")
-                    val airports = CtafLookupHelper.findAirportsWithinRadius(gpsLoc.latitude, gpsLoc.longitude, 30.0)
-                    val warningZones = airportWarningRepo.getWarningZones(gpsLoc.latitude, gpsLoc.longitude, 0.55)
-                    _uiState.update { it.copy(currentLocation = gpsLoc, nearbyAirports = airports, airportWarningZones = warningZones) }
+                    _uiState.update { it.copy(currentLocation = gpsLoc) }
                     if (!_uiState.value.isPilotSelectionPending) {
-                        fetchLiveData()
+                        fetchLiveData() // also refreshes nearby airports / warning zones
+                    } else {
+                        refreshNearbyAviation(gpsLoc.latitude, gpsLoc.longitude)
                     }
                 } else if (!silent) {
                     Log.w(TAG, "Could not acquire GPS fix (permission not granted or no GPS signal)")
@@ -140,7 +177,9 @@ class MainViewModel @JvmOverloads constructor(
     }
 
     fun fetchLiveData() {
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        nearbyJob?.cancel() // the refresh below recomputes nearby data for the latest location
+        refreshJob = viewModelScope.launch {
             _uiState.update { it.copy(isLiveLoading = true, liveErrorMessage = null) }
 
             // Check if we can get fresh GPS location first
@@ -152,13 +191,24 @@ class MainViewModel @JvmOverloads constructor(
             val state = _uiState.value
             val lat = state.currentLocation.latitude
             val lon = state.currentLocation.longitude
-            val airports = CtafLookupHelper.findAirportsWithinRadius(lat, lon, 30.0)
-            val warningZones = airportWarningRepo.getWarningZones(lat, lon, 0.55)
 
-            val weatherResult = weatherRepo.getWeatherData(lat, lon)
-            val spaceResult = spaceWeatherRepo.getSpaceWeather()
-            val airspaceResult = airspaceRepo.getAirspaceInfo(lat, lon)
-            val terrainResult = terrainRepo.getTerrainProfile(lat, lon)
+            // Independent sources: fetch concurrently so latency is the slowest source, not the sum.
+            val fetched = coroutineScope {
+                // Local lookups publish immediately; they must not wait on the slowest network source.
+                launch {
+                    val nearby = lookupNearbyAviation(lat, lon)
+                    _uiState.update { it.copy(nearbyAirports = nearby.airports, airportWarningZones = nearby.warningZones) }
+                }
+                val weather = async { weatherRepo.getWeatherData(lat, lon) }
+                val space = async { spaceWeatherRepo.getSpaceWeather() }
+                val airspaceAsync = async { airspaceRepo.getAirspaceInfo(lat, lon) }
+                val terrain = async { terrainRepo.getTerrainProfile(lat, lon) }
+                FetchedTelemetry(weather.await(), space.await(), airspaceAsync.await(), terrain.await())
+            }
+            val weatherResult = fetched.weather
+            val spaceResult = fetched.space
+            val airspaceResult = fetched.airspace
+            val terrainResult = fetched.terrain
             val sunData = solarRepo.calculateSunData(lat, lon, System.currentTimeMillis())
 
             val weatherPair = weatherResult.getOrNull()
@@ -206,8 +256,6 @@ class MainViewModel @JvmOverloads constructor(
                     weatherObservation = weatherPair?.first,
                     weatherForecast = weatherPair?.second,
                     airspaceInfo = airspace,
-                    nearbyAirports = airports,
-                    airportWarningZones = warningZones,
                     estimatedGnss = gnss,
                     lastTelemetryUpdateEpochMs = System.currentTimeMillis(),
                     liveErrorMessage = if (weatherResult.isFailure) "Live Weather Fetch Failed" else null
@@ -248,27 +296,31 @@ class MainViewModel @JvmOverloads constructor(
     }
 
     fun updateLocation(location: LocationInfo) {
-        val updatedLoc = if (location.ctafFrequency == null) {
-            val ctafResult = com.taksolutions.uasready.data.repository.CtafLookupHelper.findNearestCtaf(location.latitude, location.longitude)
-            if (ctafResult != null) {
-                location.copy(
-                    ctafFrequency = ctafResult.frequencyMhz,
-                    ctafType = ctafResult.type,
-                    nearestAirportIdent = ctafResult.ident,
-                    nearestAirportName = ctafResult.name,
-                    nearestAirportDistanceNm = ctafResult.distanceNm
-                )
+        viewModelScope.launch {
+            val updatedLoc = if (location.ctafFrequency == null) {
+                val ctafResult = withContext(Dispatchers.IO) {
+                    CtafLookupHelper.findNearestCtaf(location.latitude, location.longitude)
+                }
+                if (ctafResult != null) {
+                    location.copy(
+                        ctafFrequency = ctafResult.frequencyMhz,
+                        ctafType = ctafResult.type,
+                        nearestAirportIdent = ctafResult.ident,
+                        nearestAirportName = ctafResult.name,
+                        nearestAirportDistanceNm = ctafResult.distanceNm
+                    )
+                } else {
+                    location
+                }
             } else {
                 location
             }
-        } else {
-            location
-        }
-        val airports = com.taksolutions.uasready.data.repository.CtafLookupHelper.findAirportsWithinRadius(updatedLoc.latitude, updatedLoc.longitude, 30.0)
-        val warningZones = airportWarningRepo.getWarningZones(updatedLoc.latitude, updatedLoc.longitude, 0.55)
-        _uiState.update { it.copy(currentLocation = updatedLoc, nearbyAirports = airports, airportWarningZones = warningZones) }
-        if (!_uiState.value.isPilotSelectionPending) {
-            fetchLiveData()
+            _uiState.update { it.copy(currentLocation = updatedLoc) }
+            if (!_uiState.value.isPilotSelectionPending) {
+                fetchLiveData() // also refreshes nearby airports / warning zones
+            } else {
+                refreshNearbyAviation(updatedLoc.latitude, updatedLoc.longitude)
+            }
         }
     }
 

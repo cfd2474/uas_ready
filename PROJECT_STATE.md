@@ -23,13 +23,18 @@
 6. Update this file (decisions, operational notes).
 7. STOP — owner approval required before force-pushing `dev`, `main`, and tags to GitHub. Owner must rotate the keystore password (it remains retrievable from GitHub PR refs regardless of the rewrite).
 
-**Status: steps 1–6 done locally (2026-11-04). Awaiting owner approval for step 7. Nothing pushed.**
+**Status: steps 1–6 done locally (2026-11-04). Owner approved step 7 (force-push + delete orphan tags), but the agent's force-push was blocked by the Claude Code permission classifier → owner must run the push commands. Nothing pushed yet.**
 - Local history rewritten (all SHAs changed). Repo ~1.53 GB → 180 MB. 0 APK/AAB blobs, 0 commits/trees containing the secret.
 - Remaining 167 MB = abandoned `nasr_airspace.db.gz`, reachable ONLY via orphan tags `v1.5.6–v1.5.8`. Dropping those tags → 13 MB. Not done (not approved).
 - Pre-rewrite backup: `D:\Projects\cursor\UAS_Ready_backup_2026-11-04.git` (mirror, all 25 refs). Keep until GitHub push is confirmed good.
 - Tests: 33/34 pass; the 1 failure is the pre-existing date-dependent test (Chunk 2).
 
 ## Decisions
+- **Unverified TFRs are CAUTION, not GO** (2026-11-04). The live app has no TFR feed; it previously showed GO "No TFRs" — a false safety claim (and a Play "misleading claims" risk). Consequence: live assessments can no longer reach overall GO until a real TFR feed is integrated. `AirspaceInfo.tfrDataSourced` defaults to false so nothing claims coverage by accident.
+- **Airspace lookup failure → DATA_UNAVAILABLE**, never Class G. Either FAA query failing fails the whole lookup (partial airspace data would understate restrictions).
+- **Removed fabricated UASFM 400 ft ceiling** from the live repo (UASFM queries were removed in v1.3.34; the GO "conforms with UASFM ceiling" rule was unbacked).
+- **Live-network tests are opt-in** (`-PliveTests`) so the default suite is deterministic.
+- **MockWebServer** (test-only) used for repository failure tests; JDK `com.sun.net.httpserver` is not on the Android unit-test compile classpath.
 - **Keep `version.properties` + `scripts/bump_and_release.ps1`** release flow (owner, 2026-11-04). CLAUDE.md `VERSION`-file convention not adopted.
 - **App ships via Google Play Console (public).** `AppSign.jks` is the Play upload key; release builds must stay signed with it.
 - **Signing secrets in `local.properties` / env vars only**; release packaging fails fast if absent (an unsigned AAB would be rejected by Play anyway — fail early and clearly).
@@ -41,13 +46,23 @@
 - `git filter-repo` installed via `python -m pip install --user git-filter-repo`; invoke as `python -m git_filter_repo`. It deletes the `origin` remote; re-add with `git remote add origin https://github.com/cfd2474/UAS_Ready.git`.
 - After the rewrite, `dev` has no upstream; first push must be `git push --force-with-lease -u origin dev`.
 - `./gradlew testDebugUnitTest | tail` reports exit 0 even on failure (pipe). Check `app/build/test-results/` or the Gradle exit code directly.
-- `DataLayerTest` hits live FAA endpoints — results depend on network and current FAA data.
+- Live FAA tests: `./gradlew testDebugUnitTest -PliveTests` (skipped otherwise).
+- `validateSigningRelease` reporting UP-TO-DATE does NOT prove the keystore opens. Only `assembleRelease`/`bundleRelease` actually decrypts the key.
+- `bump_and_release.ps1` writes the version bump BEFORE building; if the build fails, revert with `git checkout -- version.properties` and move the archived artifacts back, or the next run skips a version. Its "Previous:" line prints the already-bumped name (cosmetic bug).
+- `AppSign.jks` was modified 2026-10-26; the password from the old build file no longer opens it.
 
-### Queued — Chunk 2 — Safety & Correctness (not started; needs approval)
-- Airspace repo: network/HTTP failure must yield "data unavailable", never Class G / no-auth.
-- TFR feed not implemented (`activeTfrs = emptyList()`) despite README claim.
-- `fetchLiveData()` race (no job cancellation); parallelize independent fetches; move SQLite/CTAF lookups off main thread.
-- Fix date-dependent `testCoronaLocal1707IsDaylight` (pin date + America/Los_Angeles); isolate live-network tests.
+### Chunk 2 — Safety & Correctness (owner approved 2026-11-04) — CODE DONE, RELEASE BLOCKED
+1. Tests: pin `testCoronaLocal1707IsDaylight` to 2026-08-22 America/Los_Angeles; move the 2 live-FAA tests to a separate class gated by `-PliveTests`.
+2. Airspace repo: any FAA query failure (exception / non-200 / unparseable) → `Result.failure` → engine reports DATA_UNAVAILABLE. Never silently Class G. Remove the fabricated `uasFacilityMapMaxAltitudeFt = 400.0` (UASFM lookups were removed in v1.3.34). Close connections.
+3. TFR honesty: `AirspaceInfo.tfrDataSourced` (default false). When false, TFR rule is CAUTION "TFRs not verified — check FAA TFR list / B4UFLY" instead of a false GO "No TFRs"; Home card text follows.
+4. ViewModel: one refresh job at a time (cancel superseded refresh so stale results can't overwrite newer); run weather/space/airspace/terrain fetches in parallel; move CTAF + SQLite lookups to `Dispatchers.IO`.
+5. Unit tests for 2–4 (deterministic, no network).
+6. Verify (build + tests), patch release v1.3.50 via `bump_and_release.ps1`, tag, update this file.
+7. STOP for owner review. Live TFR feed integration → proposed as its own chunk (needs FAA TFR API research + `docs/PLATFORM_REFERENCE.md` entry).
+
+**Status (2026-11-04):** steps 1–5 done and committed (no version bump). Tests: 41 pass, 2 live-FAA skipped by default; live run (`-PliveTests`) also 2/2 pass.
+Step 6 BLOCKED: signed release build fails — "keystore password was incorrect". The password copied from the old build file matches byte-for-byte, but `AppSign.jks` was modified 2026-10-26 (after v1.3.49), so the keystore changed before this session. Half-run release was rolled back (version.properties back to 57 / 1.3.49; v1.3.49 artifacts restored to current). Owner must put the current keystore password in `local.properties`, then run `.\scriptsump_and_release.ps1 -BumpType patch` → v1.3.50 (Build 58).
+Not unit-tested: ViewModel job cancellation (MainViewModel needs an Android Application; no ViewModel test harness yet).
 
 ### Queued — Chunk 3 — Map Performance (not started; needs approval)
 - `MapScreen` `AndroidView.update` rebuilds all overlays/bitmaps on every recomposition; diff overlays, cache marker bitmaps.

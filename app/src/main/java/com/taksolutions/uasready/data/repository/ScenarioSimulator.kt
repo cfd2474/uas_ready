@@ -71,6 +71,7 @@ object ScenarioSimulator {
             controlledAirspaceAuthorizationRequired = false,
             uasFacilityMapMaxAltitudeFt = 400.0,
             activeTfrs = emptyList(),
+            tfrDataSourced = true, // Drill scenarios define TFR state explicitly
             timestampEpochMs = now,
             sourceName = "Simulated FAA Airspace"
         )

@@ -109,6 +109,10 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            // Live FAA network tests are opt-in: ./gradlew testDebugUnitTest -PliveTests
+            it.systemProperty("uasready.liveTests", project.hasProperty("liveTests").toString())
+        }
     }
 }
 
@@ -146,6 +150,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("org.json:json:20240303")
     testImplementation("org.xerial:sqlite-jdbc:3.45.2.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

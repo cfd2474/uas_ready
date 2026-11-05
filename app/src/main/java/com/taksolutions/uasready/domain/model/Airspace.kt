@@ -69,6 +69,12 @@ data class AirspaceInfo(
     val controlledAirspaceAuthorizationRequired: Boolean = false,
     val uasFacilityMapMaxAltitudeFt: Double? = null, // Max auto-approved LAANC ceiling (0 - 400 ft)
     val activeTfrs: List<TemporaryFlightRestriction> = emptyList(),
+    /**
+     * True only when [activeTfrs] came from an authoritative TFR source. When false, an empty
+     * [activeTfrs] means "not checked", NOT "no TFRs". Defaults to false so no producer can
+     * claim TFR coverage by accident.
+     */
+    val tfrDataSourced: Boolean = false,
     val zones: List<AirspaceZone> = emptyList(),
     val notams: List<NoticeToAirmen> = emptyList(),
     val specialUseAirspaceActive: Boolean = false,

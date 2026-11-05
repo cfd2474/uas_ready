@@ -26,6 +26,7 @@ data class AirportCtafResult(
 
 object CtafLookupHelper {
     private const val TAG = "CtafLookupHelper"
+    @Volatile // written on init, read from Dispatchers.IO lookups
     private var cachedAirports: List<AirportCtaf>? = null
 
     @Synchronized

@@ -40,17 +40,15 @@ class DataLayerTest {
     fun testCoronaLocal1707IsDaylight() {
         val coronaLat = 33.8753
         val coronaLon = -117.5664
-        // August 22 at 17:07 local time (5:07 PM)
-        val cal = java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, 17)
-            set(java.util.Calendar.MINUTE, 7)
-            set(java.util.Calendar.SECOND, 0)
-        }
-        val sunData = solarRepo.calculateSunData(coronaLat, coronaLon, cal.timeInMillis)
+        // August 22, 2026 at 17:07 Pacific (5:07 PM). Date and zone are pinned so the
+        // result does not depend on the day the suite runs or the machine's timezone.
+        val atMs = java.time.ZonedDateTime.of(2026, 8, 22, 17, 7, 0, 0, java.time.ZoneId.of("America/Los_Angeles"))
+            .toInstant().toEpochMilli()
+        val sunData = solarRepo.calculateSunData(coronaLat, coronaLon, atMs)
 
         assertTrue("17:07 local time should be daylight", sunData.isDaylight)
         assertTrue("Daylight remaining should be > 0", sunData.daylightRemainingMinutes > 0)
-        assertTrue("17:07 should not be darkness", !sunData.isDarknessAt(cal.timeInMillis))
+        assertTrue("17:07 should not be darkness", !sunData.isDarknessAt(atMs))
     }
 
     @Test
@@ -198,44 +196,6 @@ class DataLayerTest {
         )
         assertTrue(gnssWithCanyon.terrainOccludedSatellitesCount >= 2)
         assertTrue(gnssWithCanyon.lockedSatellitesCount < gnssWithCanyon.visibleSatellitesCount)
-    }
-
-    @Test
-    fun testLiveAirspaceRepositorySanFrancisco() = kotlinx.coroutines.runBlocking {
-        val repo = LiveAirspaceRepository()
-        val sfLat = 37.7749
-        val sfLon = -122.4194
-        val result = repo.getAirspaceInfo(sfLat, sfLon)
-
-        assertTrue(result.isSuccess)
-        val airspace = result.getOrNull()
-        assertNotNull(airspace)
-        assertTrue("San Francisco should have controlled airspace polygons in 30 NM radius", airspace!!.zones.isNotEmpty())
-        assertTrue("San Francisco airspace should include Class B, C, D or E zones", airspace.zones.any { it.name.contains("CLASS", ignoreCase = true) || it.name.contains("SAN FRANCISCO", ignoreCase = true) })
-        // Verify non-surface Class E5/E6 transition areas are completely excluded
-        assertFalse("Class E5 (700ft/1200ft) transition areas should be excluded", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
-        assertFalse("Class E6 enroute areas should be excluded", airspace.zones.any { it.name.contains("CLASS E6", ignoreCase = true) })
-        // Verify 500' floor filter: all zones must have starting altitude < 500' (surface to 500')
-        assertTrue("All SF airspace zones must have floor < 500 ft", airspace.zones.all { it.floorFt < 500.0 })
-        assertFalse("No SF airspace zones should have floor >= 500 ft", airspace.zones.any { it.floorFt >= 500.0 })
-    }
-
-    @Test
-    fun testLiveAirspaceRepositoryOntarioCorona() = kotlinx.coroutines.runBlocking {
-        val repo = LiveAirspaceRepository()
-        val ontLat = 34.0560
-        val ontLon = -117.6012
-        val result = repo.getAirspaceInfo(ontLat, ontLon)
-
-        assertTrue(result.isSuccess)
-        val airspace = result.getOrNull()
-        assertNotNull(airspace)
-        assertTrue("Ontario/Corona should have controlled airspace polygons", airspace!!.zones.isNotEmpty())
-        assertTrue("Launch at KONT should require controlled airspace authorization", airspace.controlledAirspaceAuthorizationRequired)
-        assertFalse("Class E5 transition areas should be excluded in Ontario/Corona", airspace.zones.any { it.name.contains("CLASS E5", ignoreCase = true) })
-        // Verify 500' floor filter: all zones must have starting altitude < 500' (surface to 500')
-        assertTrue("All Ontario airspace zones must have floor < 500 ft", airspace.zones.all { it.floorFt < 500.0 })
-        assertFalse("No Ontario airspace zones should have floor >= 500 ft", airspace.zones.any { it.floorFt >= 500.0 })
     }
 
     @Test

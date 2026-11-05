@@ -17,15 +17,51 @@ interface AirspaceRepository {
     suspend fun getAirspaceInfo(latitude: Double, longitude: Double): Result<AirspaceInfo>
 }
 
-class LiveAirspaceRepository : AirspaceRepository {
+/**
+ * Live FAA airspace lookup.
+ *
+ * Safety contract: if EITHER FAA query fails (network error, non-200, unparseable body),
+ * the whole lookup returns [Result.failure] so the engine reports DATA_UNAVAILABLE.
+ * A failed lookup must never be reported as uncontrolled Class G airspace.
+ */
+class LiveAirspaceRepository(
+    private val classAirspaceUrl: String = FAA_CLASS_AIRSPACE_URL,
+    private val specialUseAirspaceUrl: String = FAA_SUA_URL
+) : AirspaceRepository {
 
     companion object {
         private const val TAG = "AirspaceRepo"
-        private const val FAA_CLASS_AIRSPACE_URL =
+        const val FAA_CLASS_AIRSPACE_URL =
             "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Class_Airspace/FeatureServer/0/query"
-        private const val FAA_SUA_URL =
+        const val FAA_SUA_URL =
             "https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Special_Use_Airspace/FeatureServer/0/query"
         private const val SEARCH_RADIUS_DEG = 0.55 // ~30-33 Nautical Miles (55-60 km)
+        private const val TIMEOUT_MS = 20_000
+    }
+
+    /** GET [url] and parse the body as JSON. Throws on any transport, HTTP, or parse failure. */
+    private fun fetchGeoJson(url: String, label: String): JSONObject {
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = TIMEOUT_MS
+            readTimeout = TIMEOUT_MS
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "UASReady-Android-App/1.0")
+        }
+        try {
+            val code = conn.responseCode
+            if (code != 200) throw java.io.IOException("$label query failed: HTTP $code")
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val json = JSONObject(body)
+            // ArcGIS reports query errors as HTTP 200 with an "error" object.
+            json.optJSONObject("error")?.let { err ->
+                throw java.io.IOException("$label query error: ${err.optString("message", "unknown")}")
+            }
+            if (!json.has("features")) throw java.io.IOException("$label response has no features array")
+            return json
+        } finally {
+            conn.disconnect()
+        }
     }
 
     override suspend fun getAirspaceInfo(
@@ -69,8 +105,11 @@ class LiveAirspaceRepository : AirspaceRepository {
                 val airspace = AirspaceInfo(
                     primaryClass = primaryClass,
                     controlledAirspaceAuthorizationRequired = authRequired,
-                    uasFacilityMapMaxAltitudeFt = 400.0,
+                    // UAS Facility Map grids are not queried (removed in v1.3.34), so no ceiling is claimed.
+                    uasFacilityMapMaxAltitudeFt = null,
+                    // No live TFR feed yet: report TFR status as unverified rather than "none".
                     activeTfrs = emptyList(),
+                    tfrDataSourced = false,
                     zones = zones,
                     notams = listOf(
                         NoticeToAirmen(
@@ -90,8 +129,10 @@ class LiveAirspaceRepository : AirspaceRepository {
                 Log.i(TAG, "Successfully resolved ${zones.size} live FAA airspace polygons. Primary: $primaryClass, AuthRequired: $authRequired")
                 Result.success(airspace)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Airspace resolution error: ${e.message}", e)
+            Log.e(TAG, "Airspace resolution failed; reporting DATA_UNAVAILABLE: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -119,20 +160,11 @@ class LiveAirspaceRepository : AirspaceRepository {
         var primaryClass = AirspaceClass.CLASS_G
         var authRequired = false
 
-        try {
-            val classQueryUrl = "$FAA_CLASS_AIRSPACE_URL?where=CLASS+IN+('B','C','D','E')&geometry=$minLon,$minLat,$maxLon,$maxLat&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=OBJECTID,NAME,CLASS,LOCAL_TYPE,SECTOR,UPPER_VAL,UPPER_UOM,LOWER_VAL,LOWER_UOM,LOWER_CODE&maxAllowableOffset=0.001&returnGeometry=true&f=geojson"
+        run {
+            val classQueryUrl = "$classAirspaceUrl?where=CLASS+IN+('B','C','D','E')&geometry=$minLon,$minLat,$maxLon,$maxLat&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=OBJECTID,NAME,CLASS,LOCAL_TYPE,SECTOR,UPPER_VAL,UPPER_UOM,LOWER_VAL,LOWER_UOM,LOWER_CODE&maxAllowableOffset=0.001&returnGeometry=true&f=geojson"
 
-            val conn = (URL(classQueryUrl).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 20000
-                readTimeout = 20000
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "UASReady-Android-App/1.0")
-            }
-
-            if (conn.responseCode == 200) {
-                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                val geoJson = JSONObject(responseText)
+            run {
+                val geoJson = fetchGeoJson(classQueryUrl, "FAA Class_Airspace")
                 val features = geoJson.optJSONArray("features") ?: JSONArray()
 
                 for (i in 0 until features.length()) {
@@ -226,8 +258,6 @@ class LiveAirspaceRepository : AirspaceRepository {
                 }
                 Log.i(TAG, "Loaded ${zones.size} controlled airspace sectors from FAA Class_Airspace")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "FAA Class Airspace query error: ${e.message}")
         }
         return ParsedClassResult(zones, primaryClass, authRequired)
     }
@@ -243,20 +273,11 @@ class LiveAirspaceRepository : AirspaceRepository {
         val zones = mutableListOf<AirspaceZone>()
         var isInsideRestricted = false
 
-        try {
-            val suaQueryUrl = "$FAA_SUA_URL?where=1=1&geometry=$minLon,$minLat,$maxLon,$maxLat&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=OBJECTID,NAME,TYPE_CODE,CLASS,UPPER_VAL,UPPER_UOM,LOWER_VAL,LOWER_UOM,LOWER_CODE&maxAllowableOffset=0.001&returnGeometry=true&f=geojson"
+        run {
+            val suaQueryUrl = "$specialUseAirspaceUrl?where=1=1&geometry=$minLon,$minLat,$maxLon,$maxLat&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=OBJECTID,NAME,TYPE_CODE,CLASS,UPPER_VAL,UPPER_UOM,LOWER_VAL,LOWER_UOM,LOWER_CODE&maxAllowableOffset=0.001&returnGeometry=true&f=geojson"
 
-            val conn = (URL(suaQueryUrl).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 20000
-                readTimeout = 20000
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "UASReady-Android-App/1.0")
-            }
-
-            if (conn.responseCode == 200) {
-                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
-                val geoJson = JSONObject(responseText)
+            run {
+                val geoJson = fetchGeoJson(suaQueryUrl, "FAA Special_Use_Airspace")
                 val features = geoJson.optJSONArray("features") ?: JSONArray()
 
                 for (i in 0 until features.length()) {
@@ -332,10 +353,8 @@ class LiveAirspaceRepository : AirspaceRepository {
                         }
                     }
                 }
-                Log.i(TAG, "Total combined airspace zones loaded: ${zones.size}")
+                Log.i(TAG, "Loaded ${zones.size} special use airspace sectors from FAA Special_Use_Airspace")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "FAA SUA query error: ${e.message}")
         }
         return ParsedSuaResult(zones, isInsideRestricted)
     }

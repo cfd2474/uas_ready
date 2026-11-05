@@ -61,6 +61,7 @@ class AssessmentEngineTest {
             primaryClass = AirspaceClass.CLASS_G,
             controlledAirspaceAuthorizationRequired = false,
             activeTfrs = emptyList(),
+            tfrDataSourced = true,
             timestampEpochMs = now
         )
 
@@ -183,6 +184,49 @@ class AssessmentEngineTest {
         val result = engine.assess(context)
         assertEquals(AssessmentStatus.NO_GO, result.overallStatus)
         assertTrue(result.noGoRules.any { it.ruleId == "AIR-TFR-001" })
+    }
+
+    private fun contextWithAirspace(airspace: AirspaceInfo?) = AssessmentContext(
+        aircraft = defaultAircraft,
+        pilot = defaultPilot,
+        weather = nominalWeather,
+        forecast = null,
+        spaceWeather = nominalSpaceWeather,
+        airspace = airspace,
+        sunData = nominalSunData,
+        flightWindow = defaultFlightWindow,
+        location = defaultLocation
+    )
+
+    @Test
+    fun testUnsourcedTfrDataIsCautionNeverClear() {
+        val result = engine.assess(contextWithAirspace(nominalAirspace.copy(tfrDataSourced = false)))
+
+        assertTrue("Unverified TFRs must raise a caution", result.cautionRules.any { it.ruleId == "AIR-TFR-003" })
+        assertFalse(
+            "Must not claim 'no TFRs' when no TFR source was checked",
+            result.allRuleResults.any { it.ruleId == "AIR-TFR-002" }
+        )
+        assertNotEquals(AssessmentStatus.GO, result.overallStatus)
+    }
+
+    @Test
+    fun testSourcedEmptyTfrListIsClear() {
+        val result = engine.assess(contextWithAirspace(nominalAirspace.copy(tfrDataSourced = true)))
+
+        val tfrRule = result.allRuleResults.first { it.ruleId.startsWith("AIR-TFR") }
+        assertEquals("AIR-TFR-002", tfrRule.ruleId)
+        assertEquals(AssessmentStatus.GO, tfrRule.status)
+    }
+
+    @Test
+    fun testMissingAirspaceIsDataUnavailableNotClassG() {
+        val result = engine.assess(contextWithAirspace(null))
+
+        val airspaceRule = result.allRuleResults.first { it.category == AssessmentCategory.AIRSPACE }
+        assertEquals("AIR-MISSING", airspaceRule.ruleId)
+        assertEquals(AssessmentStatus.DATA_UNAVAILABLE, airspaceRule.status)
+        assertFalse(result.allRuleResults.any { it.ruleId == "AIR-CTRL-002" })
     }
 
     @Test

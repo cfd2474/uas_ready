@@ -156,28 +156,33 @@ fun HomeScreen(
             val ctrlRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AIR-CTRL") }
             val tfrRule = assessment?.allRuleResults?.firstOrNull { it.ruleId.startsWith("AIR-TFR") }
 
-            val airspaceClassText = when (uiState.airspaceInfo?.primaryClass) {
+            val airspaceInfo = uiState.airspaceInfo
+            val airspaceClassText = when (airspaceInfo?.primaryClass) {
                 AirspaceClass.CLASS_B -> "Class B"
                 AirspaceClass.CLASS_C -> "Class C"
                 AirspaceClass.CLASS_D -> "Class D"
                 AirspaceClass.CLASS_E_SURFACE -> "Class E Surface"
                 AirspaceClass.CLASS_E -> "Class E"
                 AirspaceClass.SPECIAL_USE -> "Special Use"
-                AirspaceClass.CLASS_G, null -> "Class G"
+                AirspaceClass.CLASS_G -> "Class G"
+                null -> "Unavailable"
             }
 
-            val tfrSummary = if (tfrRule?.status == AssessmentStatus.NO_GO) {
-                "ACTIVE TFR"
-            } else {
-                "No TFRs"
+            // Never claim "No TFRs" unless an authoritative TFR source was actually checked.
+            val tfrSummary = when {
+                tfrRule?.status == AssessmentStatus.NO_GO -> "ACTIVE TFR"
+                airspaceInfo?.tfrDataSourced == true -> "No TFRs"
+                else -> "TFRs unverified"
             }
 
-            val primaryAirspaceText = "$airspaceClassText • $tfrSummary"
+            val primaryAirspaceText = if (airspaceInfo == null) "Airspace Unavailable" else "$airspaceClassText • $tfrSummary"
 
             val secondaryAirspaceText = when {
+                airspaceInfo == null -> "Live FAA data required"
                 tfrRule?.status == AssessmentStatus.NO_GO -> "Flight Restricted / Prohibited"
                 ctrlRule?.status == AssessmentStatus.CAUTION -> "LAANC Approval Required"
-                else -> "No flight restrictions"
+                airspaceInfo.tfrDataSourced -> "No flight restrictions"
+                else -> "Check TFRs before flight"
             }
 
             val airspaceWorstStatus = listOfNotNull(

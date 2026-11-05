@@ -50,6 +50,19 @@ class AirspaceRuleEvaluator : CategoryRuleEvaluator {
                     explanation = String.format("Flight location overlaps active %s TFR (%s). Flight is legally prohibited under 14 CFR § 91.137/141.", tfr.type, tfr.description)
                 )
             )
+        } else if (!airspace.tfrDataSourced) {
+            // No authoritative TFR feed: an empty list means "not checked", never "clear".
+            rules.add(
+                RuleResult(
+                    ruleId = "AIR-TFR-003",
+                    category = category,
+                    status = AssessmentStatus.CAUTION,
+                    title = "Temporary Flight Restrictions Not Verified",
+                    inputValueFormatted = "Not Checked",
+                    thresholdFormatted = "Pilot Verification Required",
+                    explanation = "UASReady does not currently check live TFRs. Before flight, verify there are no active TFRs at this location and time using the FAA TFR list (tfr.faa.gov) or an FAA-approved B4UFLY / LAANC provider."
+                )
+            )
         } else {
             rules.add(
                 RuleResult(
